@@ -13,7 +13,10 @@ import { renderShell, updateShell } from './views/shell.js';
 
 const app = document.getElementById('app');
 
-route('/', () => import('./views/planning.js'));
+route('/', () => import('./views/home.js'));
+route('planning', () => import('./views/planning.js'));
+route('station/:id', () => import('./views/station.js'));
+route('station/:id/modifier', () => import('./views/station-edit.js'));
 route('prestation/:id', () => import('./views/prestation.js'));
 route('nouvel-audit', () => import('./views/audit-new.js'));
 route('audit/:id/:step?', () => import('./views/audit.js'));
