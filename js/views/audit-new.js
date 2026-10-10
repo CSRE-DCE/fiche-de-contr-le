@@ -1,83 +1,342 @@
-/* Audit inopiné (non planifié) : prestataire, site, prestation éventuelle, grille → démarrage immédiat. */
-import { html, sortBy, localDate, addDays, haversine, fmtDistance, fmtDate } from '../core/util.js';
+/* Création d'une tournée de contrôle terrain (#/nouvel-audit) — grille CT-2026 (avenant n° 1, § F) :
+ * type de tournée (hydrobiologie, cours d'eau, eaux souterraines), prestataire contrôlé (Titulaire du
+ * marché – lot 1, OEG en régie, HYDRECO, NBC en premier, puis les autres), date, audit inopiné ou avec
+ * rendez-vous, stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
+ * prestataire mises en avant, ordre modifiable, station la plus proche par GPS), compartiments (biologie :
+ * pré-cochés selon les stations) et opérateurs → createAudit → #/audit/<id>.
+ * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine.
+ * Option avancée : audit sur une grille historique (un seul site), ?mode=general — formulaire d'origine. */
+import { html, sortBy, localDate, addDays, haversine, fmtDistance, fmtDate, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, formValues } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
-import { createAudit, gridsFor } from '../app/audits.js';
+import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, allItems, isSheetGrid } from '../domain/grids.js';
+import { createAudit, gridsFor, effectiveGrid, updateAudit } from '../app/audits.js';
 import { getPosition } from '../ui/gps.js';
+import { pref } from '../app/settings.js';
+import { TYPE_STYLES } from '../ui/map.js';
+import { ctGrid, CT_GRID, siteTypes, openPrestations, prestationType, plannedLabel, siteMatches, typeBadges } from './station-sheet.js';
 
-let draft = {};
+/* ---------- Brouillon de la tournée (conservé entre deux affichages) ---------- */
+let draft = null;
+let legacy = {};
+const FEATURED = ['prov-TL1', 'prov-OEG', 'prov-HYDRECO', 'prov-NBC'];
+const MAX_CANDIDATES = 40;
+
+const featuredIds = grid => (Array.isArray(grid.providers) && grid.providers.length ? grid.providers : FEATURED);
+/** Prestation programmée ouverte d'une station pour le prestataire et le type de tournée (la plus proche). */
+const matchPrestation = (siteId, providerId, type) => providerId ? openPrestations(siteId, { providerId, type })[0] || null : null;
+
+function initDraft(q) {
+  const grid = ctGrid();
+  const pres = [q.prestation, ...String(q.prestations || '').split(',')].filter(Boolean).map(id => store.get('prestation', id)).filter(Boolean);
+  const site = q.site ? store.get('site', q.site) : null;
+  const typeOk = k => !!gridType(grid, k);
+  let type = typeOk(q.type) ? q.type : pres[0] ? prestationType(pres[0], grid) : site ? inferAuditType(grid, { site, prestation: openPrestations(site.id)[0] || null }) : '';
+  if (!typeOk(type)) type = typeOk(pref('home.type', '')) ? pref('home.type', '') : (gridTypes(grid)[0]?.key || 'bio');
+  let providerId = pres[0]?.providerId || '';
+  if (!providerId && site) providerId = openPrestations(site.id, { type })[0]?.providerId || '';
+  const stations = [];
+  for (const p of pres) if (!stations.some(s => s.siteId === p.siteId)) stations.push({ siteId: p.siteId, prestationId: p.id });
+  if (site && !stations.some(s => s.siteId === site.id)) stations.unshift({ siteId: site.id, prestationId: matchPrestation(site.id, providerId, type)?.id || null });
+  return {
+    key: JSON.stringify(q), type, providerId, date: localDate(), kind: q.kind === 'inopine' || !pres.length ? 'inopine' : 'planifie',
+    stations, compartments: null, operatorIds: [...new Set(pres.flatMap(p => p.operatorIds || []))], search: ''
+  };
+}
+
+/** Compartiments proposés : biologie → ceux des stations choisies (cases modifiables) ; autres types → ceux du type. */
+function defaultCompartments(grid, d) {
+  const t = gridType(grid, d.type);
+  if (!t) return typeCompartments(grid, d.type);
+  const fromSites = [...new Set(d.stations.flatMap(s => store.get('site', s.siteId)?.compartments || []))].filter(k => t.compartments.includes(k));
+  return auditCompartments(grid, d.type, fromSites.length ? fromSites : null);
+}
+const chosenCompartments = (grid, d) => d.compartments || defaultCompartments(grid, d);
+
+/** Prestataires : les quatre prestataires des contrôles 2026 en premier, puis les autres (actifs). */
+function providerLists(grid) {
+  const active = store.filter('provider', p => p.active !== false);
+  const featured = featuredIds(grid).map(id => store.get('provider', id)).filter(Boolean);
+  const others = sortBy(active.filter(p => !featured.some(f => f.id === p.id)), 'kind', 'name');
+  return { featured, others };
+}
+
+/* ---------- Choix des stations ---------- */
+function candidateRow(site, p, d) {
+  return html`<div class="an-cand${p ? ' is-planned' : ''}">
+    <div class="an-cand-main"><span class="an-cand-name">${site.name}</span>
+      <span class="an-cand-sub">${site.code}${site.bassin ? ' · ' + site.bassin : site.commune ? ' · ' + site.commune : ''}</span>
+      ${p ? html`<span class="an-cand-pres${p.plannedDate ? '' : ' is-unplanned'}">${icon('calendar', { size: 14 })}${p.ref} · ${plannedLabel(p)}</span>` : ''}</div>
+    <button type="button" class="btn ${p ? 'primary' : 'ghost'} sm" data-act="addSt" data-site="${site.id}" data-pres="${p?.id || ''}">${icon('plus', { size: 18 })}Ajouter</button>
+  </div>`;
+}
+function candidatesHTML(d) {
+  const grid = ctGrid();
+  const taken = new Set(d.stations.map(s => s.siteId));
+  const t = normalize(d.search);
+  const planned = d.providerId ? sortBy(store.filter('prestation', p => p.providerId === d.providerId && ['prevue', 'reportee'].includes(p.status) && prestationType(p, grid) === d.type && !taken.has(p.siteId)), p => p.plannedDate || '9999', 'ref') : [];
+  const plannedBySite = new Map();
+  for (const p of planned) { const s = store.get('site', p.siteId); if (s && !plannedBySite.has(s.id) && openPrestations(s.id, { providerId: d.providerId, type: d.type }).some(x => x.id === p.id) && siteMatches(s, t)) plannedBySite.set(s.id, p); }
+  const others = sortBy(store.filter('site', s => !taken.has(s.id) && !plannedBySite.has(s.id) && siteTypes(s).includes(d.type) && siteMatches(s, t)), 'name');
+  const prov = store.get('provider', d.providerId);
+  return html`
+    ${plannedBySite.size ? html`<h4 class="an-h4">${icon('calendar', { size: 18 })}Prestations programmées · ${providerHeaderName(prov)}<span class="badge info">${plannedBySite.size}</span></h4>
+      <div class="an-cands">${[...plannedBySite].slice(0, MAX_CANDIDATES).map(([id, p]) => candidateRow(store.get('site', id), p, d))}</div>` : ''}
+    <h4 class="an-h4">${icon(TYPE_STYLES[d.type]?.icon || 'station', { size: 18 })}${plannedBySite.size ? 'Autres stations' : 'Stations'} · ${TYPE_STYLES[d.type]?.label || ''}<span class="badge outline">${others.length}</span></h4>
+    ${!others.length ? html`<p class="note">${t ? 'Aucune station ne correspond à la recherche.' : 'Toutes les stations de ce type sont déjà dans la tournée.'}</p>`
+      // Prestations programmées mises en avant : les autres stations restent repliées tant qu'aucune recherche n'est saisie.
+      : plannedBySite.size && !t && !d.showAll ? html`<button type="button" class="btn ghost sm" data-act="showAll">${icon('list', { size: 18 })}Afficher les ${others.length} autres stations</button>`
+      : html`<div class="an-cands">${others.slice(0, MAX_CANDIDATES).map(s => candidateRow(s, null, d))}</div>
+        ${others.length > MAX_CANDIDATES ? html`<p class="note">${MAX_CANDIDATES} premières stations affichées : précisez la recherche.</p>` : ''}`}`;
+}
+
+function selectedHTML(d) {
+  if (!d.stations.length) return html`<div class="an-empty">${icon('route', { size: 30 })}<span>Aucune station : ajoutez la ou les stations visitées, dans l’ordre de passage.</span></div>`;
+  return html`<ol class="an-sel">${d.stations.map((s, i) => {
+    const site = store.get('site', s.siteId);
+    const p = s.prestationId ? store.get('prestation', s.prestationId) : null;
+    return html`<li class="an-sel-row">
+      <span class="an-sel-no">${i + 1}</span>
+      <span class="an-sel-main"><span class="an-sel-name">${site?.name || s.siteId}</span>
+        <span class="an-sel-sub">${site?.code || ''}${site ? html` ${typeBadges(site, { short: true })}` : ''}</span>
+        <span class="an-sel-pres">${p ? html`${icon('calendar', { size: 14 })}Prestation ${p.ref} · ${plannedLabel(p)}` : 'Hors programme (aucune prestation programmée rattachée)'}</span></span>
+      <span class="an-sel-tools">
+        <button type="button" class="icon-btn" data-act="moveSt" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} title="Monter" aria-label="Monter ${site?.name || ''}">▲</button>
+        <button type="button" class="icon-btn" data-act="moveSt" data-i="${i}" data-d="1" ${i === d.stations.length - 1 ? 'disabled' : ''} title="Descendre" aria-label="Descendre ${site?.name || ''}">▼</button>
+        <button type="button" class="icon-btn an-del" data-act="removeSt" data-i="${i}" title="Retirer" aria-label="Retirer ${site?.name || ''} de la tournée">${icon('close', { size: 20 })}</button>
+      </span></li>`;
+  })}</ol>`;
+}
+
+/* ---------- Écran de création de tournée ---------- */
+function tourForm(q) {
+  const grid = ctGrid();
+  if (!draft || draft.key !== JSON.stringify(q)) draft = initDraft(q);
+  const d = draft;
+  const types = gridTypes(grid);
+  const { featured, others } = providerLists(grid);
+  const prov = store.get('provider', d.providerId);
+  const comps = chosenCompartments(grid, d);
+  const typeDef = gridType(grid, d.type);
+  const ops = sortBy(store.filter('operator', o => o.providerId === d.providerId && o.active !== false), 'code');
+  const step = (n, title, sub = '') => html`<h2 class="an-step"><span class="an-step-no">${n}</span><span>${title}${sub ? html`<small>${sub}</small>` : ''}</span></h2>`;
+  return html`
+    ${pageTitle('Nouvelle tournée', 'Contrôle terrain d’un prestataire de prélèvement : une journée, une ou plusieurs stations', html`<a class="btn ghost sm" href="#/nouvel-audit?mode=general">${icon('clipboard', { size: 18 })}Grille historique</a>`, '#/')}
+    <form class="an-form" id="anForm" data-submit="start" novalidate>
+      <section class="card">${step(1, 'Type de tournée')}
+        <div class="an-types" role="radiogroup" aria-label="Type de tournée">${types.map(t => {
+          const st = TYPE_STYLES[t.key] || {};
+          return html`<button type="button" class="an-type t-${t.key}${d.type === t.key ? ' sel' : ''}" role="radio" aria-checked="${d.type === t.key}" data-act="setType" data-v="${t.key}">
+            <span class="an-type-ic">${icon(st.icon || t.icon || 'drop', { size: 30 })}</span><span class="an-type-txt"><b>${st.label || t.short || t.label}</b><small>${t.program}</small></span></button>`;
+        })}</div></section>
+
+      <section class="card">${step(2, 'Prestataire contrôlé')}
+        <div class="an-provs" role="radiogroup" aria-label="Prestataire">${featured.map(p => html`<button type="button" class="an-prov${d.providerId === p.id ? ' sel' : ''}" role="radio" aria-checked="${d.providerId === p.id}" data-act="setProvider" data-v="${p.id}">
+          <span class="an-prov-ic">${icon(p.kind === 'regie' ? 'home' : 'building', { size: 22 })}</span><span><b>${providerHeaderName(p)}</b><small>${PROVIDER_KINDS[p.kind] || ''}</small></span></button>`)}</div>
+        ${others.length ? field('Autre prestataire, partenaire ou régie', html`<select data-change="setProviderSel">${options(others, featured.some(f => f.id === d.providerId) ? '' : d.providerId, { placeholder: '— autre —' })}</select>`) : ''}</section>
+
+      <section class="card">${step(3, 'Date et modalité')}
+        <div class="an-row">
+          ${field('Date de la tournée', html`<input type="date" name="date" value="${d.date}" data-change="setDate" required>`, { required: true })}
+          <div class="field"><label>Type d’audit</label><div class="seg">
+            <button type="button" class="${d.kind === 'inopine' ? 'sel brand' : ''}" data-act="setKind" data-v="inopine" aria-pressed="${d.kind === 'inopine'}"><span class="k">${icon('warning', { size: 18 })}</span>Inopiné</button>
+            <button type="button" class="${d.kind === 'planifie' ? 'sel brand' : ''}" data-act="setKind" data-v="planifie" aria-pressed="${d.kind === 'planifie'}"><span class="k">${icon('calendar', { size: 18 })}</span>Avec rendez-vous</button></div></div>
+        </div></section>
+
+      <section class="card">${step(4, 'Stations de la tournée', 'dans l’ordre de passage')}
+        ${selectedHTML(d)}
+        <div class="an-add">
+          <div class="an-add-bar">
+            <label class="an-search">${icon('search', { size: 20 })}<span class="sr">Rechercher une station</span><input type="search" value="${d.search}" placeholder="Rechercher une station : nom, code, bassin, commune…" data-input="anSearch" autocomplete="off"></label>
+            <button type="button" class="btn ghost" data-act="nearest"><span class="ic">${icon('pin')}</span>Station la plus proche</button>
+          </div>
+          <div id="anNearest" class="hint"></div>
+          <div id="anCands">${candidatesHTML(d)}</div>
+        </div></section>
+
+      <section class="card">${step(5, 'Compartiments à contrôler')}
+        ${typeDef && typeDef.compartments.length > 1
+          ? html`<div class="checks an-comps">${(grid.compartments || []).filter(c => c.always || typeDef.compartments.includes(c.key)).map(c => html`<label class="check ${comps.includes(c.key) ? 'sel' : ''}"><input type="checkbox" value="${c.key}" data-change="setComp" ${comps.includes(c.key) ? 'checked' : ''} ${c.always ? 'disabled' : ''}> ${icon(c.icon || 'check', { size: 20 })} ${c.label}</label>`)}</div>
+            <p class="note">Pré-cochés selon les compartiments des stations choisies ; l’organisation, la sécurité et la traçabilité sont toujours contrôlées.</p>`
+          : html`<ul class="an-fixed">${(grid.compartments || []).filter(c => comps.includes(c.key)).map(c => html`<li>${icon(c.icon || 'check', { size: 20 })}${c.label}</li>`)}</ul>`}</section>
+
+      <section class="card">${step(6, 'Opérateurs du prestataire')}
+        ${!d.providerId ? html`<p class="note">Choisissez d’abord le prestataire.</p>`
+          : ops.length ? html`<div class="checks">${ops.map(o => html`<label class="check ${(d.operatorIds || []).includes(o.id) ? 'sel' : ''}"><input type="checkbox" value="${o.id}" data-change="setOps" ${(d.operatorIds || []).includes(o.id) ? 'checked' : ''}> ${operatorName(o)}</label>`)}</div>
+            <p class="note">D’autres opérateurs pourront être ajoutés dans la tournée.</p>`
+          : html`<p class="note">Aucun opérateur enregistré pour ce prestataire : ils seront identifiés sur place.</p>`}</section>
+
+      <div class="an-submit">
+        <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}
+          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}</span></div>
+        <button class="btn primary lg" type="submit" ${d.providerId && d.stations.length ? '' : 'disabled'}><span class="ic">${icon('route')}</span>Démarrer la tournée</button>
+      </div>
+    </form>`;
+}
+
+/** Date de tournée différente du jour : les dates pré-remplies (sans constat) prennent la date choisie. */
+async function applyTourDate(audit, date) {
+  const ids = allItems(effectiveGrid(audit)).filter(i => i.prefill === 'audit.date').map(i => i.id);
+  if (!ids.length) return audit;
+  return updateAudit(audit, a => {
+    for (const id of ids) { const r = a.responses?.[id]; if (r?.prefilled && !r.status) a.responses[id] = { ...r, value: date }; }
+  }, { reason: `Date de la tournée : ${fmtDate(date)}` });
+}
+
+/* ---------- Formulaire historique : audit sur une grille générale (un seul site) ---------- */
+function legacyForm(q) {
+  if (q.prestation && legacy.prestationId !== q.prestation) {
+    const p = store.get('prestation', q.prestation);
+    if (p) legacy = { prestationId: p.id, providerId: p.providerId, siteId: p.siteId, pointId: p.pointIds?.[0], samplingTypeId: p.samplingTypeId, matrixId: p.matrixId, operatorIds: p.operatorIds || [] };
+  }
+  const providers = sortBy(store.filter('provider', p => p.active !== false), 'kind', 'name');
+  const sites = sortBy(store.all('site'), 'name');
+  const points = store.filter('point', p => p.siteId === legacy.siteId);
+  const today = localDate();
+  const prestations = sortBy(store.filter('prestation', p => (!legacy.providerId || p.providerId === legacy.providerId) && (!legacy.siteId || p.siteId === legacy.siteId) && p.plannedDate >= addDays(today, -31) && p.plannedDate <= addDays(today, 31)), 'plannedDate');
+  const grids = gridsFor({ providerId: legacy.providerId, samplingTypeId: legacy.samplingTypeId, matrixId: legacy.matrixId }).filter(g => !isSheetGrid(g));
+  const ops = sortBy(store.filter('operator', o => o.providerId === legacy.providerId && o.active !== false), 'code');
+  return html`
+    ${pageTitle('Audit sur grille historique', 'Contrôle d’un seul site avec une grille générale (hors fiches de contrôle 2026)', '', '#/nouvel-audit')}
+    <div class="banner info">Pour les contrôles terrain 2026 (hydrobiologie, cours d’eau, eaux souterraines), utilisez plutôt <a href="#/nouvel-audit">la création de tournée</a>.</div>
+    <form class="card" data-submit="lg-start" id="newAuditForm">
+      <h2>1 · Prestataire contrôlé</h2>
+      ${field('Prestataire, partenaire ou régie', html`<select name="providerId" data-change="lg-set" required>${providers.length ? Object.entries(PROVIDER_KINDS).map(([k, label]) => html`<optgroup label="${label}">${options(providers.filter(p => p.kind === k), legacy.providerId, { placeholder: null })}</optgroup>`) : ''}<option value="" ${!legacy.providerId ? 'selected' : ''}>— sélectionner —</option></select>`, { required: true })}
+      <h2 style="margin-top:14px">2 · Site et point</h2>
+      <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn ghost" data-act="lg-nearest"><span class="ic">${icon('pin')}</span>Site le plus proche (GPS)</button></div>
+      <div id="nearestInfo" class="hint"></div>
+      ${field('Site', html`<select name="siteId" data-change="lg-set" required>${options(sites, legacy.siteId, { label: s => `${s.name} (${s.code})${s.networks?.length ? ' — ' + s.networks.join(', ') : ''}` })}</select>`, { required: true })}
+      ${points.length ? field('Point de prélèvement', html`<select name="pointId" data-change="lg-set">${options(points, legacy.pointId, { label: p => `${p.code} — ${p.name}`, placeholder: null })}</select>`) : ''}
+      <h2 style="margin-top:14px">3 · Prestation observée</h2>
+      ${field('Prestation programmée correspondante (facultatif)', html`<select name="prestationId" data-change="lg-set">${options(prestations, legacy.prestationId, { label: p => `${fmtDate(p.plannedDate)} — ${p.ref}`, placeholder: 'Aucune — prestation non programmée' })}</select>`, { hint: 'Prestations de ce prestataire sur ce site à ± 1 mois.' })}
+      <div class="grid2">
+        ${field('Type de prélèvement observé', html`<select name="samplingTypeId" data-change="lg-set">${options(store.all('samplingType'), legacy.samplingTypeId)}</select>`)}
+        ${field('Matrice', html`<select name="matrixId" data-change="lg-set">${options(store.all('matrix'), legacy.matrixId)}</select>`)}
+      </div>
+      ${ops.length ? field('Opérateur(s) présent(s)', html`<div class="checks">${ops.map(o => html`<label class="check ${(legacy.operatorIds || []).includes(o.id) ? 'sel' : ''}"><input type="checkbox" name="operatorIds" data-multi value="${o.id}" data-change="lg-set" ${(legacy.operatorIds || []).includes(o.id) ? 'checked' : ''}> ${operatorName(o)}</label>`)}</div>`, { hint: 'D’autres opérateurs pourront être ajoutés dans l’audit.' }) : ''}
+      <h2 style="margin-top:14px">4 · Grille d’audit</h2>
+      ${grids.length ? html`<div class="list">${grids.map((g, i) => html`<label class="li" style="cursor:pointer"><input type="radio" name="gridId" value="${g.id}" ${(legacy.gridId ? legacy.gridId === g.id : i === 0) ? 'checked' : ''} data-change="lg-set"><div class="li-main"><div class="li-title">${g.name}</div><div class="li-sub">${g.code} v${g.version} — ${g.description || ''}</div></div></label>`)}</div>` : html`<div class="banner warn">Aucune grille historique publiée n’est applicable.</div>`}
+      <button class="btn primary lg block" type="submit" style="margin-top:16px" ${grids.length ? '' : 'disabled'}><span class="ic">${icon('check')}</span>Démarrer immédiatement le contrôle</button>
+    </form>`;
+}
 
 export default {
-  nav: 'planning', title: 'Audit inopiné',
+  nav: 'planning', title: 'Nouvelle tournée',
   async render(params, q) {
-    if (!can('audit.create')) return html`<div class="card">${empty('🔒', 'Votre profil ne permet pas de créer un audit.')}</div>`;
-    if (q.prestation && draft.prestationId !== q.prestation) {
-      const p = store.get('prestation', q.prestation);
-      if (p) draft = { prestationId: p.id, providerId: p.providerId, siteId: p.siteId, pointId: p.pointIds?.[0], samplingTypeId: p.samplingTypeId, matrixId: p.matrixId, operatorIds: p.operatorIds || [] };
-    }
-    const providers = sortBy(store.filter('provider', p => p.active !== false), 'kind', 'name');
-    const sites = sortBy(store.all('site'), 'name');
-    const points = store.filter('point', p => p.siteId === draft.siteId);
-    const today = localDate();
-    const prestations = sortBy(store.filter('prestation', p => (!draft.providerId || p.providerId === draft.providerId) && (!draft.siteId || p.siteId === draft.siteId) && p.plannedDate >= addDays(today, -31) && p.plannedDate <= addDays(today, 31)), 'plannedDate');
-    const grids = gridsFor({ providerId: draft.providerId, samplingTypeId: draft.samplingTypeId, matrixId: draft.matrixId });
-    const ops = sortBy(store.filter('operator', o => o.providerId === draft.providerId && o.active !== false), 'code');
-    return html`
-      ${pageTitle('Audit inopiné', 'Contrôle non planifié, démarré immédiatement sur le terrain', '', '#/')}
-      <form class="card" data-submit="start" id="newAuditForm">
-        <h2>1 · Prestataire contrôlé</h2>
-        ${field('Prestataire, partenaire ou régie', html`<select name="providerId" data-change="set" required>${providers.length ? Object.entries(PROVIDER_KINDS).map(([k, label]) => html`<optgroup label="${label}">${options(providers.filter(p => p.kind === k), draft.providerId, { placeholder: null })}</optgroup>`) : ''}<option value="" ${!draft.providerId ? 'selected' : ''}>— sélectionner —</option></select>`, { required: true })}
-        <h2 style="margin-top:14px">2 · Site et point</h2>
-        <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn ghost" data-act="nearest"><span class="ic">📍</span>Site le plus proche (GPS)</button></div>
-        <div id="nearestInfo" class="hint"></div>
-        ${field('Site', html`<select name="siteId" data-change="set" required>${options(sites, draft.siteId, { label: s => `${s.name} (${s.code})${s.networks?.length ? ' — ' + s.networks.join(', ') : ''}` })}</select>`, { required: true })}
-        ${points.length ? field('Point de prélèvement', html`<select name="pointId" data-change="set">${options(points, draft.pointId, { label: p => `${p.code} — ${p.name}`, placeholder: null })}</select>`) : ''}
-        <h2 style="margin-top:14px">3 · Prestation observée</h2>
-        ${field('Prestation programmée correspondante (facultatif)', html`<select name="prestationId" data-change="set">${options(prestations, draft.prestationId, { label: p => `${fmtDate(p.plannedDate)} — ${p.ref}`, placeholder: 'Aucune — prestation non programmée' })}</select>`, { hint: 'Prestations de ce prestataire sur ce site à ± 1 mois.' })}
-        <div class="grid2">
-          ${field('Type de prélèvement observé', html`<select name="samplingTypeId" data-change="set">${options(store.all('samplingType'), draft.samplingTypeId)}</select>`)}
-          ${field('Matrice', html`<select name="matrixId" data-change="set">${options(store.all('matrix'), draft.matrixId)}</select>`)}
-        </div>
-        ${ops.length ? field('Opérateur(s) présent(s)', html`<div class="checks">${ops.map(o => html`<label class="check ${(draft.operatorIds || []).includes(o.id) ? 'sel' : ''}"><input type="checkbox" name="operatorIds" data-multi value="${o.id}" data-change="set" ${(draft.operatorIds || []).includes(o.id) ? 'checked' : ''}> ${operatorName(o)}</label>`)}</div>`, { hint: 'D’autres opérateurs pourront être ajoutés dans l’audit.' }) : ''}
-        <h2 style="margin-top:14px">4 · Grille d’audit</h2>
-        ${grids.length ? html`<div class="list">${grids.map((g, i) => html`<label class="li" style="cursor:pointer"><input type="radio" name="gridId" value="${g.id}" ${(draft.gridId ? draft.gridId === g.id : i === 0) ? 'checked' : ''} data-change="set"><div class="li-main"><div class="li-title">${g.name}</div><div class="li-sub">${g.code} v${g.version} — ${g.description || ''}</div></div></label>`)}</div>` : html`<div class="banner warn">Aucune grille publiée n’est applicable.</div>`}
-        <button class="btn primary lg block" type="submit" style="margin-top:16px" ${grids.length ? '' : 'disabled'}><span class="ic">⚡</span>Démarrer immédiatement le contrôle</button>
-      </form>`;
+    if (!can('audit.create')) return html`<div class="card">${empty(icon('lock', { size: 44 }), 'Votre profil ne permet pas de créer une tournée de contrôle.')}</div>`;
+    if (q.mode === 'general') return legacyForm(q);
+    if (!gridTypes(ctGrid()).length) return html`<div class="card">${empty(icon('warning', { size: 44 }), 'La grille CT-2026 n’est pas installée sur cet appareil.', html`<a class="btn ghost" href="#/nouvel-audit?mode=general">Audit sur grille historique</a>`)}</div>`;
+    return tourForm(q);
   },
   handlers: {
-    set(el) {
-      const form = el.form || document.getElementById('newAuditForm');
-      const v = formValues(form);
-      const siteChanged = v.siteId !== draft.siteId;
-      draft = { ...draft, ...v };
-      if (siteChanged) { draft.pointId = store.find('point', p => p.siteId === v.siteId)?.id; const s = store.get('site', v.siteId); if (s?.matrixId && !draft.matrixId) draft.matrixId = s.matrixId; }
-      if (el.name === 'prestationId' && v.prestationId) { const p = store.get('prestation', v.prestationId); Object.assign(draft, { samplingTypeId: p.samplingTypeId || draft.samplingTypeId, matrixId: p.matrixId || draft.matrixId, operatorIds: p.operatorIds?.length ? p.operatorIds : draft.operatorIds }); }
-      if (el.name !== 'gridId') this.refresh();
+    setType(el) {
+      if (draft.type === el.dataset.v) return;
+      const kept = draft.stations.filter(s => siteTypes(store.get('site', s.siteId)).includes(el.dataset.v));
+      if (kept.length < draft.stations.length) toast(`${draft.stations.length - kept.length} station(s) retirée(s) : elles ne relèvent pas de ce type de tournée.`, 'warn', 4000);
+      draft.type = el.dataset.v;
+      draft.stations = kept.map(s => ({ siteId: s.siteId, prestationId: matchPrestation(s.siteId, draft.providerId, draft.type)?.id || null }));
+      draft.compartments = null;
+      this.refresh();
+    },
+    setProvider(el) { selectProvider(el.dataset.v); this.refresh(); },
+    setProviderSel(el) { if (el.value) { selectProvider(el.value); this.refresh(); } },
+    setDate(el) { draft.date = el.value || localDate(); this.refresh(); },
+    setKind(el) { draft.kind = el.dataset.v; this.refresh(); },
+    setComp() {
+      draft.compartments = [...document.querySelectorAll('.an-comps input')].filter(i => i.checked || i.disabled).map(i => i.value);
+      this.refresh();
+    },
+    setOps() { draft.operatorIds = [...document.querySelectorAll('[data-change=setOps]')].filter(i => i.checked).map(i => i.value); this.refresh(); },
+    showAll() { draft.showAll = true; const box = document.getElementById('anCands'); if (box) box.innerHTML = String(candidatesHTML(draft)); },
+    anSearch(el) { draft.search = el.value; const box = document.getElementById('anCands'); if (box) box.innerHTML = String(candidatesHTML(draft)); },
+    addSt(el) {
+      const siteId = el.dataset.site;
+      if (draft.stations.some(s => s.siteId === siteId)) return;
+      draft.stations.push({ siteId, prestationId: el.dataset.pres || matchPrestation(siteId, draft.providerId, draft.type)?.id || null });
+      if (!draft.providerId && el.dataset.pres) selectProvider(store.get('prestation', el.dataset.pres)?.providerId || '');
+      draft.search = '';
+      this.refresh();
+    },
+    removeSt(el) { draft.stations.splice(Number(el.dataset.i), 1); this.refresh(); },
+    moveSt(el) {
+      const i = Number(el.dataset.i), j = i + Number(el.dataset.d);
+      if (j < 0 || j >= draft.stations.length) return;
+      [draft.stations[i], draft.stations[j]] = [draft.stations[j], draft.stations[i]];
+      this.refresh();
     },
     async nearest() {
+      const info = document.getElementById('anNearest');
+      info.textContent = 'Recherche de la position GPS…';
+      try {
+        const pos = await getPosition({ timeout: 20000 });
+        const taken = new Set(draft.stations.map(s => s.siteId));
+        const best = store.filter('site', s => isFinite(s.lat) && s.lat !== null && !taken.has(s.id) && siteTypes(s).includes(draft.type))
+          .map(s => ({ s, d: haversine(pos.lat, pos.lon, s.lat, s.lon) })).sort((a, b) => a.d - b.d)[0];
+        if (!best) { info.textContent = 'Aucune station géolocalisée de ce type.'; return; }
+        draft.stations.push({ siteId: best.s.id, prestationId: matchPrestation(best.s.id, draft.providerId, draft.type)?.id || null });
+        toast(`Station la plus proche ajoutée : ${best.s.name} (${fmtDistance(best.d)})`, 'ok');
+        this.refresh();
+      } catch (e) { info.textContent = e.message; }
+    },
+    async start() {
+      const d = draft;
+      if (!d.providerId) { toast('Choisissez le prestataire contrôlé.', 'err'); return; }
+      if (!d.stations.length) { toast('Ajoutez au moins une station à la tournée.', 'err'); return; }
+      const grid = ctGrid();
+      const a = await createAudit({
+        auditType: d.type, gridId: grid.id || CT_GRID, providerId: d.providerId, kind: d.kind,
+        stations: d.stations.map(s => ({ siteId: s.siteId, prestationId: s.prestationId || null })),
+        compartments: chosenCompartments(grid, d), operatorIds: d.operatorIds || []
+      });
+      if (d.date && d.date !== localDate()) await applyTourDate(a, d.date);
+      draft = null;
+      toast(`Tournée ${a.number} créée (${d.stations.length} station${d.stations.length > 1 ? 's' : ''})`, 'ok');
+      navigate('/audit/' + a.id);
+    },
+    /* Formulaire historique */
+    'lg-set'(el) {
+      const form = el.form || document.getElementById('newAuditForm');
+      const v = formValues(form);
+      const siteChanged = v.siteId !== legacy.siteId;
+      legacy = { ...legacy, ...v };
+      if (siteChanged) { legacy.pointId = store.find('point', p => p.siteId === v.siteId)?.id; const s = store.get('site', v.siteId); if (s?.matrixId && !legacy.matrixId) legacy.matrixId = s.matrixId; }
+      if (el.name === 'prestationId' && v.prestationId) { const p = store.get('prestation', v.prestationId); Object.assign(legacy, { samplingTypeId: p.samplingTypeId || legacy.samplingTypeId, matrixId: p.matrixId || legacy.matrixId, operatorIds: p.operatorIds?.length ? p.operatorIds : legacy.operatorIds }); }
+      if (el.name !== 'gridId') this.refresh();
+    },
+    async 'lg-nearest'() {
       const info = document.getElementById('nearestInfo');
       info.textContent = 'Recherche de la position GPS…';
       try {
         const pos = await getPosition({ timeout: 20000 });
-        const pts = store.filter('point', p => isFinite(p.lat) && isFinite(p.lon)).map(p => ({ p, d: haversine(pos.lat, pos.lon, p.lat, p.lon) })).sort((a, b) => a.d - b.d);
+        const pts = store.filter('point', p => isFinite(p.lat) && isFinite(p.lon) && p.lat !== null).map(p => ({ p, d: haversine(pos.lat, pos.lon, p.lat, p.lon) })).sort((a, b) => a.d - b.d);
         if (!pts.length) { info.textContent = 'Aucun point géolocalisé dans le référentiel.'; return; }
-        const best = pts[0];
-        draft = { ...draft, siteId: best.p.siteId, pointId: best.p.id };
-        toast(`Site le plus proche : ${store.get('site', best.p.siteId)?.name} (${fmtDistance(best.d)})`, 'ok');
+        legacy = { ...legacy, siteId: pts[0].p.siteId, pointId: pts[0].p.id };
+        toast(`Site le plus proche : ${store.get('site', pts[0].p.siteId)?.name} (${fmtDistance(pts[0].d)})`, 'ok');
         this.refresh();
       } catch (e) { info.textContent = e.message; }
     },
-    async start(form) {
+    async 'lg-start'(form) {
       const v = formValues(form);
       if (!v.providerId || !v.siteId || !v.gridId) { toast('Prestataire, site et grille sont obligatoires.', 'err'); return; }
       const a = await createAudit({ prestationId: v.prestationId || null, gridId: v.gridId, kind: 'inopine', providerId: v.providerId, siteId: v.siteId, pointId: v.pointId || null, operatorIds: v.operatorIds || [], samplingTypeId: v.samplingTypeId || null, matrixId: v.matrixId || null });
-      draft = {};
+      legacy = {};
       toast(`Audit inopiné ${a.number} démarré`, 'ok');
       navigate('/audit/' + a.id);
     }
   }
 };
+
+/** Changement de prestataire : prestations rattachées aux stations et opérateurs recalculés. */
+function selectProvider(id) {
+  if (!id || draft.providerId === id) return;
+  draft.providerId = id;
+  draft.stations = draft.stations.map(s => ({ siteId: s.siteId, prestationId: matchPrestation(s.siteId, id, draft.type)?.id || null }));
+  const ops = new Set(store.filter('operator', o => o.providerId === id).map(o => o.id));
+  const fromPres = draft.stations.flatMap(s => store.get('prestation', s.prestationId)?.operatorIds || []);
+  draft.operatorIds = [...new Set([...(draft.operatorIds || []).filter(x => ops.has(x)), ...fromPres])];
+}

@@ -1,6 +1,10 @@
 /* Référentiels administrables (types de prélèvements, matrices, équipements, unités, opérateurs, sites,
  * points, niveaux d'écart, types d'écarts, méthodes, contenants, campagnes). Formulaires génériques
- * décrits par un schéma ; chaque modification est tracée au journal. */
+ * décrits par un schéma ; chaque modification est tracée au journal.
+ * Sites (stations des fiches de contrôle 2026) : les champs non décrits par le schéma (types de tournée, code
+ * BSS, compartiments, accès, photos, points de prélèvement…) sont conservés ; une nouvelle station reçoit les
+ * champs « station » vides et ses types / compartiments déduits des réseaux ; la modification complète se fait
+ * dans la fiche station (#/station/:id/modifier). */
 import { html, raw, uuid, sortBy, normalize, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
@@ -10,6 +14,8 @@ import { pageTitle, badge, empty, options, field } from '../ui/components.js';
 import { EQUIPMENT_STATUS } from '../domain/model.js';
 import { equipmentStatus } from '../domain/rules.js';
 import { toCSV } from '../formats/csv.js';
+import { emptyStationFields, stationTypes, stationCompartments } from '../domain/seed.js';
+import { latLonToUtm } from '../lib/geo.js';
 
 const ref = (type, label = x => x.label || x.name) => ({ type: 'ref', ref: type, label });
 export const SCHEMAS = {
@@ -22,7 +28,7 @@ export const SCHEMAS = {
   container: { title: 'Contenants', icon: '🧴', fields: [{ k: 'code', l: 'Code', req: true }, { k: 'label', l: 'Libellé', req: true }] },
   equipment: { title: 'Équipements', icon: '🔧', fields: [{ k: 'inventoryNo', l: 'N° d’inventaire', req: true }, { k: 'label', l: 'Désignation', req: true }, { k: 'providerId', l: 'Prestataire / propriétaire', ...ref('provider') }, { k: 'category', l: 'Catégorie', type: 'select', opts: [['mesure', 'Matériel de mesure'], ['prelevement', 'Matériel de prélèvement']] }, { k: 'brand', l: 'Marque' }, { k: 'model', l: 'Modèle' }, { k: 'serial', l: 'N° de série' }, { k: 'lastCheckDate', l: 'Date de vérification', type: 'date' }, { k: 'calibrationDate', l: 'Date d’étalonnage', type: 'date' }, { k: 'calibrationRequired', l: 'Étalonnage requis', type: 'checkbox' }, { k: 'validUntil', l: 'Date de validité', type: 'date' }, { k: 'certificateRef', l: 'Certificat / constat' }, { k: 'status', l: 'Statut', type: 'select', opts: Object.entries(EQUIPMENT_STATUS) }], sub: e => { const s = equipmentStatus(e, localDate()); return s.ok ? badge('Valide', 'ok') : badge(s.reasons[0], s.level === 'critique' ? 'nc' : 'warn'); } },
   operator: { title: 'Opérateurs', icon: '👷', fields: [{ k: 'providerId', l: 'Prestataire', req: true, ...ref('provider') }, { k: 'code', l: 'Code / initiales', req: true }, { k: 'lastName', l: 'Nom' }, { k: 'firstName', l: 'Prénom' }, { k: 'function', l: 'Fonction' }, { k: 'active', l: 'Actif', type: 'checkbox' }], note: 'Les habilitations se gèrent depuis la fiche du prestataire.' },
-  site: { title: 'Sites', icon: '🏞️', fields: [{ k: 'code', l: 'Code', req: true }, { k: 'name', l: 'Nom', req: true }, { k: 'networks', l: 'Réseaux (séparés par « ; »)', type: 'list' }, { k: 'kind', l: 'Nature' }, { k: 'commune', l: 'Commune' }, { k: 'bassin', l: 'Bassin versant' }, { k: 'masseEau', l: 'Masse d’eau' }, { k: 'matrixId', l: 'Matrice principale', ...ref('matrix') }, { k: 'lat', l: 'Latitude (WGS84)', type: 'number' }, { k: 'lon', l: 'Longitude (WGS84)', type: 'number' }, { k: 'transportModes', l: 'Moyens d’accès (séparés par « ; »)', type: 'list' }, { k: 'notes', l: 'Accès / consignes', type: 'textarea' }] },
+  site: { title: 'Sites', icon: '🏞️', fields: [{ k: 'code', l: 'Code', req: true }, { k: 'name', l: 'Nom', req: true }, { k: 'networks', l: 'Réseaux (séparés par « ; »)', type: 'list' }, { k: 'kind', l: 'Nature' }, { k: 'codeType', l: 'Type de code', type: 'select', opts: [['SANDRE', 'Code SANDRE'], ['BSS', 'Code BSS (eaux souterraines)']] }, { k: 'commune', l: 'Commune' }, { k: 'bassin', l: 'Bassin versant' }, { k: 'masseEau', l: 'Masse d’eau' }, { k: 'matrixId', l: 'Matrice principale', ...ref('matrix') }, { k: 'lat', l: 'Latitude (WGS84)', type: 'number' }, { k: 'lon', l: 'Longitude (WGS84)', type: 'number' }, { k: 'transportModes', l: 'Moyens d’accès (séparés par « ; »)', type: 'list' }, { k: 'notes', l: 'Accès / consignes', type: 'textarea' }] },
   point: { title: 'Points de prélèvement', icon: '📍', fields: [{ k: 'siteId', l: 'Site', req: true, ...ref('site', s => `${s.name} (${s.code})`) }, { k: 'code', l: 'Code du point', req: true }, { k: 'name', l: 'Nom' }, { k: 'lat', l: 'Latitude', type: 'number' }, { k: 'lon', l: 'Longitude', type: 'number' }, { k: 'gpsThreshold', l: 'Seuil d’alerte GPS propre au point (m)', type: 'number' }, { k: 'description', l: 'Description / repérage', type: 'textarea' }] },
   campaign: { title: 'Campagnes', icon: '🗓️', fields: [{ k: 'code', l: 'Code', req: true }, { k: 'label', l: 'Libellé', req: true }, { k: 'network', l: 'Réseau' }, { k: 'start', l: 'Début', type: 'date' }, { k: 'end', l: 'Fin', type: 'date' }] }
 };
@@ -64,6 +70,24 @@ function readValues(schema, v) {
   return out;
 }
 
+/**
+ * Site : champs « station » des fiches de contrôle 2026 complétés sans écraser l'existant (nouvelle station :
+ * champs vides, types de tournée et compartiments déduits des réseaux ; coordonnées RGFG95 déduites du WGS84).
+ */
+function stationDefaults(site, isNew) {
+  const next = isNew ? { ...emptyStationFields(), ...site } : { ...site };
+  if (!next.codeType) next.codeType = (next.networks || []).includes('ESO') ? 'BSS' : 'SANDRE';
+  if (next.codeType === 'BSS' && !next.matrixId) next.matrixId = 'mat-ESO';
+  if (!Array.isArray(next.types) || !next.types.length) next.types = stationTypes(next);
+  if (!Array.isArray(next.compartments) || !next.compartments.length) next.compartments = stationCompartments(next);
+  const hasLL = isFinite(next.lat) && isFinite(next.lon) && next.lat !== null && next.lon !== null;
+  if (hasLL && (isNew || next.x === null || next.x === undefined || next.x === '')) {
+    const [x, y] = latLonToUtm(next.lat, next.lon, 22);
+    next.x = Math.round(x); next.y = Math.round(y);
+  }
+  return next;
+}
+
 export function editEntity(type, e = null) {
   const schema = SCHEMAS[type];
   const isNew = !e;
@@ -78,8 +102,9 @@ export function editEntity(type, e = null) {
         const vals = readValues(schema, formValues(f));
         const codeKey = schema.fields[0].k === 'code' ? 'code' : schema.fields[0].k === 'inventoryNo' ? 'inventoryNo' : null;
         if (codeKey && store.find(type, x => x.id !== e.id && String(x[codeKey]) === String(vals[codeKey]) && (type !== 'point' || x.siteId === vals.siteId) && (type !== 'operator' || x.providerId === vals.providerId))) { toast('Ce code existe déjà.', 'err'); return; }
-        const next = { ...e, ...vals };
+        let next = { ...e, ...vals };
         if (type === 'equipment') next.statusLabel = EQUIPMENT_STATUS[next.status];
+        if (type === 'site') next = stationDefaults(next, isNew);
         await store.put(type, next, { reason: isNew ? 'Création' : 'Modification du référentiel' });
         this.close(next);
       }
@@ -108,8 +133,13 @@ export const listView = {
     async new() { if (await editEntity(this.params.type)) this.refresh(); },
     async edit(el) {
       const type = this.params.type, e = store.get(type, el.dataset.id);
-      const m = openModal({ title: titleOf(type, e), body: html`<p class="note">Créé le ${new Date(e.createdAt).toLocaleString('fr-FR')} par ${e.createdByName || '—'} · modifié le ${new Date(e.updatedAt).toLocaleString('fr-FR')} par ${e.updatedByName || '—'}</p>`, actions: [{ label: 'Supprimer', act: 'del', cls: 'danger-ghost' }, { label: 'Modifier', act: 'edit', cls: 'primary' }], handlers: { del() { this.close('del'); }, edit() { this.close('edit'); } } });
+      const isSite = type === 'site';
+      const m = openModal({ title: titleOf(type, e), body: html`<p class="note">Créé le ${new Date(e.createdAt).toLocaleString('fr-FR')} par ${e.createdByName || '—'} · modifié le ${new Date(e.updatedAt).toLocaleString('fr-FR')} par ${e.updatedByName || '—'}</p>${isSite ? html`<p class="note">La fiche station regroupe toutes les informations de la station (accès, photos, compartiments, points de prélèvement).</p>` : ''}`,
+        actions: [{ label: 'Supprimer', act: 'del', cls: 'danger-ghost' }, ...(isSite ? [{ label: 'Fiche station', act: 'sheet' }] : []), { label: 'Modifier', act: 'edit', cls: 'primary' }],
+        handlers: { del() { this.close('del'); }, edit() { this.close('edit'); }, sheet() { this.close('sheet'); } } });
       const choice = await m.result;
+      if (choice === 'sheet') { navigate('/station/' + encodeURIComponent(e.id)); return; }
+      if (choice === 'edit' && isSite) { navigate(`/station/${encodeURIComponent(e.id)}/modifier`); return; }
       if (choice === 'edit') { if (await editEntity(type, e)) this.refresh(); }
       if (choice === 'del') {
         const reason = await promptDialog({ title: 'Supprimer l’élément', label: 'Motif (la suppression est tracée ; les audits passés conservent leurs données)' });

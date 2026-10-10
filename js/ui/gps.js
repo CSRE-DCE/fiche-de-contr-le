@@ -1,5 +1,6 @@
 /* Géolocalisation de l'appareil (fonctionne sans réseau : le GPS ne nécessite pas de connexion). */
 import { nowISO, uuid } from '../core/util.js';
+import { latLonToUtm } from '../lib/geo.js';
 
 let last = null;
 
@@ -25,3 +26,12 @@ export async function quickPosition() {
   catch (e) { return null; }
 }
 export function lastPosition() { return last; }
+
+/**
+ * Coordonnées RGFG95 / UTM 22N (mètres, arrondies) d'une position GPS, pour les champs « X / Y » des fiches :
+ * {x, y, lat, lon, accuracy, at} (lat / lon WGS84, précision en mètres, horodatage du relevé).
+ */
+export function positionXY(pos, zone = 22) {
+  const [x, y] = latLonToUtm(pos.lat, pos.lon, zone);
+  return { x: Math.round(x), y: Math.round(y), lat: Number(pos.lat.toFixed(7)), lon: Number(pos.lon.toFixed(7)), accuracy: pos.accuracy ?? null, at: pos.at || nowISO() };
+}

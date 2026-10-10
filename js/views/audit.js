@@ -1,7 +1,9 @@
 /* Audit terrain : Section → Critère → Réponse → Preuve → Validation.
  * Enregistrement automatique de chaque saisie sur l'appareil (« continuer plus tard » hors connexion),
  * alertes intelligentes (jamais converties automatiquement en non-conformité), écarts, synthèse,
- * signatures, verrouillage scellé, puis modifications uniquement motivées et historisées. */
+ * signatures, verrouillage scellé, puis modifications uniquement motivées et historisées.
+ * Deux affichages : grilles « en feuilles » (CT-2026 : tournée de stations, feuilles fidèles aux fiches papier —
+ * js/views/audit-sheet.js) et grilles historiques par sections (ci-dessous). Les actions de saisie sont communes. */
 import { html, raw, fmtDate, fmtTime, fmtDateTime, localDate, localTime, localDateTime, nowISO, sortBy } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -9,13 +11,14 @@ import { can, canEditAudit } from '../core/auth.js';
 import { mediaFor } from '../core/media.js';
 import { navigate } from '../ui/router.js';
 import { toast, promptDialog, confirmDialog, openModal, downloadBlob, choiceDialog } from '../ui/dom.js';
-import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar, auditBadge, critBadge, deviationBadge, alertLevelBadge, empty, operatorName, siteName, providerName, kindBadge } from '../ui/components.js';
+import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar, auditBadge, critBadge, deviationBadge, empty, operatorName, siteName, providerName, kindBadge } from '../ui/components.js';
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
-import { RESPONSES, DOMAINS, DOC_TYPES, responseText } from '../domain/model.js';
+import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality } from '../domain/model.js';
 import { allowedResponses, isAnswered, isAnswerable, needsJustification } from '../domain/grids.js';
 import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
-import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips } from './audit-modules.js';
+import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem } from './audit-modules.js';
+import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep } from './audit-sheet.js';
 
 const amendState = new Map();   // « utilisateur:audit » → motif de la modification en cours (audit signé)
 const amendKey = id => `${session.user?.id}:${session.unlockedAt}:${id}`;
@@ -34,7 +37,7 @@ function itemCard(audit, item, st, editable) {
   const r = audit.responses?.[item.id];
   const n = st.counts[item.id] || 0;
   const answered = isAnswered(item, n ? { ...(r || {}), mediaCount: n } : r);
-  const isNC = r?.status === 'NC';
+  const isNC = r?.status === 'NC', isP = r?.status === 'P';
   const missing = !answered && item.required;
   const alerts = st.alerts.filter(a => a.itemId === item.id);
   const media = mediaFor({ type: 'item', id: audit.id, itemId: item.id });
@@ -63,7 +66,7 @@ function itemCard(audit, item, st, editable) {
     default: control = '';
   }
   const needJ = needsJustification(item, r);
-  return html`<article class="item ${answered ? 'answered' : ''} ${isNC ? 'is-nc' : ''} ${missing && audit.status !== 'en_cours' ? 'missing' : ''}" id="item-${item.id}">
+  return html`<article class="item ${answered ? 'answered' : ''} ${isNC ? 'is-nc' : ''} ${isP ? 'is-p' : ''} ${missing && audit.status !== 'en_cours' ? 'missing' : ''}" id="item-${item.id}">
     <div class="item-head">${item.code ? html`<span class="item-code">${item.code}</span>` : ''}<div class="item-label">${item.label}${item.required && isAnswerable(item) ? html` <span class="req" title="obligatoire">*</span>` : ''}</div></div>
     ${item.refs?.length ? html`<div class="item-refs">${item.refs.map((rf, i) => html`<button type="button" class="ref-chip" data-act="ref" data-item="${item.id}" data-i="${i}">📄 ${refLabel(rf, audit.documentsSnapshot)}</button>`)}</div>` : ''}
     ${item.help ? html`<div class="item-help">${item.help}</div>` : ''}
@@ -74,18 +77,11 @@ function itemCard(audit, item, st, editable) {
     ${thumbs(media)}
     <div class="item-tools">
       ${editable && !audit.lock?.lockedAt ? evidenceButtons({ type: 'item', id: audit.id, itemId: item.id }, { auditId: audit.id }) : ''}
-      ${editable && (isNC || r?.status === 'NV' || r?.status === 'NO') && can('deviation.manage') ? html`<button class="btn danger-ghost sm" data-act="dev-new" data-item="${item.id}">⚠ Créer un écart</button>` : ''}
+      ${editable && (isNC || isP || r?.status === 'NV' || r?.status === 'NO') && can('deviation.manage') ? html`<button class="btn danger-ghost sm" data-act="dev-new" data-item="${item.id}">⚠ Créer un écart</button>` : ''}
     </div>
     ${deviationChips(audit, item.id)}
     ${r?.at ? html`<div class="item-meta">Saisi le ${fmtDate(r.at)} à ${fmtTime(r.at)} par ${r.byName || ''}${n ? ` · ${n} preuve(s)` : ''}</div>` : ''}
   </article>`;
-}
-
-function alertBox(a, editable) {
-  const icon = a.level === 'critique' ? '⛔' : a.level === 'attention' ? '⚠️' : 'ℹ️';
-  return html`<div class="alert ${a.level}" role="alert"><span class="ic">${icon}</span><div class="grow"><div class="a-title">${a.title} ${alertLevelBadge(a.level)}</div><div class="a-msg">${a.message}</div>
-    ${a.deviation && editable && can('deviation.manage') ? html`<div class="row" style="gap:8px"><button class="btn sm danger-ghost" data-act="alert-dev" data-key="${a.key}">Créer un écart</button><button class="btn sm ghost" data-act="alert-dismiss" data-key="${a.key}">Ne pas retenir (motif)</button></div>` : ''}
-    ${a.deviation ? html`<div class="tiny" style="margin-top:4px;opacity:.85">Alerte d’aide à la décision : aucune non-conformité n’est créée automatiquement.</div>` : ''}</div></div>`;
 }
 
 /* ---------- Étapes fixes ---------- */
@@ -101,10 +97,7 @@ function identificationStep(audit, st, editable) {
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
       ['Site', siteName(audit.siteId)], ['Point', store.get('point', audit.pointId)?.code], ['Prestation', p ? html`<a href="#/prestation/${p.id}">${p.ref} — ${fmtDate(p.plannedDate)}</a>` : 'non programmée']
     ])}</div>
-    <div class="card"><h2>Documents applicables figés dans l’audit</h2>
-      ${audit.documentsSnapshot?.length ? html`<div class="list">${audit.documentsSnapshot.map((d, i) => html`<button class="li" data-act="doc-snap" data-i="${i}"><div class="li-main"><div class="li-title">${DOC_TYPES[d.type] || d.type} — ${d.reference}</div><div class="li-sub">${d.name}</div><div class="row" style="gap:6px;margin-top:4px"><span class="version-pill">v${d.version}</span><span class="tiny mono muted">SHA-256 ${d.sha256.slice(0, 16)}…</span></div></div><span class="chev">›</span></button>`)}</div>`
-        : html`<p class="note">Aucun document applicable n’était rattaché à la prestation lors de la création de l’audit.</p>`}
-      <p class="note">Versions et contenus figés à la création de l’audit : une révision ultérieure d’un document n’affecte pas cet audit.</p></div>
+    ${documentsCard(audit)}
     ${st.alerts.length ? html`<div class="card"><h2>Alertes en cours (${st.alerts.length})</h2>${st.alerts.map(a => alertBox(a, editable))}</div>` : ''}
     ${editable && !audit.lock?.lockedAt ? html`<div class="card"><h2>Actions</h2><div class="btn-row">
       <button class="btn ghost" data-act="later">⏸ Continuer plus tard</button>
@@ -143,53 +136,29 @@ function synthesisStep(audit, st, editable) {
     </div>`;
 }
 
-function signaturesStep(audit, st, editable, seal) {
-  const errors = st.validation.filter(v => v.level === 'error'), warnings = st.validation.filter(v => v.level === 'warning');
-  const sig = audit.signatures || {};
-  const locked = !!audit.lock?.lockedAt;
-  const sigBlock = (role, label) => {
-    const sg = sig[role];
-    if (!sg) return html`<p class="note">Non signé.</p>`;
-    return html`<div class="banner ${sg.refused ? 'warn' : 'ok'}">${sg.refused ? html`Refus / absence de signature consigné le ${fmtDateTime(sg.at)} — ${sg.name || ''}. Motif : ${sg.comment || '—'}` : html`Signé par <b>${sg.name}</b>${sg.function ? ' (' + sg.function + ')' : ''} le ${fmtDate(sg.at)} à ${fmtTime(sg.at)}${sg.offline ? ' — hors connexion' : ''}`}</div>
-      ${sg.mediaId ? thumbs([store.get('media', sg.mediaId)].filter(Boolean)) : ''}<div class="tiny muted mono">Empreinte signée : ${sg.contentHash}</div>`;
-  };
-  return html`
-    ${locked ? html`<div class="card" style="border-color:var(--ok)"><h2>🔒 Audit signé et verrouillé</h2>
-      ${kv([['Verrouillé le', fmtDateTime(audit.lock.lockedAt)], ['Par', audit.lock.lockedByName], ['Empreinte scellée (SHA-256)', html`<span class="mono tiny">${audit.lock.contentHash}</span>`], ['Modifications après signature', String((audit.amendments || []).length)], ['Contrôle d’intégrité', seal ? html`<span class="${seal.ok ? 'diff-up' : 'diff-down'}">${seal.message}</span>` : '']])}
-      <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="verify">🔎 Vérifier l’intégrité</button></div></div>` : ''}
-    <div class="card"><h2>Contrôle avant clôture</h2>
-      ${errors.length ? html`<div class="banner nc">${errors.length} point(s) bloquant(s) à compléter avant signature :</div><div class="list">${errors.map(e => html`<a class="li stripe-nc" href="#/audit/${audit.id}/${e.sectionId}" data-scroll="${e.itemId}"><div class="li-main"><div class="li-sub">${e.message}</div></div><span class="chev">›</span></a>`)}</div>` : html`<div class="banner ok">Aucun point bloquant : toutes les réponses obligatoires et justifications sont renseignées.</div>`}
-      ${warnings.length ? html`<details style="margin-top:8px"><summary>${warnings.length} avertissement(s) — décision de l’auditeur</summary><ul>${warnings.map(w => html`<li><a href="#/audit/${audit.id}/${w.sectionId}">${w.message}</a></li>`)}</ul></details>` : ''}
-      ${st.alerts.filter(a => a.level !== 'info').length ? html`<p class="note">${st.alerts.filter(a => a.level !== 'info').length} alerte(s) active(s) — voir Identification ou les sections concernées.</p>` : ''}
-      ${editable && !locked ? html`<div class="btn-row" style="margin-top:10px">${audit.status === 'en_cours' ? html`<button class="btn primary" data-act="finish" ${errors.length ? raw('disabled') : ''}>⏹ Terminer l’audit (heure de fin)</button>` : html`<span class="badge warn">Terminé à ${fmtTime(audit.endedAt)}</span><button class="btn ghost sm" data-act="reopen">Rouvrir</button>`}</div>` : ''}
-    </div>
-    <div class="card"><h2>Signature de l’auditeur</h2>${sigBlock('auditor')}
-      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px">✍️ Signer en tant qu’auditeur (${session.user.name})</button>` : ''}</div>
-    <div class="card"><h2>Signature du représentant du prestataire</h2>${sigBlock('provider')}
-      ${editable && !locked && audit.status === 'termine' && sig.auditor ? html`<div class="grid2" style="margin-top:8px"><div class="field"><label>Nom du représentant</label><input id="repName" value="${sig.provider?.name || operatorName(st.operators[0]) || ''}"></div><div class="field"><label>Fonction</label><input id="repFn" value="${sig.provider?.function || st.operators[0]?.function || ''}"></div></div>
-        <div class="btn-row"><button class="btn primary lg" data-act="sign-provider">✍️ Faire signer le représentant</button><button class="btn ghost" data-act="refuse-provider">Refus / absence de signature</button></div>` : ''}
-      ${!sig.auditor && !locked ? html`<p class="note">L’auditeur signe en premier.</p>` : ''}</div>
-    ${editable && !locked && sig.auditor && sig.provider ? html`<div class="card" style="border-color:var(--brand)"><h2>Validation finale</h2><p>Le verrouillage scelle le contenu de l’audit (empreinte SHA-256). Toute modification ultérieure exigera un motif, sera réservée au responsable qualité et sera historisée avec la valeur précédente.</p><button class="btn ok lg block" data-act="lock">🔒 Valider et verrouiller l’audit</button></div>` : ''}
-    <div class="card"><h2>Rapport et dossier de preuve</h2>
-      <div class="btn-row"><button class="btn ${locked ? 'primary' : 'ghost'}" data-act="report">📄 ${locked ? 'Rapport d’audit PDF' : 'Rapport provisoire PDF'}</button><button class="btn ghost" data-act="dossier">🗂 Dossier de preuve (JSON + médias)</button></div>
-      ${(audit.reports || []).length ? html`<details style="margin-top:8px"><summary>${audit.reports.length} rapport(s) généré(s)</summary><ul>${audit.reports.map(r => html`<li>${fmtDateTime(r.at)} — ${r.by} — ${r.provisional ? 'provisoire' : 'définitif'} — ${r.pages} p. — <span class="mono tiny">${r.sha256.slice(0, 24)}…</span></li>`)}</ul></details>` : ''}
-    </div>`;
-}
-
 /* ---------- Vue ---------- */
 export default {
   nav: 'audits', title: 'Audit',
   async render({ id, step }, q, ctx) {
     const audit = store.get('audit', id);
     if (!audit) return html`<div class="card">${empty('❓', 'Audit introuvable sur cet appareil.')}<a class="btn ghost" href="#/audits">Liste des audits</a></div>`;
+    const locked = !!audit.lock?.lockedAt;
+    const amendReason = amendState.get(amendKey(audit.id)) || null;
+    ctx.amendReason = amendReason;
+    ctx.sheetView = null;
+    const editable = locked ? (!!amendReason && can('audit.amend')) : (canEditAudit(audit) && audit.status !== 'abandonne');
+    // Grille « en feuilles » (CT-2026) : tournée de stations, feuilles fidèles aux fiches papier.
+    if (isSheetAudit(audit)) {
+      const st = auditState(audit, { includeMissing: step === 'signatures' });
+      const seal = locked && (step === 'signatures' || !step) ? await verifyAuditSeal(audit) : null;
+      const view = await renderSheetAudit({ audit, st, step: normalizeStep(audit, st, step), q, editable, locked, amendReason, seal });
+      ctx.sheetView = view;
+      return view.html;
+    }
     const st = auditState(audit, { includeMissing: step === 'signatures' });
     const steps = stepsOf(st);
     const cur = steps.includes(step) ? step : (audit.status === 'en_cours' ? (st.structure.find(s => s.visible && st.progress.bySection[s.id]?.answered < st.progress.bySection[s.id]?.total)?.id || 'identification') : 'signatures');
     const idx = steps.indexOf(cur);
-    const locked = !!audit.lock?.lockedAt;
-    const amendReason = amendState.get(amendKey(audit.id)) || null;
-    ctx.amendReason = amendReason;
-    const editable = locked ? (!!amendReason && can('audit.amend')) : (canEditAudit(audit) && audit.status !== 'abandonne');
     const sec = st.structure.find(s => s.id === cur);
     const bs = sec ? st.progress.bySection[sec.id] : null;
     // Indicateur Section → Critère → Réponse → Preuve → Validation
@@ -236,12 +205,15 @@ export default {
         ${idx < steps.length - 1 ? html`<a class="btn primary lg" href="#/audit/${audit.id}/${steps[idx + 1]}">Suivant ▶</a>` : ''}
       </div>`;
   },
-  async mount(root, params, q) {
+  async mount(root, params, q, ctx) {
+    const view = ctx?.sheetView;
+    if (view) { await mountSheetAudit(root, { audit: store.get('audit', params.id), siteId: view.siteId, q }); await hydrateMedia(root); return; }
     await hydrateMedia(root);
-    if (q.item) document.getElementById('item-' + q.item)?.scrollIntoView({ block: 'center' });
+    if (q.item) { const el = document.getElementById('item-' + q.item); if (el) setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
   },
+  unmount() { unmountSheetAudit(); },
   handlers: {
-    ...operatorHandlers, ...equipmentHandlers, ...gpsHandlers, ...sampleHandlers,
+    ...operatorHandlers, ...equipmentHandlers, ...gpsHandlers, ...sampleHandlers, ...sheetHandlers,
     async resp(el) {
       const audit = store.get('audit', this.params.id);
       const cur = audit.responses?.[el.dataset.item];
@@ -249,7 +221,7 @@ export default {
       // Un nouvel appui sur la réponse déjà choisie l'annule (correction d'une erreur de saisie, tracée).
       await setResponse(audit, el.dataset.item, cur?.status === value ? { status: undefined } : { status: value }, { reason: this.amendReason });
       navigator.vibrate?.(20);
-      this.refresh();
+      await refreshKeep(this);
     },
     async 'val-btn'(el) {
       const audit = store.get('audit', this.params.id);
@@ -270,17 +242,26 @@ export default {
       let v = el.value;
       if (el.dataset.num !== undefined && v !== '') { const n = Number(v.replace(',', '.')); if (!isFinite(n)) { toast('Valeur numérique invalide', 'err'); return; } v = n; }
       await setResponse(audit, el.dataset.item, { value: v === '' ? undefined : v, status: audit.responses?.[el.dataset.item]?.status === 'NA' ? undefined : audit.responses?.[el.dataset.item]?.status }, { reason: this.amendReason });
-      this.refresh();
+      await refreshKeep(this);
     },
     async now(el) {
       const audit = store.get('audit', this.params.id);
       const v = el.dataset.kind === 'date' ? localDate() : el.dataset.kind === 'time' ? localTime() : localDateTime();
-      await setResponse(audit, el.dataset.item, { value: v }, { reason: this.amendReason });
-      this.refresh();
+      const cur = audit.responses?.[el.dataset.item];
+      await setResponse(audit, el.dataset.item, { value: v, status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
+      await refreshKeep(this);
     },
     async comment(el) {
       const audit = store.get('audit', this.params.id);
-      await setResponse(audit, el.dataset.item, { comment: el.value.trim() || undefined }, { reason: this.amendReason });
+      const value = el.value.trim();
+      await setResponse(audit, el.dataset.item, { comment: value || undefined }, { reason: this.amendReason });
+      // Feuilles : observation recopiée dans la version « tableau » / « carte » du critère, obligation signalée.
+      for (const pfx of ['t', 'k']) {
+        const twin = document.getElementById(`${pfx}-o-${el.dataset.item}`);
+        if (!twin) continue;
+        if (twin !== el) twin.value = el.value;
+        twin.classList.toggle('need', !!twin.dataset.need && !value);
+      }
       const s = document.getElementById('saveState'); if (s) s.textContent = `Enregistré sur l’appareil ✓ ${localTime()}`;
     },
     async concl(el) {
@@ -300,10 +281,14 @@ export default {
       this.refresh();
     },
     async 'media-view'(el) { await viewMedia(el.dataset.id, { readOnly: !!store.get('audit', this.params.id)?.lock?.lockedAt, onChange: () => this.refresh() }); },
+    /* Photographies de la fiche station (feuille 1) : actions de js/views/station-sheet.js, chargé à la demande. */
+    async 'st-photo'(el, ev) { const m = await import('./station-sheet.js'); return m.stationHandlers['st-photo'].call(this, el, ev); },
+    async 'st-photo-view'(el, ev) { const m = await import('./station-sheet.js'); return m.stationHandlers['st-photo-view'].call(this, el, ev); },
     async ref(el) {
       const audit = store.get('audit', this.params.id);
-      const item = audit.gridSnapshot.sections.flatMap(s => [s, ...(s.subsections || [])]).flatMap(s => s.items || []).find(i => i.id === el.dataset.item);
-      const rf = item.refs[Number(el.dataset.i)];
+      const item = findItem(audit, el.dataset.item);
+      const rf = item?.refs?.[Number(el.dataset.i)];
+      if (!rf) return;
       const art = refArticle(rf, audit.documentsSnapshot);
       openModal({ title: refLabel(rf, audit.documentsSnapshot), body: html`${rf.requirement ? html`<p><b>Exigence :</b> ${rf.requirement}</p>` : ''}${art ? html`<div class="doc-article"><h4>${art.number} — ${art.title}</h4><p>${art.text}</p></div><p class="note">Texte de la version figée dans l’audit.</p>` : html`<p class="note">Texte de l’article non disponible dans l’instantané documentaire.</p>`}`, actions: [{ label: 'Fermer', cls: 'primary' }] });
     },
@@ -315,9 +300,11 @@ export default {
       const audit = store.get('audit', this.params.id);
       let prefill = { source: 'manuel' };
       if (el.dataset.item) {
-        const it = audit.gridSnapshot.sections.flatMap(s => [s, ...(s.subsections || [])]).flatMap(s => s.items || []).find(i => i.id === el.dataset.item);
+        const it = findItem(audit, el.dataset.item);
+        if (!it) { toast('Critère introuvable dans la grille de l’audit.', 'err'); return; }
         const r = audit.responses?.[it.id];
-        prefill = { itemId: it.id, itemCode: it.code, requirement: it.refs?.[0]?.requirement || it.label, docRefs: it.refs || [], description: r?.comment || '', source: 'critere', criticalityCode: 'MIN' };
+        // Criticité proposée selon la réponse : P ⇒ observation / piste d'amélioration, NC ⇒ mineure (modifiable).
+        prefill = { itemId: it.id, itemCode: it.code, requirement: it.refs?.[0]?.requirement || it.label, docRefs: it.refs || [], description: r?.comment || '', source: 'critere', criticalityCode: defaultCriticality(r?.status) };
       }
       if (audit.lock?.lockedAt) prefill.reason = this.amendReason;
       const dev = await openDeviationForm(audit, prefill);
@@ -327,7 +314,8 @@ export default {
       const audit = store.get('audit', this.params.id);
       const a = auditState(audit, { includeMissing: true }).alerts.find(x => x.key === el.dataset.key);
       if (!a) return;
-      const dev = await openDeviationForm(audit, { ...a.deviation, docRefs: a.deviation.refs || [], itemId: a.itemId || null, itemCode: a.itemId ? a.itemId.replace(/^it-/, '') : null, source: 'alerte', alertCode: a.code, criticalityCode: a.level === 'critique' ? 'MAJ' : 'MIN' });
+      const it = a.itemId ? findItem(audit, a.itemId) : null;
+      const dev = await openDeviationForm(audit, { ...a.deviation, docRefs: a.deviation.refs || [], itemId: a.itemId || null, itemCode: it?.code || (a.itemId ? a.itemId.replace(/^it-/, '') : null), stationKey: a.stationKey ?? undefined, source: 'alerte', alertCode: a.code, criticalityCode: a.level === 'critique' ? 'MAJ' : 'MIN' });
       if (dev) this.refresh();
     },
     async 'alert-dismiss'(el) {
@@ -398,7 +386,7 @@ export default {
       downloadBlob(JSON.stringify(pkg), `${audit.number}_dossier_preuve.json`, 'application/json');
       await store.log('export', { entityType: 'audit', entityId: audit.id, entityLabel: audit.number, details: 'Dossier de preuve JSON' });
     },
-    later() { toast('Audit enregistré sur l’appareil : reprise possible depuis le planning.', 'ok'); navigate('/'); },
+    later() { toast('Audit enregistré sur l’appareil : reprise possible depuis l’accueil ou le planning.', 'ok'); navigate('/'); },
     async abandon() {
       const reason = await promptDialog({ title: 'Abandonner l’audit', label: 'Motif de l’abandon' });
       if (!reason) return;

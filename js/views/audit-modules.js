@@ -1,18 +1,88 @@
 /* Modules spécialisés de l'audit terrain : opérateurs et habilitations, équipements de mesure,
- * relevé GPS du point, traçabilité des échantillons, saisie des écarts. */
+ * relevé GPS du point, traçabilité des échantillons, saisie des écarts — et éléments communs aux deux
+ * affichages de l'audit (grilles historiques par sections, grilles « en feuilles ») : encadré d'alerte,
+ * documents figés, étape « Signatures », recherche d'un critère dans la grille effective. */
 import { html, raw, uuid, nowISO, localDate, localTime, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, sortBy, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { can } from '../core/auth.js';
 import { mediaFor } from '../core/media.js';
 import { openModal, toast, promptDialog, confirmDialog, formValues } from '../ui/dom.js';
-import { field, options, badge, kv, thumbs, evidenceButtons, voiceBtn, operatorName, critBadge, deviationBadge, seg } from '../ui/components.js';
+import { field, options, badge, kv, thumbs, evidenceButtons, voiceBtn, operatorName, critBadge, deviationBadge, seg, alertLevelBadge } from '../ui/components.js';
+import { icon } from '../ui/icons.js';
 import { getPosition } from '../ui/gps.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
-import { EQUIPMENT_STATUS, QUALIFICATION_TYPES } from '../domain/model.js';
-import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations } from '../app/audits.js';
+import { EQUIPMENT_STATUS, QUALIFICATION_TYPES, DOC_TYPES } from '../domain/model.js';
+import { allItems } from '../domain/grids.js';
+import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid } from '../app/audits.js';
 import { refLabel } from '../app/documents.js';
 import { orgSettings } from '../app/settings.js';
+
+/* ---------- Éléments communs aux deux affichages de l'audit ---------- */
+/** Critère de la grille EFFECTIVE de l'audit (identifiant « it-F4-5@09271503 », identifiant d'origine ou code). */
+export function findItem(audit, id) {
+  if (!audit || !id) return null;
+  return allItems(effectiveGrid(audit)).find(i => i.id === id || i.code === id) || null;
+}
+
+/** Encadré d'alerte (aide à la décision : jamais convertie automatiquement en non-conformité). */
+export function alertBox(a, editable) {
+  const ic = a.level === 'critique' ? 'warning' : a.level === 'attention' ? 'warning' : 'info';
+  return html`<div class="alert ${a.level}" role="alert"><span class="ic">${icon(ic, { size: 22 })}</span><div class="grow"><div class="a-title">${a.title} ${alertLevelBadge(a.level)}</div><div class="a-msg">${a.message}</div>
+    ${a.deviation && editable && can('deviation.manage') ? html`<div class="row" style="gap:8px"><button class="btn sm danger-ghost" data-act="alert-dev" data-key="${a.key}">Créer un écart</button><button class="btn sm ghost" data-act="alert-dismiss" data-key="${a.key}">Ne pas retenir (motif)</button></div>` : ''}
+    ${a.deviation ? html`<div class="tiny" style="margin-top:4px;opacity:.85">Alerte d’aide à la décision : aucune non-conformité n’est créée automatiquement.</div>` : ''}</div></div>`;
+}
+
+/** Documents applicables figés dans l'audit à sa création (version + empreinte). */
+export function documentsCard(audit) {
+  return html`<div class="card"><h2>Documents applicables figés dans l’audit</h2>
+    ${audit.documentsSnapshot?.length ? html`<div class="list">${audit.documentsSnapshot.map((d, i) => html`<button class="li" data-act="doc-snap" data-i="${i}"><div class="li-main"><div class="li-title">${DOC_TYPES[d.type] || d.type} — ${d.reference}</div><div class="li-sub">${d.name}</div><div class="row" style="gap:6px;margin-top:4px"><span class="version-pill">v${d.version}</span><span class="tiny mono muted">SHA-256 ${d.sha256.slice(0, 16)}…</span></div></div><span class="chev">›</span></button>`)}</div>`
+      : html`<p class="note">Aucun document applicable n’était rattaché à la prestation lors de la création de l’audit.</p>`}
+    <p class="note">Versions et contenus figés à la création de l’audit : une révision ultérieure d’un document n’affecte pas cet audit.</p></div>`;
+}
+
+/**
+ * Étape « Signatures » : contrôle avant clôture (erreurs bloquantes, avertissements), fin de l'audit, signatures de
+ * l'auditeur et du représentant du prestataire, verrouillage scellé, rapports.
+ * opts : issueHref(issue) → lien vers le critère concerné ; sheets : grille en feuilles (bouton « Fiches de contrôle
+ * (PDF) » en plus du rapport détaillé).
+ */
+export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/audit/${audit.id}/${e.sectionId}`, sheets = false } = {}) {
+  const errors = st.validation.filter(v => v.level === 'error'), warnings = st.validation.filter(v => v.level === 'warning');
+  const sig = audit.signatures || {};
+  const locked = !!audit.lock?.lockedAt;
+  const sigBlock = role => {
+    const sg = sig[role];
+    if (!sg) return html`<p class="note">Non signé.</p>`;
+    return html`<div class="banner ${sg.refused ? 'warn' : 'ok'}">${sg.refused ? html`Refus / absence de signature consigné le ${fmtDateTime(sg.at)} — ${sg.name || ''}. Motif : ${sg.comment || '—'}` : html`Signé par <b>${sg.name}</b>${sg.function ? ' (' + sg.function + ')' : ''} le ${fmtDate(sg.at)} à ${fmtTime(sg.at)}${sg.offline ? ' — hors connexion' : ''}`}</div>
+      ${sg.mediaId ? thumbs([store.get('media', sg.mediaId)].filter(Boolean)) : ''}<div class="tiny muted mono">Empreinte signée : ${sg.contentHash}</div>`;
+  };
+  return html`
+    ${locked ? html`<div class="card" style="border-color:var(--ok)"><h2><span class="row" style="gap:8px">${icon('lock', { size: 20 })}Audit signé et verrouillé</span></h2>
+      ${kv([['Verrouillé le', fmtDateTime(audit.lock.lockedAt)], ['Par', audit.lock.lockedByName], ['Empreinte scellée (SHA-256)', html`<span class="mono tiny">${audit.lock.contentHash}</span>`], ['Modifications après signature', String((audit.amendments || []).length)], ['Contrôle d’intégrité', seal ? html`<span class="${seal.ok ? 'diff-up' : 'diff-down'}">${seal.message}</span>` : '']])}
+      <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="verify"><span class="ic">${icon('search')}</span>Vérifier l’intégrité</button></div></div>` : ''}
+    <div class="card"><h2>Contrôle avant clôture</h2>
+      ${errors.length ? html`<div class="banner nc">${errors.length} point(s) bloquant(s) à compléter avant signature :</div><div class="list as-issues">${errors.map(e => html`<a class="li stripe-nc" href="${issueHref(e)}"><div class="li-main"><div class="li-sub">${e.message}</div></div><span class="chev">›</span></a>`)}</div>` : html`<div class="banner ok">Aucun point bloquant : toutes les réponses obligatoires et justifications sont renseignées.</div>`}
+      ${warnings.length ? html`<details style="margin-top:8px"><summary>${warnings.length} avertissement(s) — décision de l’auditeur</summary><ul>${warnings.map(w => html`<li><a href="${issueHref(w)}">${w.message}</a></li>`)}</ul></details>` : ''}
+      ${st.alerts.filter(a => a.level !== 'info').length ? html`<p class="note">${st.alerts.filter(a => a.level !== 'info').length} alerte(s) active(s) — voir ${sheets ? 'l’onglet « Infos »' : 'Identification'} ou les ${sheets ? 'feuilles' : 'sections'} concernées.</p>` : ''}
+      ${editable && !locked ? html`<div class="btn-row" style="margin-top:10px">${audit.status === 'en_cours' ? html`<button class="btn primary" data-act="finish" ${errors.length ? raw('disabled') : ''}>⏹ Terminer l’audit (heure de fin)</button>` : html`<span class="badge warn">Terminé à ${fmtTime(audit.endedAt)}</span><button class="btn ghost sm" data-act="reopen">Rouvrir</button>`}</div>` : ''}
+    </div>
+    <div class="card"><h2>Signature de l’auditeur</h2>${sigBlock('auditor')}
+      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px"><span class="ic">${icon('signature')}</span>Signer en tant qu’auditeur (${session.user.name})</button>` : ''}</div>
+    <div class="card"><h2>Signature du représentant du prestataire</h2>${sigBlock('provider')}
+      ${editable && !locked && audit.status === 'termine' && sig.auditor ? html`<div class="grid2" style="margin-top:8px"><div class="field"><label for="repName">Nom du représentant</label><input id="repName" value="${sig.provider?.name || operatorName(st.operators[0]) || ''}"></div><div class="field"><label for="repFn">Fonction</label><input id="repFn" value="${sig.provider?.function || st.operators[0]?.function || ''}"></div></div>
+        <div class="btn-row"><button class="btn primary lg" data-act="sign-provider"><span class="ic">${icon('signature')}</span>Faire signer le représentant</button><button class="btn ghost" data-act="refuse-provider">Refus / absence de signature</button></div>` : ''}
+      ${!sig.auditor && !locked ? html`<p class="note">L’auditeur signe en premier${sheets ? ' : une seule signature électronique scelle l’ensemble des fiches de la tournée' : ''}.</p>` : ''}</div>
+    ${editable && !locked && sig.auditor && sig.provider ? html`<div class="card" style="border-color:var(--brand)"><h2>Validation finale</h2><p>Le verrouillage scelle le contenu de l’audit (empreinte SHA-256). Toute modification ultérieure exigera un motif, sera réservée au responsable qualité et sera historisée avec la valeur précédente.</p><button class="btn ok lg block" data-act="lock"><span class="ic">${icon('lock')}</span>Valider et verrouiller l’audit</button></div>` : ''}
+    <div class="card"><h2>Rapports et dossier de preuve</h2>
+      <div class="btn-row">
+        ${sheets ? html`<button class="btn ${locked ? 'primary' : 'accent'}" data-act="sheets-pdf"><span class="ic">${icon('pdf')}</span>Fiches de contrôle (PDF)${locked ? '' : ' — provisoires'}</button>` : ''}
+        <button class="btn ${locked && !sheets ? 'primary' : 'ghost'}" data-act="report"><span class="ic">${icon('doc')}</span>${sheets ? 'Rapport d’audit détaillé (PDF)' : locked ? 'Rapport d’audit PDF' : 'Rapport provisoire PDF'}</button>
+        <button class="btn ghost" data-act="dossier"><span class="ic">${icon('folder')}</span>Dossier de preuve (JSON + médias)</button></div>
+      ${sheets ? html`<p class="note">Fiches de contrôle : les feuilles remplies de la tournée, fidèles aux fiches papier (filigrane « PROVISOIRE » tant que l’audit n’est pas verrouillé). Rapport détaillé : constats, écarts, preuves et empreintes.</p>` : ''}
+      ${(audit.reports || []).length ? html`<details style="margin-top:8px"><summary>${audit.reports.length} rapport(s) généré(s)</summary><ul>${audit.reports.map(r => html`<li>${fmtDateTime(r.at)} — ${r.by} — ${r.provisional ? 'provisoire' : 'définitif'} — ${r.pages} p. — <span class="mono tiny">${String(r.sha256 || '').slice(0, 24)}…</span></li>`)}</ul></details>` : ''}
+    </div>`;
+}
 
 /** Opérateurs pris en compte dans l'audit : référentiel + opérateurs non référencés saisis sur place. */
 export function auditOperators(audit) {
@@ -336,7 +406,8 @@ export async function openDeviationForm(audit, prefill = {}) {
   return dev;
 }
 
-export function deviationChips(audit, itemId) {
-  const devs = auditDeviations(audit.id).filter(d => d.itemId === itemId);
-  return devs.length ? html`<div class="row dev-link" style="gap:6px">${devs.map(d => html`<a class="badge nc" href="#/ecart/${d.id}">⚠ ${d.number}</a>${critBadge(d.criticalityCode)}${deviationBadge(d.status)}`)}</div>` : '';
+/** Écarts rattachés à un critère (devs : liste déjà filtrée, facultative, pour éviter de relire tous les écarts). */
+export function deviationChips(audit, itemId, devs = null) {
+  devs = devs || auditDeviations(audit.id).filter(d => d.itemId === itemId);
+  return devs.length ? html`<div class="row dev-link" style="gap:6px">${devs.map(d => html`<a class="badge ${d.criticalityCode === 'OBS' ? 'perf' : 'nc'}" href="#/ecart/${d.id}">⚠ ${d.number}</a>${critBadge(d.criticalityCode)}${deviationBadge(d.status)}`)}</div>` : '';
 }

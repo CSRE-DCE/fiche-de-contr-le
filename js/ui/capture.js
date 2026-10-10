@@ -69,8 +69,11 @@ export async function addFilesFromInput(input, extra = {}) {
 
 function linkLabel(link) {
   if (!link) return '—';
-  const names = { audit: 'Audit', item: 'Critère', sample: 'Échantillon', equipment: 'Équipement', deviation: 'Écart', point: 'Point de prélèvement', observation: 'Observation', operator: 'Opérateur', document: 'Document', signature: 'Signature', action: 'Action corrective', gps: 'Relevé GPS' };
-  return `${names[link.type] || link.type}${link.itemId ? ' — ' + link.itemId.replace(/^it-/, '') : ''}`;
+  const names = { audit: 'Audit', item: 'Critère', sample: 'Échantillon', equipment: 'Équipement', deviation: 'Écart', point: 'Point de prélèvement', observation: 'Observation', operator: 'Opérateur', document: 'Document', signature: 'Signature', action: 'Action corrective', gps: 'Relevé GPS', sheet: 'Feuille', site: 'Station' };
+  // Feuille d'une tournée : itemId = clé de la feuille (« 3@09271503 » → « 3 · station 09271503 »).
+  if (link.type === 'sheet') return `Feuille ${String(link.itemId || '').replace('@', ' · station ')}`;
+  if (link.type === 'site') return `Station ${link.id?.replace(/^site-/, '') || ''}${link.slot ? ' — photo ' + link.slot : ''}`;
+  return `${names[link.type] || link.type}${link.itemId ? ' — ' + link.itemId.replace(/^it-/, '').replace('@', ' · station ') : ''}`;
 }
 
 /** Visionneuse : image ou document, métadonnées, vérification d'intégrité, annotation. */

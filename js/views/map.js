@@ -1,74 +1,83 @@
-/* Carte : sites, points, prestations programmées, audits réalisés et à réaliser ; zones préchargées. */
-import { html, esc, fmtDate, localDate, sortBy } from '../core/util.js';
+/* Carte des stations (#/carte) : une pastille par station aux couleurs de son type de tournée (biologie :
+ * vert, cours d'eau : bleu, eaux souterraines : ardoise ; deux couleurs si plusieurs types), anneau selon le
+ * statut de contrôle (tournée en cours : orange ; contrôlée dans l'année : coche verte), légende, filtres par
+ * type et par statut ; un clic ouvre la fiche station. Ma position, préchargement des tuiles pour le terrain
+ * (zones limitées), fonctionnement hors connexion (stations affichées même sans fond de carte). */
+import { html, esc } from '../core/util.js';
 import { store } from '../core/store.js';
-import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, confirmDialog } from '../ui/dom.js';
 import { pageTitle } from '../ui/components.js';
-import { createMap, tileUrls, preloadTiles, tileCacheCount, clearTileCache } from '../ui/map.js';
+import { icon } from '../ui/icons.js';
+import { siteLatLon } from '../ui/sheet-chrome.js';
+import { createMap, tileUrls, preloadTiles, tileCacheCount, clearTileCache, tilesUsable, watchTiles, stationIcon, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { getPosition } from '../ui/gps.js';
 import { orgSettings } from '../app/settings.js';
-import { auditsOf, isLate } from './planning.js';
+import { siteTypes, stationStatus } from './station-sheet.js';
 
 let map = null, layer = null, meMarker = null;
-const COLORS = { late: '#b3261e', progress: '#d98a00', done: '#1b7a43', planned: '#1f5f99', today: '#00ac97', none: '#8a979c' };
-const LABELS = { today: 'Prestation aujourd’hui', planned: 'Prestation à auditer', late: 'En retard / non auditée', progress: 'Audit en cours', done: 'Audité (signé)', none: 'Sans prestation' };
 
-function pointStatus(pt, today) {
-  const prest = store.filter('prestation', p => (p.pointIds || []).includes(pt.id) || (p.siteId === pt.siteId && !(p.pointIds || []).length));
-  const audits = store.filter('audit', a => a.pointId === pt.id || (a.siteId === pt.siteId && !a.pointId));
-  if (audits.some(a => a.status === 'en_cours' || a.status === 'termine')) return { s: 'progress', prest, audits };
-  if (prest.some(p => p.plannedDate === today && !auditsOf(p.id).length)) return { s: 'today', prest, audits };
-  if (prest.some(p => isLate(p, today))) return { s: 'late', prest, audits };
-  if (prest.some(p => p.plannedDate >= today && !auditsOf(p.id).some(a => a.lock?.lockedAt))) return { s: 'planned', prest, audits };
-  if (audits.some(a => a.lock?.lockedAt)) return { s: 'done', prest, audits };
-  return { s: 'none', prest, audits };
+/** Stations à afficher (filtres ?type= et ?statut=) : [{site, ll, types, status}]. */
+function stations(q) {
+  const year = new Date().getFullYear();
+  return store.all('site').map(site => ({ site, ll: siteLatLon(site), types: siteTypes(site) }))
+    .filter(x => x.ll && (!q.type || x.types.includes(q.type)))
+    .map(x => ({ ...x, status: stationStatus(x.site.id, { year }) }))
+    .filter(x => !q.statut || x.status.key === q.statut);
 }
 
 export default {
   nav: 'carte', title: 'Carte',
   async render(params, q) {
     const n = await tileCacheCount();
-    const f = q.filtre || 'tous';
-    return html`${pageTitle('Carte des sites et des audits', `${store.count('point')} point(s) de prélèvement · ${n} tuile(s) de carte disponibles hors connexion`)}
-      <div class="chips" style="margin-bottom:8px">${[['tous', 'Tous'], ['aauditer', 'À auditer'], ['retard', 'En retard'], ['audites', 'Audités'], ['jour', 'Aujourd’hui']].map(([k, l]) => html`<button class="chip ${f === k ? 'sel' : ''}" data-act="filter" data-v="${k}">${l}</button>`)}</div>
-      <div class="map-box" id="mapBox" role="application" aria-label="Carte interactive"></div>
-      <div class="map-legend">${Object.entries(LABELS).map(([k, l]) => html`<span><i style="background:${COLORS[k]}"></i>${l}</span>`)}</div>
-      <div class="btn-row" style="margin-top:8px"><button class="btn ghost" data-act="me">📍 Ma position</button><button class="btn ghost" data-act="preload">⬇️ Précharger la zone affichée</button>${n ? html`<button class="btn ghost" data-act="clear">Vider le cache de carte</button>` : ''}</div>
-      <p class="note" id="preloadMsg">Préchargement limité au niveau de zoom ${orgSettings().maxPreloadZoom} et à 1 500 tuiles par zone, pour respecter les conditions d’utilisation du serveur de tuiles (configurable dans Administration). Les points restent affichés même sans fond de carte.</p>`;
+    const list = stations(q);
+    const usable = await tilesUsable();
+    const chip = (k, v, label, extra = '') => html`<button class="chip ${(q[k] || '') === v ? 'sel' : ''}" data-act="filter" data-k="${k}" data-v="${v}" aria-pressed="${(q[k] || '') === v}">${extra}${label}</button>`;
+    return html`${pageTitle('Carte des stations', `${list.length} station(s) affichée(s) · ${n} tuile(s) de carte disponibles hors connexion`, html`<a class="btn ghost" href="#/"><span class="ic">${icon('station')}</span>Liste des stations</a>`)}
+      <div class="chips" style="margin-bottom:6px" role="group" aria-label="Type de tournée">${chip('type', '', 'Toutes')}${TYPE_ORDER.map(t => chip('type', t, TYPE_STYLES[t].label, html`<i class="mk-chip" style="background:${TYPE_STYLES[t].color}"></i>`))}</div>
+      <div class="chips" style="margin-bottom:8px" role="group" aria-label="Statut de contrôle">${chip('statut', '', 'Tous statuts')}${Object.entries(STATUS_STYLES).map(([k, s]) => chip('statut', k, k === 'controlee' ? `Contrôlées en ${new Date().getFullYear()}` : s.label))}</div>
+      ${usable ? '' : html`<div class="banner warn">Hors connexion et aucune zone préchargée : fond de carte indisponible. Les stations restent affichées à leur position.</div>`}
+      <div class="map-box mp-box" id="mapBox" role="application" aria-label="Carte interactive des stations"></div>
+      <div class="map-legend mp-legend">${TYPE_ORDER.map(t => html`<span><i style="background:${TYPE_STYLES[t].color}"></i>${TYPE_STYLES[t].label}</span>`)}
+        <span><i class="mp-multi"></i>Plusieurs types</span>
+        <span><i class="mp-ring is-en_cours"></i>${STATUS_STYLES.en_cours.label}</span>
+        <span><i class="mp-ring is-controlee"></i>Contrôlée en ${new Date().getFullYear()}</span></div>
+      <div class="btn-row" style="margin-top:8px"><button class="btn ghost" data-act="me"><span class="ic">${icon('pin')}</span>Ma position</button><button class="btn ghost" data-act="preload"><span class="ic">${icon('download')}</span>Précharger la zone affichée</button>${n ? html`<button class="btn ghost" data-act="clear">Vider le cache de carte</button>` : ''}</div>
+      <p class="note" id="preloadMsg">Touchez une station pour ouvrir sa fiche. Préchargement limité au niveau de zoom ${orgSettings().maxPreloadZoom} et à 1 500 tuiles par zone, pour respecter les conditions d’utilisation du serveur de tuiles (configurable dans Administration). Les stations restent affichées même sans fond de carte.</p>`;
   },
-  mount(root, params, q) {
-    const today = localDate();
-    map = createMap(root.querySelector('#mapBox'));
-    layer = globalThis.L.layerGroup().addTo(map);
-    const f = q.filtre || 'tous';
+  async mount(root, params, q) {
+    const box = root.querySelector('#mapBox');
+    if (!globalThis.L) { box.innerHTML = String(html`<div class="empty">${icon('map', { size: 44 })}<div>Carte indisponible sur cet appareil.</div></div>`); return; }
+    const tiles = await tilesUsable();
+    if (!box.isConnected) return;
+    map = createMap(box, { tiles });
+    if (tiles) watchTiles(map, { onFail: () => box.classList.add('is-offline'), onLoad: () => box.classList.remove('is-offline') });
+    else box.classList.add('is-offline');
+    const L = globalThis.L;
+    layer = L.layerGroup().addTo(map);
     const bounds = [];
     let focus = null;
-    for (const pt of store.all('point')) {
-      if (!isFinite(pt.lat) || !isFinite(pt.lon) || pt.lat === null) continue;
-      const st = pointStatus(pt, today);
-      if (f === 'aauditer' && !['planned', 'today', 'late'].includes(st.s)) continue;
-      if (f === 'retard' && st.s !== 'late') continue;
-      if (f === 'audites' && st.s !== 'done') continue;
-      if (f === 'jour' && st.s !== 'today') continue;
-      const site = store.get('site', pt.siteId);
-      const next = sortBy(st.prest.filter(p => p.plannedDate >= today), 'plannedDate')[0];
-      const last = sortBy(st.audits, '-startedAt')[0];
-      const m = globalThis.L.circleMarker([pt.lat, pt.lon], { radius: st.s === 'none' ? 6 : 9, color: '#fff', weight: 2, fillColor: COLORS[st.s], fillOpacity: 0.95 }).addTo(layer);
-      m.bindPopup(`<b>${esc(site?.name || pt.name)}</b><br><span style="color:#55636a">${esc(pt.code)} · ${esc((site?.networks || []).join(', '))}</span><br>${esc(LABELS[st.s])}
-        ${next ? `<br>Prochaine prestation : ${esc(fmtDate(next.plannedDate))} — ${esc(store.get('provider', next.providerId)?.name || '')}<br><a class="btn primary" href="#/prestation/${esc(next.id)}">Fiche de préparation</a>` : ''}
-        ${last ? `<br>Dernier audit : <a href="#/audit/${esc(last.id)}">${esc(last.number)}</a> (${esc(fmtDate(last.startedAt))})` : ''}
-        ${can('audit.create') ? `<br><a class="btn ghost" href="#/nouvel-audit" data-site="${esc(pt.siteId)}">Audit inopiné</a>` : ''}`);
-      bounds.push([pt.lat, pt.lon]);
-      if (q.point === pt.id) focus = { m, pt };
+    const focusSite = q.site || (q.point ? store.get('point', q.point)?.siteId : null);
+    for (const x of stations(q)) {
+      const { site, ll, types, status } = x;
+      const m = L.marker(ll, { icon: stationIcon({ types, status: status.key, size: status.key === 'a_controler' ? 20 : 24 }), title: `${site.name} (${site.code})`, riseOnHover: true, keyboard: true }).addTo(layer);
+      m.bindTooltip(`<b>${esc(site.name)}</b><br>${esc(site.code)} · ${esc(types.map(t => TYPE_STYLES[t].label).join(', '))}<br>${esc(status.label)}`, { direction: 'top', offset: [0, -10] });
+      m.on('click', () => navigate('/station/' + encodeURIComponent(site.id)));
+      bounds.push(ll);
+      if (focusSite === site.id) focus = { m, ll };
     }
-    if (focus) { map.setView([focus.pt.lat, focus.pt.lon], 13); focus.m.openPopup(); }
-    else if (bounds.length) map.fitBounds(bounds, { padding: [20, 20], maxZoom: 12 });
+    if (focus) { map.setView(focus.ll, 12); focus.m.openTooltip(); }
+    else if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
     setTimeout(() => map?.invalidateSize(), 100);
   },
   unmount() { if (map) { map.remove(); map = null; layer = null; meMarker = null; } },
   handlers: {
-    filter(el) { navigate('/carte?filtre=' + el.dataset.v, { replace: true }); },
+    filter(el) {
+      const q = { ...this.query, [el.dataset.k]: el.dataset.v };
+      if (!q[el.dataset.k]) delete q[el.dataset.k];
+      delete q.site; delete q.point;
+      navigate('/carte?' + new URLSearchParams(q), { replace: true });
+    },
     async me() {
       try {
         const p = await getPosition({ timeout: 20000 });

@@ -1,4 +1,7 @@
-/* Fiche de préparation d'une prestation programmée (avant déplacement) + édition de la prestation. */
+/* Fiche de préparation d'une prestation programmée (avant déplacement) + édition de la prestation.
+ * Date vide = « À planifier » (programme RCS ESC BIO 2026). Les prestations des fiches de contrôle 2026 (grille
+ * CT-2026) démarrent une TOURNÉE (#/nouvel-audit, pré-sélection de la prestation) ; les autres, un audit sur leur
+ * grille historique. Lien vers la fiche station. */
 import { html, fmtDate, fmtDateTime, localDate, sortBy, uuid, nowISO } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -13,6 +16,17 @@ import { recurringDeviations } from '../domain/summary.js';
 import { applicableDocuments, docInForce } from '../app/documents.js';
 import { createAudit, gridsFor, setPrestationStatus } from '../app/audits.js';
 import { auditsOf } from './planning.js';
+import { icon } from '../ui/icons.js';
+import { isSheetGrid } from '../domain/grids.js';
+import { prestationType, ctGrid } from './station-sheet.js';
+
+/** Prestation relevant des fiches de contrôle 2026 (tournée CT-2026) plutôt que d'une grille historique ? */
+function isTourPrestation(p) {
+  if (p.auditType) return true;
+  const g = p.gridId ? store.get('grid', p.gridId) : null;
+  if (g) return isSheetGrid(g);
+  return !!prestationType(p, ctGrid()) && !gridsFor(p).some(x => !isSheetGrid(x));
+}
 
 function docRow(d, availability) {
   return html`<a class="li" href="#/document/${d.id}"><div class="li-main"><div class="li-title">${DOC_TYPES[d.type] || d.type} — ${d.reference || d.name}</div>
@@ -25,7 +39,7 @@ export default {
   nav: 'planning', title: 'Préparation',
   async render({ id }) {
     const p = store.get('prestation', id);
-    if (!p) return html`<div class="card">${empty('❓', 'Prestation introuvable.')}<a class="btn ghost" href="#/">Retour au planning</a></div>`;
+    if (!p) return html`<div class="card">${empty('❓', 'Prestation introuvable.')}<a class="btn ghost" href="#/planning">Retour au planning</a></div>`;
     const today = localDate();
     const site = store.get('site', p.siteId), prov = store.get('provider', p.providerId), partner = store.get('provider', p.partnerId);
     const points = (p.pointIds || []).map(x => store.get('point', x)).filter(Boolean);
@@ -42,19 +56,23 @@ export default {
     const recurring = recurringDeviations(store.filter('deviation', d => d.providerId === p.providerId));
     const camp = store.get('campaign', p.campaignId);
     const date = p.plannedDate || today;
+    const tour = isTourPrestation(p);
     return html`
-      ${pageTitle(site?.name || 'Prestation', `${p.ref} · ${p.plannedDate ? fmtDate(p.plannedDate) : 'date à fixer'}${p.plannedTime ? ' à ' + p.plannedTime : ''}${p.dateIndicative ? ' (date indicative)' : ''}`, html`${prestationBadge(p.status)}`, '#/')}
+      ${pageTitle(site?.name || 'Prestation', `${p.ref} · ${p.plannedDate ? fmtDate(p.plannedDate) : 'À planifier'}${p.plannedTime ? ' à ' + p.plannedTime : ''}${p.plannedDate && p.dateIndicative ? ' (date indicative)' : ''}`, html`${!p.plannedDate ? badge('À planifier', 'warn') : ''}${prestationBadge(p.status)}`, '#/planning')}
       <div class="btn-row" style="margin-bottom:12px">
-        ${current ? html`<a class="btn primary lg" href="#/audit/${current.id}"><span class="ic">▶</span>Reprendre l’audit ${current.number}</a>`
-          : can('audit.create') ? html`<button class="btn primary lg" data-act="start"><span class="ic">▶</span>Démarrer l’audit</button>` : ''}
+        ${current ? html`<a class="btn primary lg" href="#/audit/${current.id}"><span class="ic">▶</span>Reprendre la tournée ${current.number}</a>`
+          : can('audit.create') ? (tour
+            ? html`<a class="btn primary lg" href="#/nouvel-audit?prestation=${encodeURIComponent(p.id)}&type=${prestationType(p)}"><span class="ic">${icon('route')}</span>Démarrer une tournée</a>`
+            : html`<button class="btn primary lg" data-act="start"><span class="ic">▶</span>Démarrer l’audit</button>`) : ''}
         ${audits.filter(a => a.lock?.lockedAt).map(a => html`<a class="btn ok" href="#/audit/${a.id}">🔒 ${a.number}</a>`)}
+        ${site ? html`<a class="btn ghost" href="#/station/${encodeURIComponent(site.id)}"><span class="ic">${icon('station')}</span>Fiche station</a>` : ''}
       </div>
       <div class="card"><h2>Informations générales</h2>${kv([
         ['Référence de la prestation', p.ref], ['Référence du marché', p.marketRef],
         ['Prestataire', prov ? html`<a href="#/prestataire/${prov.id}">${prov.name}</a> ${kindBadge(prov.kind)}` : '—'],
         ['Partenaire', partner?.name], ['Équipe de prélèvement', [p.team, ops.map(o => operatorName(o)).join(', ')].filter(Boolean).join(' — ')],
-        ['Date', p.plannedDate ? fmtDate(p.plannedDate) + (p.dateIndicative ? ' (indicative)' : '') : 'à fixer'], ['Heure', p.plannedTime],
-        ['Site', site ? `${site.name} (${site.code})` : '—'], ['Campagne', camp?.label],
+        ['Date', p.plannedDate ? fmtDate(p.plannedDate) + (p.dateIndicative ? ' (indicative)' : '') : 'À planifier'], ['Heure', p.plannedTime],
+        ['Site', site ? html`<a href="#/station/${encodeURIComponent(site.id)}">${site.name} (${site.code})</a>` : '—'], ['Campagne', camp?.label],
         ['Type de prélèvement', store.get('samplingType', p.samplingTypeId)?.label], ['Matrice', store.get('matrix', p.matrixId)?.label],
         ['Protocole applicable', proto ? html`${proto.reference} <span class="version-pill">v${proto.version}</span>` : (p.protocolDocKey ? `${p.protocolDocKey} — aucune version en vigueur` : 'non précisé')],
         ['CCTP applicable', cctp ? html`${cctp.reference} <span class="version-pill">v${cctp.version}</span>` : (p.cctpDocKey ? `${p.cctpDocKey} — aucune version en vigueur` : 'non précisé')],
@@ -67,7 +85,7 @@ export default {
         ${docs.length ? html`<div class="list">${docs.map(d => docRow(d, availability))}</div>` : empty('📄', 'Aucun document rattaché. Renseignez le CCTP et le protocole de la prestation.')}
         <p class="note">Les versions affichées seront figées dans l’audit au démarrage : une modification ultérieure d’un document ne modifiera jamais un audit déjà réalisé.</p></div>
 
-      <div class="card"><h2>Site et point(s) de prélèvement</h2>
+      <div class="card"><h2>Site et point(s) de prélèvement ${site ? html`<a class="btn ghost sm" href="#/station/${encodeURIComponent(site.id)}">Fiche station</a>` : ''}</h2>
         ${kv([['Site', site ? `${site.name} — ${site.code}` : ''], ['Réseau(x)', (site?.networks || []).join(', ')], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')], ['Accès', (site?.transportModes || []).join(', ')], ['Pressions', site?.pressions]])}
         <div class="list" style="margin-top:10px">${points.map(pt => html`<div class="li"><div class="li-main"><div class="li-title">📍 ${pt.code} — ${pt.name}</div><div class="li-sub">${pt.lat ? `${pt.lat.toFixed(6)}, ${pt.lon.toFixed(6)} (WGS84)` : 'coordonnées non renseignées'}${pt.description ? ' · ' + pt.description : ''}</div></div>${pt.lat ? html`<a class="btn ghost sm" href="#/carte?point=${pt.id}">Carte</a>` : ''}</div>`)}</div></div>
 
@@ -137,7 +155,7 @@ export function editPrestation(p = null) {
     body: html`<form id="prestForm" class="grid2">
       ${field('Référence', html`<input name="ref" value="${p.ref}" required>`, { required: true })}
       ${field('Référence du marché', html`<input name="marketRef" value="${p.marketRef || ''}">`)}
-      ${field('Date prévue', html`<input type="date" name="plannedDate" value="${p.plannedDate || ''}" required>`, { required: true })}
+      ${field('Date prévue', html`<input type="date" name="plannedDate" value="${p.plannedDate || ''}">`, { hint: 'Laisser vide si la date reste à planifier.' })}
       ${field('Heure prévue', html`<input type="time" name="plannedTime" value="${p.plannedTime || ''}">`)}
       ${field('Site', html`<select name="siteId" required>${options(siteOpts, p.siteId, { label: s => `${s.name} (${s.code})` })}</select>`, { required: true })}
       ${field('Point (code)', html`<select name="pointId">${options(store.filter('point', x => x.siteId === p.siteId), p.pointIds?.[0], { label: x => `${x.code} — ${x.name}`, placeholder: 'Point principal du site' })}</select>`, { hint: 'Enregistrez puis rouvrez pour choisir parmi les points du nouveau site.' })}
@@ -163,7 +181,7 @@ export function editPrestation(p = null) {
         const v = formValues(form);
         const pts = store.filter('point', x => x.siteId === v.siteId);
         const pointId = pts.some(x => x.id === v.pointId) ? v.pointId : pts[0]?.id;
-        const next = { ...p, ...v, pointIds: pointId ? [pointId] : [], dateIndicative: false };
+        const next = { ...p, ...v, pointIds: pointId ? [pointId] : [], dateIndicative: v.plannedDate ? false : !!p.dateIndicative };
         delete next.pointId;
         if (isNew) next.statusHistory = [{ at: nowISO(), by: session.user.name, event: 'création', label: 'Prestation créée manuellement' }];
         await store.put('prestation', next, { reason: isNew ? 'Saisie manuelle' : 'Modification de la prestation' });
