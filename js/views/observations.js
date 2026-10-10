@@ -4,7 +4,7 @@
 import { html, raw, fmtDateTime, fmtDate, sortBy, uuid, nowISO, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
-import { can } from '../core/auth.js';
+import { can, isTeamMode } from '../core/auth.js';
 import { mediaFor } from '../core/media.js';
 import { navigate, currentView } from '../ui/router.js';
 import { toast, openModal, choiceDialog, formValues } from '../ui/dom.js';
@@ -78,7 +78,7 @@ async function captureForm({ urgent }) {
     }, { action: 'emergency' });
     const { scheduleSync } = await import('../app/sync.js');
     scheduleSync(0);
-    toast(navigator.onLine && session.mode === 'server' ? 'Alerte enregistrée et en cours de transmission' : 'Alerte enregistrée — transmission dès que la connexion sera disponible', 'warn', 6000);
+    toast(navigator.onLine && isTeamMode() ? 'Alerte enregistrée et en cours de transmission' : 'Alerte enregistrée — transmission dès que la connexion sera disponible', 'warn', 6000);
   } else toast('Observation enregistrée ✓', 'ok');
   return obs;
 }
@@ -103,7 +103,7 @@ export default {
           ${thumbs(ph)}
           ${can('observation.create') ? html`<div class="item-tools"><button class="btn ghost sm" data-act="link-audit" data-id="${o.id}">Rattacher à un audit</button>${can('deviation.manage') ? html`<button class="btn ghost sm" data-act="to-dev" data-id="${o.id}">Créer un écart</button>` : ''}</div>` : ''}
         </div></div>`; })}</div>` : html`<div class="card">${empty('👁️', 'Aucune observation enregistrée.')}</div>`}
-      ${session.mode !== 'server' && alerts.length ? html`<p class="note">Mode autonome : les alertes restent sur l’appareil (aucun serveur de transmission configuré).</p>` : ''}`;
+      ${!isTeamMode() && alerts.length ? html`<p class="note">Mode autonome : les alertes restent sur l’appareil (aucune équipe de synchronisation configurée).</p>` : ''}`;
   },
   async mount(root) { await hydrateMedia(root); },
   handlers: {

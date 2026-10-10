@@ -201,7 +201,7 @@ export default {
       ${audit.status === 'abandonne' ? html`<div class="banner na">Audit abandonné — ${audit.abandonReason || ''}</div>` : ''}
       ${body}
       <div class="audit-footer">
-        ${idx > 0 ? html`<a class="btn ghost lg" href="#/audit/${audit.id}/${steps[idx - 1]}">◀ Précédent</a>` : html`<a class="btn ghost lg" href="#/">◀ Planning</a>`}
+        ${idx > 0 ? html`<a class="btn ghost lg" href="#/audit/${audit.id}/${steps[idx - 1]}">◀ Précédent</a>` : html`<a class="btn ghost lg" href="#/">◀ Stations</a>`}
         ${idx < steps.length - 1 ? html`<a class="btn primary lg" href="#/audit/${audit.id}/${steps[idx + 1]}">Suivant ▶</a>` : ''}
       </div>`;
   },

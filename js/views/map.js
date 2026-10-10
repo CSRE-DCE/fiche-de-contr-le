@@ -66,8 +66,8 @@ export default {
       bounds.push(ll);
       if (focusSite === site.id) focus = { m, ll };
     }
-    if (focus) { map.setView(focus.ll, 12); focus.m.openTooltip(); }
-    else if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
+    if (focus) { map.setView(focus.ll, 12, { animate: false }); focus.m.openTooltip(); }
+    else if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12, animate: false });
     setTimeout(() => map?.invalidateSize(), 100);
   },
   unmount() { if (map) { map.remove(); map = null; layer = null; meMarker = null; } },

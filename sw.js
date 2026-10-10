@@ -1,12 +1,12 @@
-/* Service worker — PWA d'audit des prestations de prélèvement.
- *  - Fichiers de l'application : « réseau d'abord, repli sur le cache » (toujours la dernière version
- *    dès qu'il y a du réseau ; utilisation intégrale hors connexion sinon). Tous les fichiers sont
+/* Service worker — Fiches de contrôle terrain (OEG).
+ *  - Fichiers de l'application (liste SHELL) : « réseau d'abord, repli sur le cache » (toujours la dernière
+ *    version dès qu'il y a du réseau ; utilisation intégrale hors connexion sinon). Tous les fichiers sont
  *    préchargés à l'installation : l'application fonctionne hors connexion dès la première ouverture.
  *  - Tuiles de carte : « cache d'abord », dans un cache séparé conservé d'une version à l'autre
  *    (zones préchargées depuis l'écran Carte).
- *  - API du serveur (/api/) : jamais mise en cache (données chiffrées gérées par l'application).
- * IMPORTANT : à chaque modification des fichiers du dossier audit/, incrémenter AUDIT_BUILD dans
- * audit/version.js (seul endroit à modifier).
+ *  - API GitHub (synchronisation) : autre domaine, jamais mise en cache par ce service worker.
+ * IMPORTANT : à chaque publication d'une modification de l'application, incrémenter AUDIT_BUILD dans
+ * version.js (python tools/bump_version.py) et tenir SHELL à jour (vérifié par tools/check_release.py).
  */
 importScripts('./version.js');
 const CACHE = 'oeg-ct-build-' + self.AUDIT_BUILD;

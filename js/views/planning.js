@@ -4,7 +4,7 @@
 import { html, localDate, addDays, fmtDate, normalize, sortBy, groupBy } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
-import { can } from '../core/auth.js';
+import { can, isTeamMode } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast } from '../ui/dom.js';
 import { pageTitle, prestationBadge, kindBadge, auditBadge, options, empty, siteName } from '../ui/components.js';
@@ -127,7 +127,7 @@ export default {
       ${pickBar()}
       ${!all.length ? html`<div class="card">${empty('📅', 'Aucune prestation programmée sur cet appareil.', html`<div class="btn-row">
           ${can('planning.manage') ? html`<a class="btn primary" href="#/import">📥 Importer un calendrier (Excel, CSV, ICS, API)</a><button class="btn ghost" data-act="programme">Importer le programme des fiches terrain OEG</button>` : ''}
-          ${session.mode === 'server' ? html`<button class="btn ghost" data-act="prepare">Synchroniser</button>` : ''}</div>`)}</div>`
+          ${isTeamMode() ? html`<button class="btn ghost" data-act="prepare">Synchroniser</button>` : ''}</div>`)}</div>`
         : !list.length ? html`<div class="card">${empty('🔎', 'Aucune prestation pour cette sélection.')}</div>`
         : html`${[...grouped.entries()].map(([d, ps]) => html`<div class="date-head">${d ? longDate(d) : 'À planifier (date à fixer)'} · ${ps.length}</div><div class="list">${ps.slice(0, 200).map(card)}</div>`)}`}
       <p class="note" style="margin-top:14px">${list.length} prestation(s) affichée(s). Les prestations peuvent être réalisées en régie, par des prestataires externes ou des partenaires. Cochez une ou plusieurs prestations pour démarrer une tournée de contrôle.</p>`;
@@ -161,7 +161,7 @@ export default {
     },
     async prepare() {
       const { runSync, prefetchMedia } = await import('../app/sync.js');
-      if (session.mode !== 'server') { toast('Mode autonome : toutes les données sont déjà sur l’appareil. Pensez à précharger la carte (écran Carte).', '', 4500); return; }
+      if (!isTeamMode()) { toast('Mode autonome : toutes les données sont déjà sur l’appareil. Pensez à précharger la carte (écran Carte).', '', 4500); return; }
       if (!navigator.onLine) { toast('Hors connexion : la préparation nécessite le réseau.', 'warn'); return; }
       toast('Synchronisation et téléchargement des documents…');
       const r = await runSync({ reason: 'préparation du terrain' });

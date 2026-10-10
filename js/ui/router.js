@@ -56,7 +56,7 @@ async function render({ keepScroll = false } = {}) {
   const ctx = { params, query, refresh, navigate };
   let body;
   try { body = await mod.render(params, query, ctx); }
-  catch (e) { console.error(e); body = html`<div class="card"><h2>Erreur d’affichage</h2><p>${e.message}</p><a class="btn ghost" href="#/">Retour au planning</a></div>`; }
+  catch (e) { console.error(e); body = html`<div class="card"><h2>Erreur d’affichage</h2><p>${e.message}</p><a class="btn ghost" href="#/">Retour à l’accueil</a></div>`; }
   container.innerHTML = String(body);
   const unbind = bindActions(container, mod.handlers || {}, ctx);
   current = { pattern: match.pattern, params, query, view: mod, unbind, ctx };

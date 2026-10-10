@@ -347,7 +347,7 @@ async function initMap(box, site) {
     L.marker([p.lat, p.lon], { icon: kindIcon(p.kind, { size: 22, title: p.label }), keyboard: false }).addTo(map).bindTooltip(p.label);
     bounds.push([p.lat, p.lon]);
   }
-  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false });
   watchTiles(map, { onFail: () => box.classList.add('is-offline'), onLoad: () => box.classList.remove('is-offline') });
   setTimeout(() => { if (box.isConnected) map.invalidateSize(); }, 200);
 }

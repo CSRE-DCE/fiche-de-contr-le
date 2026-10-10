@@ -5,7 +5,7 @@
 import { html, localDate } from '../core/util.js';
 import { session } from '../core/session.js';
 import { store } from '../core/store.js';
-import { ROLES, can } from '../core/auth.js';
+import { ROLES, can, isTeamMode } from '../core/auth.js';
 import { bindActions } from '../ui/dom.js';
 import { navigate } from '../ui/router.js';
 import { syncState, onSyncState, runSync } from '../app/sync.js';
@@ -86,11 +86,11 @@ function updateNet() {
   if (!pill) return;
   const online = navigator.onLine;
   pill.classList.toggle('offline', !online);
-  pill.classList.toggle('pending', online && session.mode === 'server' && syncState.pending > 0);
+  pill.classList.toggle('pending', online && isTeamMode() && syncState.pending > 0);
   let text = online ? 'En ligne' : 'Hors connexion';
-  if (session.mode !== 'server') text = online ? 'Mode autonome' : 'Hors connexion';
+  if (!isTeamMode()) text = online ? 'Mode autonome' : 'Hors connexion';
   if (syncState.running) text = 'Synchronisation…';
-  else if (syncState.pending && session.mode === 'server') text += ` · ${syncState.pending} en attente`;
+  else if (syncState.pending && isTeamMode()) text += ` · ${syncState.pending} en attente`;
   if (syncState.needsLogin) text = 'Reconnexion requise';
   lbl.textContent = text;
   pill.title = `${text}${syncState.lastSyncAt ? ' — dernière synchronisation : ' + new Date(syncState.lastSyncAt).toLocaleString('fr-FR') : ''}`;

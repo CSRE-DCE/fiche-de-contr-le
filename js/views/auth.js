@@ -72,7 +72,7 @@ export function renderSetup(root, { onDone }) {
         </div>
         <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"></div>
         <label class="check sel"><input type="checkbox" name="oeg" checked> Reprendre le référentiel des fiches terrain OEG (stations, organismes, préleveurs, campagnes)</label>
-        <label class="check" style="margin-top:8px"><input type="checkbox" name="demo" checked> Ajouter des données de démonstration fictives (prestataire « DÉMO », 3 prestations, documents « EXEMPLE »)</label>
+        <label class="check" style="margin-top:8px"><input type="checkbox" name="demo"> Ajouter des données de démonstration fictives (prestataire « DÉMO », 3 prestations, documents « EXEMPLE »)</label>
         <p class="hint" id="setupErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="setupBtn">Créer et ouvrir la session</button>
       </form>` : html`<form data-submit="team" autocomplete="off" id="teamForm">

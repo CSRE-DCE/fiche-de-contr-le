@@ -3,7 +3,7 @@
 import { html, raw, localDate, sortBy, fmtDateTime } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
-import { can } from '../core/auth.js';
+import { can, isTeamMode } from '../core/auth.js';
 import { toast, downloadBlob, promptDialog, readFileAsText, confirmDialog } from '../ui/dom.js';
 import { pageTitle, options, field } from '../ui/components.js';
 import { table, csvOf, responsesRows, exportWorkbook, planningICS, buildPackage, protectPackage, readPackage, importPackage } from '../app/exports.js';
@@ -36,7 +36,7 @@ export default {
       <div class="card"><h2>Données d’audit et sauvegarde</h2>
         <div class="btn-row"><button class="btn ghost" data-act="package">Paquet de données complet (JSON)</button><button class="btn primary" data-act="backup">🔐 Sauvegarde chiffrée</button></div>
         <p class="note">Le paquet contient toutes les données et photos ; la sauvegarde chiffrée est protégée par un mot de passe dédié (AES-256). Conservez ces fichiers dans un emplacement sécurisé.</p>
-        ${can('ref.manage') || session.mode !== 'server' ? html`<h3>Importer un paquet (autre appareil, restauration)</h3><label class="btn ghost">📂 Choisir un paquet<input type="file" accept="application/json,.json" hidden data-change="importpkg"></label>
+        ${can('ref.manage') || !isTeamMode() ? html`<h3>Importer un paquet (autre appareil, restauration)</h3><label class="btn ghost">📂 Choisir un paquet<input type="file" accept="application/json,.json" hidden data-change="importpkg"></label>
           <p class="note">Fusion avec les données de l’appareil : rien n’est écrasé sans trace, les valeurs concurrentes sont conservées dans le rapport de conflits (Synchronisation).</p>` : ''}
       </div>`;
   },

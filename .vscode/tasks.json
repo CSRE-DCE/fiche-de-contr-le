@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Serveur local (Python)",
+      "detail": "python tools/serve.py — application sur http://127.0.0.1:8000/ (arrêt : Ctrl+C)",
+      "type": "shell",
+      "command": "python",
+      "linux": { "command": "python3" },
+      "osx": { "command": "python3" },
+      "args": ["tools/serve.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Tests (pytest)",
+      "detail": "python -m pytest -q — tests unitaires (navigateur), fumée, tournées, synchronisation GitHub simulée",
+      "type": "shell",
+      "command": "python",
+      "linux": { "command": "python3" },
+      "osx": { "command": "python3" },
+      "args": ["-m", "pytest", "-q"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Vérification avant publication",
+      "detail": "python tools/check_release.py — cache hors connexion, chemins relatifs, JSON, numéro de version",
+      "type": "shell",
+      "command": "python",
+      "linux": { "command": "python3" },
+      "osx": { "command": "python3" },
+      "args": ["tools/check_release.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Nouvelle version",
+      "detail": "python tools/bump_version.py — AUDIT_BUILD + 1 et date du jour dans version.js",
+      "type": "shell",
+      "command": "python",
+      "linux": { "command": "python3" },
+      "osx": { "command": "python3" },
+      "args": ["tools/bump_version.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}

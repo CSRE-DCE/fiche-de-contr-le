@@ -4,7 +4,7 @@ export const session = {
   dekRaw: null,       // octets de la clé (pour l'envelopper pour un nouvel utilisateur)
   user: null,         // {id, username, name, role}
   device: null,       // {id, name, number}
-  mode: null,         // 'standalone' | 'server'
+  mode: null,         // 'standalone' | 'github' (équipe : dépôt GitHub privé de données)
   serverUrl: '',
   token: null,        // jeton d'accès au serveur (mémoire)
   tokenExpiresAt: null,
