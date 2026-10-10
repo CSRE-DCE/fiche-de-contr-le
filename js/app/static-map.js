@@ -98,11 +98,12 @@ async function loadTile(url, { cache, network, timeoutMs, fetchTile }) {
 
 /**
  * Compose la carte statique (voir l'en-tête du fichier). Options : zoom (sinon ajusté aux points : fitZoom),
- * minZoom / maxZoom, network (false : cache seulement), timeoutMs (par tuile), minCoverage (part minimale des
- * tuiles disponibles, défaut 0,6), template (modèle d'URL, défaut : réglages de l'organisation), fetchTile (tests).
+ * minZoom / maxZoom, network (false : cache seulement), useCache (false : ni lecture ni écriture du cache de
+ * l'appareil), timeoutMs (par tuile), minCoverage (part minimale des tuiles disponibles, défaut 0,6), template
+ * (modèle d'URL, défaut : réglages de l'organisation), fetchTile (tests).
  */
 export async function staticMap({ center, points = [], width = 640, height = 480, zoom = null, minZoom = 7, maxZoom = 14, network = true,
-  timeoutMs = 5000, minCoverage = 0.6, template = null, fetchTile = null } = {}) {
+  useCache = true, timeoutMs = 5000, minCoverage = 0.6, template = null, fetchTile = null } = {}) {
   if (!center || !isFinite(center[0]) || !isFinite(center[1])) return { kind: 'schema', reason: 'coords', zoom: null, tiles: { loaded: 0, total: 0 } };
   const W = Math.round(width), H = Math.round(height);
   const z = zoom ?? fitZoom(center, points, W, H, { minZoom, maxZoom });
@@ -119,7 +120,7 @@ export async function staticMap({ center, points = [], width = 640, height = 480
   const base = { zoom: z, tiles: { loaded: 0, total: tiles.length } };
   if (!tpl) return { kind: 'schema', reason: 'tiles', ...base };
   let cache = null;
-  try { cache = typeof caches !== 'undefined' ? await caches.open(TILE_CACHE) : null; } catch (e) { cache = null; }
+  try { cache = useCache && typeof caches !== 'undefined' ? await caches.open(TILE_CACHE) : null; } catch (e) { cache = null; }
   if (!cache && !(network && online)) return { kind: 'schema', reason: 'offline', ...base };
   const canvas = makeCanvas(W, H);
   const ctx = canvas?.getContext('2d');

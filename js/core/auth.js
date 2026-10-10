@@ -1,16 +1,19 @@
 /* Authentification, rôles et droits.
  *
- * Deux modes :
- *  - autonome : comptes locaux à l'appareil, créés par l'administrateur local ;
- *  - serveur  : comptes gérés par le serveur ; la première connexion d'un utilisateur sur un appareil
- *               se fait en ligne, les suivantes peuvent se faire hors connexion (mot de passe vérifié
- *               localement par désenveloppement de la clé de chiffrement).
+ * Les comptes sont toujours LOCAUX à l'appareil (mot de passe vérifié hors connexion par désenveloppement
+ * de la clé de chiffrement de l'appareil). Deux modes :
+ *  - autonome : données uniquement sur l'appareil, échanges par paquets export/import ;
+ *  - équipe (GitHub) : l'appareil est rattaché à un dépôt GitHub PRIVÉ de données (propriétaire/dépôt,
+ *    branche, préfixe) et se synchronise par l'API REST GitHub avec un jeton d'accès « fine-grained »
+ *    conservé CHIFFRÉ avec la clé de l'appareil (entité locale jamais synchronisée). Le rôle d'un compte
+ *    rattaché à un login GitHub est celui de config/utilisateurs.json (appliqué par js/app/sync.js) ; à
+ *    défaut, son rôle local.
  */
 import { meta } from './db.js';
 import { session, clearSession } from './session.js';
 import { store } from './store.js';
 import { wrapDEK, unwrapDEK, importDEK, newDEKRaw } from './crypto.js';
-import { uuid, nowISO, bytesToBase64, base64ToBytes } from './util.js';
+import { uuid, nowISO } from './util.js';
 
 import { ROLES, PERMISSIONS } from '../domain/permissions.js';
 export { ROLES, PERMISSIONS };
@@ -45,7 +48,7 @@ export async function loadDevice() {
   }
   session.device = device;
   session.mode = await meta.get('mode', null);
-  session.serverUrl = await meta.get('serverUrl', '');
+  session.team = session.mode === TEAM_MODE ? await meta.get('team', null) : null;
   return device;
 }
 export async function updateDevice(patch) {
@@ -121,7 +124,7 @@ export async function lock(reason = 'manuel') {
   clearSession();
 }
 
-/** Crée un compte local (mode autonome) ou enregistre localement un compte serveur. */
+/** Crée un compte local (les deux modes ; extra : champs du profil, ex. { githubLogin }). */
 export async function addLocalAccount({ id, username, name, role, password, source = 'local', extra = {} }) {
   if (!session.dekRaw) throw new Error('Session fermée');
   validatePassword(password);
@@ -129,7 +132,7 @@ export async function addLocalAccount({ id, username, name, role, password, sour
   const k = await getKeyring();
   if (k.users[username] && k.users[username].userId !== id) throw new Error('Identifiant déjà utilisé sur cet appareil.');
   const userId = id || uuid();
-  k.users[username] = { userId, name, role, wrap: await wrapDEK(session.dekRaw, password), lastLogin: null };
+  k.users[username] = { ...(k.users[username] || {}), userId, name, role, wrap: await wrapDEK(session.dekRaw, password), lastLogin: k.users[username]?.lastLogin || null, ...(extra.githubLogin !== undefined ? { githubLogin: extra.githubLogin || null } : {}) };
   await saveKeyring(k);
   if (source === 'local') {
     const existing = store.get('user', userId);
@@ -146,7 +149,11 @@ export async function setLocalAccountDisabled(username, disabled) {
 }
 export async function syncKeyringProfile(user) {
   const k = await getKeyring(); const e = k.users[normUsername(user.username)];
-  if (e) { e.name = user.name; e.role = user.role; e.disabled = user.active === false; await saveKeyring(k); }
+  if (e) {
+    e.name = user.name; e.role = user.role; e.disabled = user.active === false;
+    if (user.githubLogin !== undefined) e.githubLogin = user.githubLogin || null;
+    await saveKeyring(k);
+  }
 }
 
 export async function changePassword(oldPassword, newPassword) {
@@ -164,118 +171,96 @@ export function validatePassword(p) {
 }
 export function normUsername(u) { return String(u || '').trim().toLowerCase(); }
 
-/* ---------- mode serveur ---------- */
-export function apiUrl(path) {
-  const base = String(session.serverUrl || '').replace(/\/+$/, '');
-  return base + '/api/v1' + path;
+/* ---------- mode équipe (dépôt GitHub de données) ---------- */
+export const TEAM_MODE = 'github';
+export const TEAM_DEFAULTS = { apiUrl: 'https://api.github.com', branch: 'main', prefix: 'donnees/' };
+const TOKEN_ID = 'github:token';
+
+export function isTeamMode() { return session.mode === TEAM_MODE; }
+/** « propriétaire/dépôt » de l'équipe (affichage). */
+export function teamLabel(team = session.team) { return team ? `${team.owner}/${team.repo}` : ''; }
+
+function cleanTeam(t) {
+  return { apiUrl: t.apiUrl || TEAM_DEFAULTS.apiUrl, owner: t.owner, repo: t.repo, branch: t.branch || TEAM_DEFAULTS.branch, prefix: t.prefix ?? TEAM_DEFAULTS.prefix, attachedAt: t.attachedAt || nowISO(), orgName: t.orgName || '' };
 }
-export function assertSecureUrl(url) {
-  const u = new URL(url);
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
-  if (u.protocol !== 'https:' && !local) throw new Error('Le serveur doit être joint en HTTPS (communications chiffrées).');
-  return u.origin + u.pathname.replace(/\/+$/, '');
+async function setTeamMode(team) {
+  const t = cleanTeam(team);
+  await meta.set('mode', TEAM_MODE); await meta.set('team', t);
+  session.mode = TEAM_MODE; session.team = t;
+  return t;
 }
 
-/** Connexion en ligne ; crée la clé de l'appareil au premier démarrage, ou récupère la clé déposée. */
-export async function serverLogin(serverUrl, username, password, { firstSetup = false } = {}) {
-  serverUrl = assertSecureUrl(serverUrl);
-  await loadDevice();
-  const k = await getKeyring();
-  const hasLocalKey = Object.keys(k.users).length > 0;
-  const freshKey = !hasLocalKey ? newDEKRaw() : null;
-  const res = await fetch(serverUrl + '/api/v1/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: normUsername(username), password,
-      device: { id: session.device.id, name: session.device.name, userAgent: navigator.userAgent },
-      // Au premier démarrage, la clé de l'appareil est déposée sur le serveur (canal HTTPS) : elle
-      // permettra à un autre utilisateur autorisé d'ouvrir une session sur cet appareil sans perte des
-      // données non encore synchronisées. Le serveur refuse ce dépôt pour un appareil révoqué.
-      deviceKey: freshKey ? bytesToBase64(freshKey) : undefined
-    })
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Connexion refusée (${res.status})`);
-  let dekRaw = freshKey;
-  if (!dekRaw) {
-    const entry = k.users[normUsername(username)];
-    dekRaw = entry ? await unwrapDEK(entry.wrap, password) : null;
-    if (!dekRaw && body.deviceKey) dekRaw = base64ToBytes(body.deviceKey);
-    if (!dekRaw) throw new Error('Impossible d’ouvrir les données de cet appareil avec ce compte. Contactez l’administrateur.');
-  }
-  await meta.set('mode', 'server'); await meta.set('serverUrl', serverUrl);
-  session.mode = 'server'; session.serverUrl = serverUrl;
-  if (body.device?.number) await updateDevice({ number: body.device.number, serverRegisteredAt: body.device.registeredAt || nowISO() });
-  const user = { id: body.user.id, username: body.user.username, name: body.user.name, role: body.user.role };
-  k.users[user.username] = { userId: user.id, name: user.name, role: user.role, wrap: await wrapDEK(dekRaw, password), lastLogin: nowISO() };
-  await saveKeyring(k);
-  await openWithDEK(dekRaw, user);
-  session.token = body.token; session.tokenExpiresAt = body.expiresAt;
-  await saveToken();
-  await store.log(firstSetup ? 'setup' : 'login', { entityType: 'user', entityId: user.id, entityLabel: user.name, details: { mode: 'serveur', serveur: serverUrl } });
-  return user;
+/** Jeton GitHub : conservé chiffré avec la clé de l'appareil (entité locale « localSecret », jamais synchronisée). */
+export async function saveTeamToken(token, login) {
+  if (!session.dekRaw) throw new Error('Session fermée');
+  session.token = token; session.githubLogin = login || null;
+  await store.put('localSecret', { id: TOKEN_ID, token, login: login || null, savedAt: nowISO(), savedBy: session.user?.id || null });
 }
-
-/** Renouvelle le jeton serveur après une ouverture de session locale (si le réseau est disponible). */
-export async function refreshServerToken(password) {
-  if (session.mode !== 'server' || !navigator.onLine) return false;
-  try {
-    const res = await fetch(apiUrl('/auth/login'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: session.user.username, password, device: { id: session.device.id, name: session.device.name, userAgent: navigator.userAgent } })
-    });
-    const body = await res.json().catch(() => ({}));
-    if (res.status === 401 && body.code === 'DEVICE_REVOKED') return { revoked: true };
-    if (!res.ok) return false;
-    session.token = body.token; session.tokenExpiresAt = body.expiresAt;
-    if (body.user?.role && body.user.role !== session.user.role) { session.user.role = body.user.role; await syncKeyringProfile({ ...session.user }); }
-    await saveToken();
-    return true;
-  } catch (e) { return false; }
-}
-/** Le jeton est conservé chiffré (avec la clé de l'appareil) pour reprendre la synchronisation après verrouillage. */
-async function saveToken() {
-  if (!session.token) return;
-  await store.put('localSecret', { id: 'serverToken:' + session.user.id, token: session.token, expiresAt: session.tokenExpiresAt });
-}
+/** Recharge le jeton en mémoire après l'ouverture de session (mode équipe). */
 export function restoreToken() {
-  const t = store.get('localSecret', 'serverToken:' + session.user?.id);
-  if (t && (!t.expiresAt || new Date(t.expiresAt) > new Date())) { session.token = t.token; session.tokenExpiresAt = t.expiresAt; }
+  const t = store.get('localSecret', TOKEN_ID);
+  if (isTeamMode() && t?.token) { session.token = t.token; session.githubLogin = t.login || null; }
+  else { session.token = null; session.githubLogin = null; }
+  return !!session.token;
+}
+/** Informations non secrètes sur le jeton enregistré. */
+export function tokenInfo() { const t = store.get('localSecret', TOKEN_ID); return t?.token ? { login: t.login, savedAt: t.savedAt, savedBy: t.savedBy } : null; }
+
+/** Rattache un compte local à un login GitHub (son rôle suivra config/utilisateurs.json). */
+export async function linkGithubLogin(userId, login) {
+  const k = await getKeyring();
+  for (const e of Object.values(k.users)) if (e.userId === userId) e.githubLogin = login || null;
+  await saveKeyring(k);
+  const u = store.get('user', userId);
+  if (u && (u.githubLogin || null) !== (login || null)) await store.put('user', { ...u, githubLogin: login || null }, { reason: 'Rattachement au compte GitHub ' + (login || '(aucun)') });
 }
 
 /**
- * Rattache un appareil configuré en mode autonome à un serveur (session ouverte requise) : la clé de
- * l'appareil est déposée sur le serveur, le compte serveur est ajouté au trousseau local et toutes
- * les données locales seront envoyées à la prochaine synchronisation.
+ * Premier démarrage en mode équipe (« Rejoindre une équipe ») : crée la clé de l'appareil et le compte
+ * local, enregistre la configuration du dépôt et le jeton (chiffré). Le rôle initial est celui de
+ * config/utilisateurs.json pour ce login, « admin » pour celui qui initialise un dépôt vide, sinon « auditeur ».
+ * Les données de l'équipe sont ensuite reçues par la première synchronisation.
  */
-export async function attachToServer(serverUrl, username, password) {
-  if (!session.dekRaw) throw new Error('Session fermée');
-  serverUrl = assertSecureUrl(serverUrl);
-  const res = await fetch(serverUrl + '/api/v1/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: normUsername(username), password, device: { id: session.device.id, name: session.device.name, userAgent: navigator.userAgent }, deviceKey: bytesToBase64(session.dekRaw) })
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Connexion refusée (${res.status})`);
-  await meta.set('mode', 'server'); await meta.set('serverUrl', serverUrl);
-  session.mode = 'server'; session.serverUrl = serverUrl;
-  if (body.device?.number) await updateDevice({ number: body.device.number, serverRegisteredAt: nowISO() });
+export async function setupTeam({ deviceName, account, team, token, login, role = 'auditeur' }) {
+  if (await isSetUp()) throw new Error('Cet appareil est déjà configuré.');
+  validatePassword(account.password);
+  if (!token) throw new Error('Jeton d’accès GitHub requis.');
+  await loadDevice();
+  await updateDevice({ name: deviceName || defaultDeviceName() });
+  const t = await setTeamMode(team);
+  const dekRaw = newDEKRaw();
+  const user = { id: uuid(), username: normUsername(account.username), name: String(account.name || '').trim(), role: ROLES[role] ? role : 'auditeur', active: true, githubLogin: login || null };
+  if (!user.username || !user.name) throw new Error('Nom et identifiant du compte local requis.');
   const k = await getKeyring();
-  k.users[body.user.username] = { userId: body.user.id, name: body.user.name, role: body.user.role, wrap: await wrapDEK(session.dekRaw, password), lastLogin: nowISO() };
+  k.users[user.username] = { userId: user.id, name: user.name, role: user.role, githubLogin: user.githubLogin, wrap: await wrapDEK(dekRaw, account.password), lastLogin: nowISO() };
   await saveKeyring(k);
-  session.user = { id: body.user.id, username: body.user.username, name: body.user.name, role: body.user.role };
-  session.token = body.token; session.tokenExpiresAt = body.expiresAt;
-  await saveToken();
-  await store.log('attach-server', { entityLabel: serverUrl, details: { serveur: serverUrl, compte: body.user.username } });
-  return body.user;
+  await openWithDEK(dekRaw, { id: user.id, username: user.username, name: user.name, role: user.role });
+  await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Configuration initiale de l’appareil (équipe)' });
+  await saveTeamToken(token, login);
+  await store.log('setup', { entityLabel: session.device.name, details: { mode: 'équipe GitHub', depot: teamLabel(t), branche: t.branch, prefixe: t.prefix, compteGitHub: login, device: session.device } });
+  return user;
 }
 
-/** Appel authentifié à l'API d'administration du serveur. */
-export async function adminApi(path, { method = 'GET', body } = {}) {
-  if (session.mode !== 'server') throw new Error('Fonction disponible uniquement en mode serveur.');
-  if (!session.token) throw new Error('Reconnexion au serveur requise (Synchronisation).');
-  const res = await fetch(apiUrl(path), { method, headers: { Authorization: `Bearer ${session.token}`, 'X-Device-Id': session.device.id, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
-  const out = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(out.error || `Erreur serveur ${res.status}`);
-  return out;
+/**
+ * Rattache un appareil déjà configuré (session ouverte) à un dépôt d'équipe : toutes les données locales
+ * seront fusionnées avec celles du dépôt à la prochaine synchronisation. Le compte courant est relié au
+ * login GitHub du jeton.
+ */
+export async function attachTeam({ team, token, login }) {
+  if (!session.dekRaw) throw new Error('Session fermée');
+  const t = await setTeamMode(team);
+  await saveTeamToken(token, login);
+  await linkGithubLogin(session.user.id, login);
+  await store.log('attach-team', { entityLabel: teamLabel(t), details: { depot: teamLabel(t), branche: t.branch, prefixe: t.prefix, compteGitHub: login } });
+  return t;
 }
+
+/** Détache l'appareil de l'équipe : retour au mode autonome, jeton effacé ; les données locales restent. */
+export async function detachTeam(reason = null) {
+  const label = teamLabel();
+  await meta.set('mode', 'standalone'); await meta.del('team');
+  session.mode = 'standalone'; session.team = null; session.token = null; session.githubLogin = null;
+  if (store.getRaw('localSecret', TOKEN_ID)) await store.put('localSecret', { id: TOKEN_ID, _deleted: true });
+  await store.log('detach-team', { entityLabel: label, reason, details: { depot: label } });
+}
+

@@ -7,6 +7,6 @@
  *
  * La version est aussi enregistrée dans chaque audit (« version de l'application »).
  */
-self.AUDIT_BUILD = 2;
+self.AUDIT_BUILD = 3;
 self.AUDIT_BUILD_DATE = '2026-10-10';
 self.AUDIT_VERSION = '1.0.' + self.AUDIT_BUILD;

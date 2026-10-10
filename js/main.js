@@ -4,7 +4,7 @@ import { session } from './core/session.js';
 import { store } from './core/store.js';
 import * as auth from './core/auth.js';
 import { revokeAllURLs } from './core/media.js';
-import { route, startRouter, stopRouter } from './ui/router.js';
+import { route, startRouter, stopRouter, refresh } from './ui/router.js';
 import { toast } from './ui/dom.js';
 import { initSync, stopSync, runSync } from './app/sync.js';
 import { applyDisplayPrefs, orgSettings } from './app/settings.js';
@@ -60,7 +60,8 @@ export async function lockApp(reason = 'manuel') {
   stopSync(); stopRouter(); revokeAllURLs();
   await auth.lock(reason);
   document.body.classList.remove('in-audit');
-  showLogin(reason === 'inactivité' ? 'Session verrouillée après inactivité. Vos saisies sont enregistrées sur l’appareil.' : '');
+  showLogin(reason === 'inactivité' ? 'Session verrouillée après inactivité. Vos saisies sont enregistrées sur l’appareil.'
+    : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).' : '');
 }
 
 /** Appareil révoqué par l'administrateur : effacement complet des données locales. */
@@ -73,33 +74,39 @@ async function onRevoked() {
   renderMessage(app, { title: 'Appareil désactivé', message: 'Cet appareil a été désactivé par l’administrateur (appareil perdu ou retiré). Toutes les données locales ont été effacées. Contactez votre administrateur pour réactiver un appareil.' });
 }
 
-async function enterApp({ password = null } = {}) {
+/** Mise à niveau idempotente du référentiel (grille CT-2026, stations, programmes) par un profil habilité. */
+function upgradeReferentiel() {
+  if (!auth.can('ref.manage')) return Promise.resolve(null);
+  return import('./app/bootstrap.js').then(m => m.upgradeReferentiel2026?.()).catch(() => null);
+}
+
+async function enterApp() {
   document.body.classList.remove('auth-mode');
   teardownAuth();
   auth.restoreToken();
   renderShell(app, { lock: () => lockApp('manuel') });
   watchActivity();
-  initSync({ revoked: onRevoked });
+  initSync({ revoked: onRevoked, disabled: () => lockApp('compte désactivé') });
   await startRouter(document.getElementById('view'), { onRoute: updateShell });
-  if (session.mode === 'server' && password) {
-    const r = await auth.refreshServerToken(password);
-    if (r?.revoked) return onRevoked();
-    runSync({ reason: 'ouverture de session' }).then(async res => {
-      if (res?.pulled || res?.pushed) toast(`Synchronisation : ${res.pushed} envoi(s), ${res.pulled} réception(s)`, 'ok');
-      // Serveur vierge : le premier administrateur / responsable qualité initialise le référentiel de base.
-      if (!res?.errors?.length && !res?.skipped && !store.count('grid') && auth.can('ref.manage')) {
-        const { seedBase } = await import('./app/bootstrap.js');
-        await seedBase();
-        toast('Serveur vierge : référentiel de base et grilles initialisés. Reprenez les stations depuis Administration › Données.', 'ok', 7000);
-        runSync({ reason: 'initialisation du référentiel' });
-      }
-    }).catch(() => {});
-  }
+  if (!auth.isTeamMode()) { upgradeReferentiel(); return; }
+  // Mode équipe : réception des données de l'équipe d'abord, puis mise à niveau du référentiel (évite de
+  // recréer localement ce que le dépôt contient déjà).
+  const emptyBefore = !store.count('site');
+  runSync({ reason: 'ouverture de session' }).then(async res => {
+    if (res?.revoked || res?.disabled || !session.unlocked) return;
+    if (res?.pulled || res?.pushed) toast(`Synchronisation : ${res.pushed} envoi(s), ${res.pulled} réception(s)`, 'ok');
+    else if (res?.errors?.length) toast('Synchronisation : ' + res.errors[0], 'warn', 6000);
+    if (res && !res.skipped && !res.errors?.length) {
+      const up = await upgradeReferentiel();
+      if (up?.upgraded) runSync({ reason: 'mise à niveau du référentiel' }).catch(() => {});
+    }
+    if (emptyBefore && store.count('site') && session.unlocked) refresh();   // premières données reçues : réafficher
+  }).catch(() => {});
 }
 
 function showLogin(message = '') {
   document.body.classList.add('auth-mode');
-  renderLogin(app, { message, onUnlocked: ({ password }) => enterApp({ password }) });
+  renderLogin(app, { message, onUnlocked: () => enterApp() });
 }
 
 async function boot() {
@@ -109,7 +116,7 @@ async function boot() {
   await auth.loadDevice();
   if (!(await auth.isSetUp())) {
     document.body.classList.add('auth-mode');
-    renderSetup(app, { onDone: ({ password }) => enterApp({ password }) });
+    renderSetup(app, { onDone: () => enterApp() });
   } else showLogin();
 }
 

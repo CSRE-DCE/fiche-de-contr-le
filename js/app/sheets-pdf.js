@@ -21,7 +21,7 @@
  * Le moteur de rendu (buildSheetsPdf) reçoit un « modèle » de document (sheetsModelFromAudit, blankSheetsModel) :
  * il est testable sans base de données (tests/unit/pdf-sheets.test.js).
  */
-import { PDFDocument, A4, A4_LANDSCAPE, parseSvgPath } from '../formats/pdf.js';
+import { PDFDocument, A4, A4_LANDSCAPE } from '../formats/pdf.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
@@ -37,7 +37,7 @@ import {
   expandGrid, sheetsOf, groupSheets, headerOf, sectionHeaders, sheetStoreKey, prefillResponses, auditCompartments, normalizeCompartments,
   typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName
 } from '../domain/grids.js';
-import { formatValue, itemInput, fieldShown, SHEET_CONCLUSIONS, AUDIT_TYPES, PROVIDER_KINDS } from '../domain/model.js';
+import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS } from '../domain/model.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { auditState, auditContentHash, auditMedia } from './audits.js';
@@ -67,6 +67,7 @@ const STATUS_OF = Object.fromEntries(STATUS.map(s => [s.code, s]));
 const conclColor = (code, t) => STATUS_OF[code]?.color || t.main;
 const theme = name => { const t = THEMES[name] || THEMES.ocean; return { ...t, title: t.title || t.dark, num: t.num || t.main, name: THEMES[name] ? name : 'ocean' }; };
 const present = v => v !== undefined && v !== null && String(v).trim() !== '';
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const upper = s => String(s || '').toLocaleUpperCase('fr-FR');
 const fmtXY = v => (present(v) && isFinite(Number(v)) ? String(Math.round(Number(v))) : '—');
 const fmtLL = (v, pos, neg) => `${Math.abs(v).toFixed(5).replace('.', ',')}° ${v >= 0 ? pos : neg}`;
@@ -104,7 +105,7 @@ const dims = img => [img.width || img.naturalWidth, img.height || img.naturalHei
 
 /** Ressources rastérisées d'un document (mises en cache : un objet image par pictogramme et couleur). */
 class Assets {
-  constructor(doc) { this.doc = doc; this.cache = new Map(); }
+  constructor(doc, { mapNetwork = true } = {}) { this.doc = doc; this.cache = new Map(); this.mapNetwork = mapNetwork; }
   async once(key, fn) {
     if (!this.cache.has(key)) this.cache.set(key, fn().catch(() => null));
     return this.cache.get(key);
@@ -187,7 +188,7 @@ class Assets {
     return this.once(`map:${site?.id}:${wPx}x${hPx}`, async () => {
       const ll = siteLatLon(site);
       if (!ll) return null;
-      const m = await staticMap({ center: ll, points: points.map(p => [p.lat, p.lon]), width: wPx, height: hPx });
+      const m = await staticMap({ center: ll, points: points.map(p => [p.lat, p.lon]), width: wPx, height: hPx, network: this.mapNetwork });
       if (m.kind !== 'tiles') return { schema: true, reason: m.reason };
       return { ...m, image: this.doc.addImage(m.jpeg) };
     });
@@ -764,7 +765,7 @@ class SheetsRenderer {
       } else if (c.key === 'obs') {
         const ls = row.cells.obs || [];
         if (!ls.length) { if (this.blank || conformity) this.dots(cx + 4, y + row.h - PADY - 1.5, cx + c.w - 4); }
-        else ls.forEach((o, k) => d.text(o.s, cx + 3, ty + k * LH, { font: o.font || F.text, size: o.color ? FS - 0.6 : FS - 0.2, color: o.color || INK }));
+        else ls.forEach((o, k) => this.chemText(o.s, cx + 3, ty + k * LH, { font: o.font || F.text, size: o.color ? FS - 0.6 : FS - 0.2, color: o.color || INK }));
       }
       cx += c.w;
     }
@@ -1262,7 +1263,7 @@ class SheetsRenderer {
         if (ty > by + bh - 14) break;
         kinds.add(p.kind);
         this.symbol(p.kind, tx + 3.5, ty + 3.6, 7);
-        const s = `${p.label} — ${ll ? fmtDistance(haversine(ll[0], ll[1], p.lat, p.lon)) : ''}`;
+        const s = `${ll ? 'à ' + fmtDistance(haversine(ll[0], ll[1], p.lat, p.lon)) + ' — ' : ''}${p.label}`;
         d.text(d.clampLines(d.wrap(s, F.text, 6.5, bw - gw - 42), 1, F.text, 6.5, bw - gw - 42)[0], tx + 10, ty, { font: F.text, size: 6.5, color: INK });
         ty += 9;
       }
@@ -1409,7 +1410,7 @@ class SheetsRenderer {
     let cy = y + 25;
     for (const it of short) {
       const v = formatValue(it, this.resp(it.id)?.value);
-      d.text(it.label + ' :', x + 9, cy + 3, { font: F.text, size: 7.8, color: NAVY });
+      d.text(it.label + ' :', x + 9, cy + 3 + (7.8 - d.fitSize(it.label + ' :', F.text, 7.8, lw - 4, 5)) / 2, { font: F.text, size: d.fitSize(it.label + ' :', F.text, 7.8, lw - 4, 5), color: NAVY });
       if (v) d.text(v, x + 9 + lw, cy + 2.6, { font: F.semi, size: d.fitSize(v, F.semi, 8, w - lw - 20, 5), color: INK });
       else this.dots(x + 9 + lw, cy + 11, x + w - 9);
       d.line(x + 6, cy + rh - 0.5, x + w - 6, cy + rh - 0.5, { color: t.line, width: 0.4 });
@@ -1451,7 +1452,11 @@ class SheetsRenderer {
           const px = cols[i].align === 'center' ? cx + (cols[i].w - pw) / 2 : cx + 4;
           d.roundRect(px, this.y + row.h / 2 - 5.5, pw, 11, 5.5, { fill: c.pill });
           d.text(c.text, px, this.y + row.h / 2 - size * 0.48, { font: F.bold, size, color: '#ffffff', align: 'center', width: pw });
-        } else c.lines.forEach((l, k) => d.text(l, cx + 4, this.y + 3.5 + k * (size + 2) + (c.lines.length === 1 ? (row.h - size - 7) / 2 : 0), { font: c.font || F.text, size, color: c.color || INK, align: cols[i].align || 'left', width: cols[i].w - 8 }));
+        } else c.lines.forEach((l, k) => {
+          const ly = this.y + 3.5 + k * (size + 2) + (c.lines.length === 1 ? (row.h - size - 7) / 2 : 0);
+          if ((cols[i].align || 'left') === 'left') this.chemText(l, cx + 4, ly, { font: c.font || F.text, size, color: c.color || INK });
+          else d.text(l, cx + 4, ly, { font: c.font || F.text, size, color: c.color || INK, align: cols[i].align, width: cols[i].w - 8 });
+        });
         cx += cols[i].w;
       });
       this.y += row.h;
@@ -1479,7 +1484,7 @@ class SheetsRenderer {
       d.roundRect(M, this.y, w, 20, [7, 7, 0, 0], { fill: t.bar });
       await this.pastille(M + 12, this.y + 10, 8.5, { iconName, fill: t.main });
       d.text(title + (i ? ' (suite)' : ''), M + 25, this.y + 5.4, { font: F.bold, size: 9.4, color: t.title });
-      if (chunk.length) chunk.forEach((l, k) => d.text(l, M + 10, this.y + 27 + k * 10.4, { font: F.text, size: 8, color: INK }));
+      if (chunk.length) chunk.forEach((l, k) => this.chemText(l, M + 10, this.y + 27 + k * 10.4, { font: F.text, size: 8, color: INK }));
       else d.text('Néant.', M + 10, this.y + 28, { font: F.italic, size: 8, color: MUTED });
       this.y += h + 8;
       i += Math.max(1, chunk.length);
@@ -1608,12 +1613,13 @@ class SheetsRenderer {
 
 /**
  * Moteur : document PDF des fiches d'un modèle (sheetsModelFromAudit, blankSheetsModel). options : only (filtre des
- * feuilles, ex. feuille 1), compress (défaut true : flux compressés). Retourne { bytes, pages, doc }.
+ * feuilles, ex. feuille 1), compress (défaut true : flux compressés), mapNetwork (false : carte composée des seules
+ * tuiles du cache, sinon schéma). Retourne { bytes, pages, doc }.
  */
-export async function buildSheetsPdf(model, { only = null, compress = true, title = '' } = {}) {
+export async function buildSheetsPdf(model, { only = null, compress = true, title = '', mapNetwork = true } = {}) {
   const doc = new PDFDocument({ title: title || model.header?.title || 'Fiches de contrôle terrain', author: model.auditorName || 'Office de l’Eau de Guyane', subject: 'Fiches de contrôle terrain des prestations de prélèvement', keywords: `contrôle terrain;OEG;${model.number || 'fiche vierge'}`, autoFirstPage: false, margins: { top: 48, bottom: 52, left: M, right: M } });
   await loadOegFonts(doc);
-  const assets = new Assets(doc);
+  const assets = new Assets(doc, { mapNetwork });
   const r = new SheetsRenderer(doc, assets, model);
   if (model.provisional) doc.watermark = { text: 'PROVISOIRE', mode: 'fill', color: '#c62828', opacity: 0.09, font: F.black, size: 96 };
   const short = model.fingerprint ? `Empreinte ${model.fingerprint.slice(0, 12)}…` : '';
@@ -1676,5 +1682,3 @@ export async function generateStationSheetPdf({ siteId = null, auditType = '' } 
   return { bytes, filename: `Fiche_station_${fileToken(sites[0].name || sites[0].code)}.pdf`, pages, provisional: false };
 }
 
-const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-export { parseSvgPath };
