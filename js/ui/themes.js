@@ -20,7 +20,7 @@ export const OEG = {
   paper: '#f4f9fd',     // fond de page
   card: '#ffffff',
   line: '#cfe3f1',
-  ok: '#1b7a43', nc: '#c62828', na: '#5f6b7a', warn: '#b45309'
+  ok: '#1b7a43', perf: '#d97706', nc: '#c62828', na: '#5f6b7a', warn: '#b45309'
 };
 
 export const THEMES = {
@@ -32,6 +32,7 @@ export const THEMES = {
   violet: { label: 'Violet', main: '#6a35b0', dark: '#4a1f8a', head: '#8256c4', headText: '#ffffff', bar: '#9464cc', barText: '#ffffff', row: '#ffffff', rowAlt: '#faf6fd', light: '#ece8fc', line: '#d4c3ec', accent: '#9c6ccc' },
   sky: { label: 'Ciel', main: '#0b6cb4', dark: '#0d3577', head: '#088cc0', headText: '#ffffff', bar: '#dcf4fc', barText: '#0d3577', row: '#ffffff', rowAlt: '#e4f4fc', light: '#d8f0fc', line: '#b4dcf0', accent: '#0c9ccc' },
   rust: { label: 'Cuivre', main: '#e0662a', dark: '#b4451a', head: '#fce8d8', headText: '#8a3a1a', bar: '#fdf0e4', barText: '#b4451a', row: '#fcf8f4', rowAlt: '#fcf0e8', light: '#fdf0e4', line: '#f3c9a6', accent: '#f0a060', title: '#c4501f' },
+  slate: { label: 'Ardoise (eaux souterraines)', main: '#2f6f8f', dark: '#163e57', head: '#3f7ea3', headText: '#ffffff', bar: '#e3eef5', barText: '#163e57', row: '#ffffff', rowAlt: '#eef4f8', light: '#e3eef5', line: '#bcd3e2', accent: '#5b9bbf' },
   teal: { label: 'Turquoise', main: '#0b6c9c', dark: '#0d3577', head: '#088cb4', headText: '#ffffff', bar: '#d8f4fc', barText: '#0d3577', row: '#ffffff', rowAlt: '#ecf8fc', light: '#dcf4fc', line: '#b4dcec', accent: '#349cc0', num: '#349cc0' }
 };
 
