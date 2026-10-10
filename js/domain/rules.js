@@ -1,11 +1,17 @@
-/* Alertes intelligentes. Fichier pur (testé sous Node).
+/* Alertes intelligentes. Fichier pur (testé sous Node et dans le navigateur).
  *
  * Une alerte signale une situation qui mérite l'attention de l'auditeur. Elle n'est JAMAIS
  * transformée automatiquement en non-conformité : elle propose seulement de créer un écart
  * pré-rempli, l'auditeur garde la décision finale.
+ *
+ * Grilles en feuilles : règles `item.alerts` appliquées à la valeur saisie (`input` numérique, ou champ
+ * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps) aux
+ * coordonnées théoriques de la station, ancienneté des calibrations des sondes (module « instruments »).
  */
-import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAnswerable } from './grids.js';
+import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAnswerable, sheetsOf } from './grids.js';
+import { itemInput } from './model.js';
 import { haversine, fmtDistance, fmtDate, daysBetween } from '../core/util.js';
+import { ecartGPS } from '../lib/geo.js';
 
 const LEVEL_RANK = { critique: 3, attention: 2, info: 1 };
 
@@ -63,12 +69,40 @@ export function equipmentStatus(eq, date) {
   return { ok: !reasons.length, level, reasons };
 }
 
+/** Clés et libellés par défaut des appareils du module « instruments » (feuille 4). */
+const DEFAULT_INSTRUMENTS = [{ key: 'ph', label: 'Sonde pH' }, { key: 'o2', label: 'Sonde O₂' }, { key: 'cond', label: 'Conductivité' }, { key: 'turb', label: 'Turbidimètre' }];
+const fr = v => String(v).replace('.', ',');
+const isNum = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(String(v).replace(',', '.')));
+const toNum = v => Number(String(v).replace(',', '.'));
+
+/**
+ * Écart (m) entre des coordonnées saisies {x, y} et les coordonnées théoriques de la station (RGFG95 / UTM 22N,
+ * distance euclidienne). null si l'une des deux positions est incomplète.
+ */
+export function xyDistance(value, site) {
+  if (!value || !site || !isNum(value.x) || !isNum(value.y) || !isNum(site.x) || !isNum(site.y)) return null;
+  return ecartGPS(toNum(site.x), toNum(site.y), toNum(value.x), toNum(value.y));
+}
+
+/**
+ * État de la dernière calibration d'un appareil à la date de l'audit :
+ * {ok, days, level, reason} — plus de `maxDays` jours avant l'audit, ou postérieure à l'audit ⇒ attention.
+ */
+export function calibrationStatus(calibration, auditDate, maxDays = 30) {
+  const d = String(calibration || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !auditDate) return { ok: true, days: null, level: null, reason: '' };
+  const days = daysBetween(d, String(auditDate).slice(0, 10));
+  if (days < 0) return { ok: false, days, level: 'attention', reason: `date de dernière calibration (${fmtDate(d)}) postérieure à la date de l’audit (${fmtDate(auditDate)})` };
+  if (days > maxDays) return { ok: false, days, level: 'attention', reason: `dernière calibration le ${fmtDate(d)}, soit ${days} jours avant l’audit (maximum ${maxDays} jours)` };
+  return { ok: true, days, level: null, reason: '' };
+}
+
 /**
  * Calcule les alertes d'un audit.
  * input : {audit, grid, ctx, point, site, prestation, operators, settings, today, mediaCounts, includeMissing}
  */
 export function computeAlerts(input) {
-  const { audit, grid, ctx = {}, point, prestation, operators = [], settings = {}, mediaCounts = {} } = input;
+  const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {} } = input;
   const today = input.today || (audit.startedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
   const auditDate = (audit.startedAt || today).slice(0, 10);
   const responses = audit.responses || {};
@@ -152,13 +186,39 @@ export function computeAlerts(input) {
   for (const it of items) {
     const r = responses[it.id];
     const v = responseValue(it, r);
+    const spec = itemInput(it);
     for (const rule of it.alerts || []) {
-      if (v === undefined || v === null || v === '' || v === 'NA') continue;
-      if (cmp(rule.op, v, rule.value)) add({
-        code: rule.code || 'ITEM_RULE', level: rule.level || 'attention', sectionId: it.sectionId, itemId: it.id,
-        title: rule.title || it.label,
-        message: (rule.message || `${it.label} : valeur ${v}`).replace('{value}', String(v).replace('.', ',')),
-        deviation: { requirement: rule.requirement || it.label, description: `${it.label} : ${String(v).replace('.', ',')}${it.unit ? ' ' + it.unit : ''}. ${rule.message || ''}`.trim(), typeCode: rule.typeCode || null, refs: it.refs }
+      // Valeur contrôlée : champ d'un objet (rule.field), valeur saisie d'un critère de conformité (input),
+      // sinon valeur du critère (statut pour un critère de conformité sans saisie).
+      let x = v, unit = it.unit || '';
+      if (rule.field) {
+        x = r?.status === 'NA' ? undefined : r?.value?.[rule.field];
+        unit = (spec?.fields || []).find(f => f.key === rule.field)?.unit || '';
+      } else if (it.kind === 'conformity' && it.input) {
+        x = r?.status === 'NA' ? undefined : r?.value;
+        unit = spec?.unit || '';
+      }
+      if (x === undefined || x === null || x === '' || x === 'NA' || (typeof x === 'object' && !Array.isArray(x))) continue;
+      if (cmp(rule.op, x, rule.value)) {
+        const shown = fr(x);
+        add({
+          code: rule.code || 'ITEM_RULE', level: rule.level || 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet,
+          key: `${rule.code || 'ITEM_RULE'}:${it.id}${rule.field ? ':' + rule.field : ''}`,
+          title: (rule.title || it.label).replace('{value}', shown),
+          message: (rule.message || `${it.label} : valeur ${shown}`).replace('{value}', shown),
+          deviation: { requirement: rule.requirement || it.label, description: `${it.label} : ${shown}${unit ? ' ' + unit : ''}. ${(rule.message || '').replace('{value}', shown)}`.trim(), typeCode: rule.typeCode || null, refs: it.refs }
+        });
+      }
+    }
+    // Coordonnées X / Y saisies éloignées des coordonnées théoriques de la station (critères « fields » gps)
+    if (spec?.type === 'fields' && spec.gps && r?.value && r.status !== 'NA' && site) {
+      const d = xyDistance(r.value, site);
+      const threshold = Number(grid?.settings?.gpsThresholdM) || Number(settings.gpsThresholdM) || 100;
+      if (d !== null && d > threshold) add({
+        code: 'GPS_XY_FAR', level: 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, key: 'GPS_XY_FAR:' + it.id,
+        title: 'Coordonnées éloignées de la station',
+        message: `${it.label} : position X ${r.value.x} / Y ${r.value.y} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
+        deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
       });
     }
     // Version du protocole présentée ≠ version applicable
@@ -190,7 +250,25 @@ export function computeAlerts(input) {
     }
   }
 
-  // 7. Informations obligatoires absentes (affichées lors de la clôture)
+  // 7. Calibration des appareils de mesure (module « instruments » des feuilles visibles)
+  if (grid?.layout === 'sheets') {
+    const maxDays = Number(grid.settings?.calibrationMaxDays) || 30;
+    for (const sh of sheetsOf(grid, responses, ctx)) {
+      if (!(sh.modules || []).includes('instruments')) continue;
+      const data = audit.sheets?.[sh.no]?.instruments || {};
+      for (const ins of sh.instruments || DEFAULT_INSTRUMENTS) {
+        const st = calibrationStatus(data[ins.key]?.calibration, auditDate, maxDays);
+        if (!st.ok) add({
+          code: 'CALIBRATION', level: st.level, sheet: sh.no, sectionId: null, key: `CALIBRATION:${sh.no}:${ins.key}`, target: { type: 'instrument', id: ins.key },
+          title: 'Calibration à vérifier',
+          message: `${ins.label}${data[ins.key]?.model ? ` (${data[ins.key].model})` : ''} : ${st.reason}.`,
+          deviation: { requirement: `Appareils de mesure calibrés depuis moins de ${maxDays} jours`, description: `${ins.label} ${data[ins.key]?.serial ? `n° ${data[ins.key].serial} ` : ''}: ${st.reason}.`, typeCode: 'MATERIEL' }
+        });
+      }
+    }
+  }
+
+  // 8. Informations obligatoires absentes (affichées lors de la clôture)
   if (input.includeMissing) {
     for (const s of structure) {
       if (!s.visible) continue;

@@ -5,6 +5,10 @@
  * - oegReferential(DATA) : sites, points, prestataires/partenaires/régie, opérateurs et campagnes repris
  *   du référentiel des fiches terrain OEG (js/data.js), pour démarrer avec les stations réelles.
  * - oegProgramme(DATA, …) : prestations programmées déduites des sessions de campagne des fiches terrain.
+ * - bioProgramme(DATA) : programme RCS ESC BIO 2026 (une prestation HYDRECO « à planifier » par station BIO).
+ * Les sites sont enrichis pour les fiches de contrôle BIO 2026 (cours d'eau, hydro-écorégion, listes BIO,
+ * compartiments à contrôler, accès, difficultés, photos) ; seules les données de la station ATHANASE
+ * (09271503) sont connues (maquettes) : les autres stations ont des champs vides à compléter.
  * - demoData() : jeu d'exemple FICTIF (documents « EXEMPLE », prestataire de démonstration).
  * Les identifiants sont déterministes : deux appareils initialisés séparément produisent les mêmes
  * identifiants pour les mêmes objets, ce qui évite les doublons à la synchronisation.
@@ -105,6 +109,48 @@ function monthRange(label) {
   return { start, end };
 }
 
+/* ---------- Programme biologique RCS ESC BIO 2026 ---------- */
+/** Listes des fiches terrain biologiques déterminant les compartiments à contrôler. */
+export const BIO_LISTS = ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO'];
+export const BIO_CAMPAIGN = { id: 'camp-BIO-2026', code: 'BIO-2026', label: 'RCS ESC BIO 2026', network: 'BIO', start: '2026-09-01', end: '2026-12-15' };
+export const BIO_GRID_ID = 'grid-ct-bio-2026-v1';
+
+/** Compartiments à contrôler déduits des listes BIO : 'organisation' toujours ; BIO_CE ⇒ physico + invertébrés + diatomées ; BIO_FISH ⇒ poissons ; BIO_PHYTO ⇒ phytoplancton. */
+export function bioCompartments(lists = []) {
+  if (!lists.length) return [];
+  const out = ['organisation'];
+  if (lists.includes('BIO_CE')) out.push('physico', 'invertebres', 'diatomees');
+  if (lists.includes('BIO_FISH')) out.push('poissons');
+  if (lists.includes('BIO_PHYTO')) out.push('phytoplancton');
+  return out;
+}
+
+/** Champs « station » ajoutés aux sites (fiche station BIO 2026), vides par défaut. */
+export function emptyStationFields() {
+  return {
+    riverName: '', strahler: '', her: '', typo: '', bioLists: [], compartments: [],
+    access: { summary: '', details: '', modes: [] }, difficulties: '', photos: {}, photoSource: '', samplingPoints: []
+  };
+}
+const stationPhoto = (code, slot, caption) => ({ caption, src: `img/stations/${code}/${slot}.jpg`, mediaId: null });
+/** Données connues des stations (maquettes des fiches) : seule ATHANASE est documentée. */
+export const STATION_DETAILS = {
+  '09271503': {
+    riverName: 'Approuague', commune: '', strahler: '',
+    access: {
+      summary: 'Environ 2 h depuis Cayenne et 1 h 30 depuis Régina.',
+      details: 'Depuis le dégrad public de Régina, remonter l’Approuague pendant environ 1 h 30. La station se situe en aval direct du Saut Mapaou.',
+      modes: ['Bateau motorisé / pirogue']
+    },
+    difficulties: 'Roches, Saut Tourépé.',
+    photos: {
+      RD: stationPhoto('09271503', 'RD', 'Vue d’ensemble'), RG: stationPhoto('09271503', 'RG', 'Berge rocheuse'),
+      AM: stationPhoto('09271503', 'AM', 'Amont'), AV: stationPhoto('09271503', 'AV', 'Aval')
+    },
+    photoSource: 'Localisation cartographique et photos issues du rapport HYDRECO CRT BIO 2024.'
+  }
+};
+
 /** Référentiel repris des fiches terrain OEG. */
 export function oegReferential(DATA) {
   const sites = new Map();
@@ -117,17 +163,26 @@ export function oegReferential(DATA) {
         id: 'site-' + code, code, name: s.nom, networks: [], kind: extra.kind || 'Cours d’eau', commune: s.commune || '', bassin: s.bv || s.bassin || '',
         masseEau: s.code_me || '', statut: s.statut || '', pressions: s.pressions || s.pression || '', x: s.x, y: s.y, projection: 'RGFG95 / UTM 22N',
         lat: lat !== null ? Math.round(lat * 1e6) / 1e6 : null, lon: lon !== null ? Math.round(lon * 1e6) / 1e6 : null,
-        transportModes: s.transportModes || [], typePoint: s.type_point || s.typo || s.type || '', matrixId: extra.matrixId || 'mat-ESU', source: 'Fiches terrain OEG'
+        transportModes: s.transportModes || [], typePoint: s.type_point || s.typo || s.type || '', matrixId: extra.matrixId || 'mat-ESU', source: 'Fiches terrain OEG',
+        ...emptyStationFields()
       });
     }
     const site = sites.get(code);
     if (!site.networks.includes(network)) site.networks.push(network);
+    if (site.her === '' && s.her !== undefined && s.her !== null) site.her = s.her;
+    if (!site.typo && s.typo) site.typo = s.typo;
+    if (extra.bioList && !site.bioLists.includes(extra.bioList)) site.bioLists.push(extra.bioList);
   };
   for (const k of ['RCO13', 'RCO25', 'RCO_BIO12']) (DATA[k] || []).forEach(s => add(s, 'RCO'));
-  for (const k of ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO', 'BIO_ADNE']) (DATA[k] || []).forEach(s => add(s, 'BIO'));
+  for (const k of ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO', 'BIO_ADNE']) (DATA[k] || []).forEach(s => add(s, 'BIO', { bioList: BIO_LISTS.includes(k) ? k : null }));
   (DATA.CH_STATIONS || []).forEach(s => add(s, 'Chimie'));
   (DATA.ESO || []).forEach(s => add(s, 'ESO', { kind: 'Eau souterraine', matrixId: 'mat-ESO' }));
   (DATA.EL_STATIONS || []).forEach(s => add(s, 'EL', { kind: s.type === 'MEC' ? 'Eau côtière' : 'Eau de transition', matrixId: 'mat-EL' }));
+  for (const st of sites.values()) {
+    st.bioLists = BIO_LISTS.filter(k => st.bioLists.includes(k));
+    st.compartments = bioCompartments(st.bioLists);
+    if (STATION_DETAILS[st.code]) Object.assign(st, structuredClone(STATION_DETAILS[st.code]));
+  }
   const site = [...sites.values()];
   const point = site.map(s => ({ id: 'pt-' + s.code, siteId: s.id, code: s.code, name: `Point de prélèvement ${s.name}`, lat: s.lat, lon: s.lon, description: s.typePoint || '', gpsThreshold: null }));
   const provider = PROVIDERS.map(({ aliases, ...p }) => ({ ...p, contacts: [], contracts: [], address: '', phone: '', email: '', accreditation: {}, active: true, notes: 'Repris du référentiel des fiches terrain.' }));
@@ -139,8 +194,33 @@ export function oegReferential(DATA) {
   ['S1 - Sept.26', 'S2 - Déc.26', 'S3 - Fév.27', 'S4 - Juin.27'].forEach(l => camp('Chimie', l));
   (DATA.EL_SESSIONS || []).forEach(s => camp('EL', s.label));
   ['Juillet 2026', 'Novembre 2026'].forEach(l => camp('ESO', l));
-  camp('BIO', 'Campagne biologique 2026');
+  campaign.push({ ...BIO_CAMPAIGN });
   return { site, point, provider, operator, campaign };
+}
+
+/**
+ * Programme RCS ESC BIO 2026 : une prestation HYDRECO par station BIO (listes BIO_CE / BIO_FISH / BIO_PHYTO),
+ * date « à planifier » (plannedDate vide, date indicative), contrôle terrain complet, grille CT-BIO-2026.
+ */
+export function bioProgramme(DATA) {
+  const seen = new Set(), out = [];
+  for (const k of BIO_LISTS) for (const s of DATA[k] || []) {
+    const code = String(s.code);
+    if (seen.has(code)) continue;
+    seen.add(code);
+    const lists = BIO_LISTS.filter(l => (DATA[l] || []).some(x => String(x.code) === code));
+    const compartments = bioCompartments(lists);
+    out.push({
+      id: 'pres-BIO-2026-' + code, ref: 'BIO-2026-' + code, marketRef: '', campaignId: BIO_CAMPAIGN.id,
+      siteId: 'site-' + code, pointIds: ['pt-' + code], plannedDate: '', plannedTime: '', dateIndicative: true, frequency: 'Par campagne',
+      samplingTypeId: 'stype-HYDROBIO', matrixId: 'mat-ESU', providerId: 'prov-HYDRECO', partnerId: null,
+      operatorIds: [], team: '', protocolDocKey: '', cctpDocKey: '', methodId: '', controlLevel: 'complet', status: 'prevue', statusHistory: [],
+      gridId: BIO_GRID_ID, compartments,
+      source: { kind: 'programme-bio-2026', externalId: 'BIO-2026|' + code, label: 'Programme RCS ESC BIO 2026 (HYDRECO)' },
+      notes: `Campagne ${BIO_CAMPAIGN.label} (${BIO_CAMPAIGN.start.split('-').reverse().join('/')} → ${BIO_CAMPAIGN.end.split('-').reverse().join('/')}) — date à planifier. Listes : ${lists.join(', ')}.`
+    });
+  }
+  return out;
 }
 
 /**

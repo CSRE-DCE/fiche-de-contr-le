@@ -1,7 +1,39 @@
 /* Synthèse factuelle d'un audit et indicateurs d'historique. Fichier pur (testé sous Node).
- * Volontairement AUCUN score global : seuls des décomptes traçables sont produits. */
-import { visibleStructure, isAnswerable } from './grids.js';
-import { OPEN_DEVIATION } from './model.js';
+ * Volontairement AUCUN score global : seuls des décomptes traçables sont produits (y compris par feuille
+ * pour les grilles en feuilles : la conclusion d'une feuille reste le choix du contrôleur). */
+import { visibleStructure, isAnswerable, sheetsOf, isSheetGrid } from './grids.js';
+import { OPEN_DEVIATION, SHEET_CONCLUSIONS } from './model.js';
+
+/**
+ * Décompte par feuille visible (synthèse, PDF) :
+ * [{no, key, tab, title, theme, C, NC, NA, NO, NV, unanswered, total, values, conclusion, conclusionLabel, comments, hint}]
+ * - total = critères de conformité visibles ; values = critères « valeur seule » renseignés ;
+ * - conclusion = choix du contrôleur (audit.sheets[no].conclusion.status) ou '' ;
+ * - hint = simple suggestion factuelle (« 2 NC sur cette feuille »), jamais appliquée automatiquement.
+ */
+export function sheetSummary({ audit, grid = audit?.gridSnapshot, ctx = {} }) {
+  if (!isSheetGrid(grid)) return [];
+  const responses = audit?.responses || {};
+  const c = Array.isArray(ctx.compartments) ? ctx : { ...ctx, compartments: audit?.compartments };
+  return sheetsOf(grid, responses, c).map(sh => {
+    const st = { no: sh.no, key: sh.key, tab: sh.tab, title: sh.title, theme: sh.theme, C: 0, NC: 0, NA: 0, NO: 0, NV: 0, unanswered: 0, total: 0, values: 0 };
+    for (const it of sh.items) {
+      if (!isAnswerable(it)) continue;
+      const r = responses[it.id];
+      if (it.kind === 'conformity') {
+        st.total++;
+        if (r?.status && st[r.status] !== undefined) st[r.status]++; else st.unanswered++;
+      } else if (r && r.value !== undefined && r.value !== null && r.value !== '') st.values++;
+    }
+    const block = (sh.blocks || []).find(b => b.key === 'conclusion');
+    const concl = audit?.sheets?.[sh.no]?.conclusion || {};
+    st.conclusion = concl.status || '';
+    st.conclusionLabel = st.conclusion ? ((block?.options || []).find(o => o[0] === st.conclusion)?.[1] || SHEET_CONCLUSIONS[st.conclusion] || st.conclusion) : '';
+    st.comments = concl.comments || '';
+    st.hint = st.NC ? `${st.NC} NC sur cette feuille` : st.unanswered ? `${st.unanswered} point(s) sans réponse` : st.total ? 'Tous les points renseignés, aucune NC' : '';
+    return st;
+  });
+}
 
 /**
  * @param {object} p {audit, grid, ctx, deviations:[…], criticalities:[…], alerts:[…]}
@@ -21,7 +53,7 @@ export function auditSummary({ audit, grid, ctx = {}, deviations = [], criticali
       if (it.kind === 'conformity') {
         st.total++; counts.controlled++;
         if (r?.status) { st[r.status]++; counts[r.status]++; } else { st.unanswered++; counts.unanswered++; }
-        if (r?.status === 'NC') ncItems.push({ code: it.code, label: it.label, section: s.title, comment: r.comment || '', refs: it.refs || [] });
+        if (r?.status === 'NC') ncItems.push({ code: it.code, label: it.label, section: s.title, sheet: it.sheet ?? null, comment: r.comment || '', value: r.value ?? null, refs: it.refs || [] });
       } else if (r && (r.value !== undefined && r.value !== '' && r.value !== null)) counts.measures++;
     }
     sections.push(st);
@@ -55,7 +87,8 @@ export function auditSummary({ audit, grid, ctx = {}, deviations = [], criticali
   const actions = deviations.filter(d => d.correctiveActionRequested || d.immediateAction)
     .map(d => ({ number: d.number, criticality: crit.get(d.criticalityCode)?.label || d.criticalityCode || '', action: d.correctiveActionRequested || '', immediate: d.immediateAction || '', responsible: d.responsible || '', dueDate: d.dueDate || '' }));
 
-  return { counts, sections, ncItems, deviationsCount: deviations.length, byCriticality, frequentRequirements, strengths, vigilance, actions, samples: (audit.samples || []).length, equipment: (audit.equipmentChecks || []).length };
+  const sheets = sheetSummary({ audit, grid, ctx });
+  return { counts, sections, sheets, ncItems, deviationsCount: deviations.length, byCriticality, frequentRequirements, strengths, vigilance, actions, samples: (audit.samples || []).length, equipment: (audit.equipmentChecks || []).length };
 }
 
 /**

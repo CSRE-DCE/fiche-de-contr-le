@@ -1,11 +1,14 @@
 /* Opérations métier sur les audits : création (instantanés), réponses, écarts, clôture, signatures,
- * verrouillage scellé, modifications motivées après signature et vérification d'intégrité. */
+ * verrouillage scellé, modifications motivées après signature et vérification d'intégrité.
+ * Grilles en feuilles (CT-BIO-2026) : compartiments retenus (audit.compartments), réponses pré-remplies à la
+ * création (prefilled: true), données propres aux feuilles (audit.sheets : observations, notes, photos,
+ * conclusion, instruments, agents) mises à jour par updateSheet. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
 import { can } from '../core/auth.js';
-import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addDays, localDate } from '../core/util.js';
-import { allItems, progress, validateResponses, visibleStructure, rankGrids } from '../domain/grids.js';
+import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addDays, localDate, localTime } from '../core/util.js';
+import { allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, prefillResponses, normalizeCompartments, isSheetGrid } from '../domain/grids.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
 import { nextNumber } from './numbering.js';
@@ -15,7 +18,12 @@ import { orgSettings } from './settings.js';
 export const auditDeviations = auditId => store.filter('deviation', d => d.auditId === auditId).sort((a, b) => String(a.number).localeCompare(String(b.number), 'fr', { numeric: true }));
 export const auditMedia = auditId => store.filter('media', m => m.auditId === auditId);
 
-/** Contexte des conditions de grille (matrice, type de prélèvement, prestataire…). */
+export { prefillResponses };
+
+/**
+ * Contexte des conditions de grille (matrice, type de prélèvement, prestataire…) et compartiments retenus
+ * (grilles en feuilles : audit.compartments, à défaut tous les compartiments de la grille).
+ */
 export function auditContext(audit) {
   const prestation = audit.prestationId ? store.get('prestation', audit.prestationId) : null;
   const matrix = store.get('matrix', audit.matrixId || prestation?.matrixId);
@@ -24,7 +32,8 @@ export function auditContext(audit) {
   const site = store.get('site', audit.siteId);
   return {
     matrixCode: matrix?.code || '', samplingTypeCode: stype?.code || '', providerKind: provider?.kind || '', providerId: provider?.id || '',
-    auditKind: audit.kind || '', network: (site?.networks || []).join(','), controlLevel: prestation?.controlLevel || ''
+    auditKind: audit.kind || '', network: (site?.networks || []).join(','), controlLevel: prestation?.controlLevel || '',
+    compartments: normalizeCompartments(audit.gridSnapshot, audit.compartments)
   };
 }
 
@@ -42,16 +51,19 @@ export function auditState(audit, { includeMissing = false } = {}) {
   const deviations = auditDeviations(audit.id);
   const prestation = audit.prestationId ? store.get('prestation', audit.prestationId) : null;
   const point = store.get('point', audit.pointId);
+  const site = store.get('site', audit.siteId);
   const operators = [...(audit.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean), ...(audit.adHocOperators || [])];
   const settings = orgSettings();
-  const alerts = computeAlerts({ audit, grid, ctx, point, prestation, operators, settings, mediaCounts: counts, includeMissing, today: localDate() })
+  const alerts = computeAlerts({ audit, grid, ctx, point, site, prestation, operators, settings, mediaCounts: counts, includeMissing, today: localDate() })
     .filter(a => !(audit.dismissedAlerts || []).some(d => d.key === a.key));
   const deviationsByItem = {};
   for (const d of deviations) if (d.itemId) deviationsByItem[d.itemId] = (deviationsByItem[d.itemId] || 0) + 1;
   return {
-    grid, ctx, counts, deviations, prestation, point, operators, alerts,
+    grid, ctx, counts, deviations, prestation, point, site, operators, alerts,
     structure: visibleStructure(grid, audit.responses || {}, ctx),
     progress: progress(grid, audit.responses || {}, ctx, counts),
+    sheets: isSheetGrid(grid) ? sheetsOf(grid, audit.responses || {}, ctx) : [],
+    sheetProgress: isSheetGrid(grid) ? sheetProgress(grid, audit.responses || {}, ctx, counts) : {},
     validation: validateResponses(grid, audit.responses || {}, ctx, { mediaCounts: counts, deviationsByItem }),
     summary: auditSummary({ audit, grid, ctx, deviations: deviations.filter(d => d.status !== 'annule'), criticalities: store.all('criticality'), alerts })
   };
@@ -65,13 +77,15 @@ export function gridsFor(prestation) {
 /**
  * Crée un audit. Tout ce qui sert de référence est FIGÉ dans l'audit : copie de la grille, instantané
  * des documents applicables (version + empreinte), identification de l'appareil et de l'application.
+ * Grille à compartiments : `compartments` retenus (défaut : ceux de la station, sinon tous ; « organisation »
+ * toujours) ; les critères `prefill` reçoivent une valeur initiale (sans statut, marquée prefilled: true).
  */
-export async function createAudit({ prestationId = null, gridId, kind = 'planifie', providerId, siteId, pointId, operatorIds = [], samplingTypeId = null, matrixId = null }) {
+export async function createAudit({ prestationId = null, gridId, kind = 'planifie', providerId, siteId, pointId, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null }) {
   if (!can('audit.create')) throw new Error('Votre profil ne permet pas de créer un audit.');
   const grid = store.get('grid', gridId);
   if (!grid) throw new Error('Grille d’audit introuvable.');
   const prestation = prestationId ? store.get('prestation', prestationId) : null;
-  const now = nowISO(), today = localDate();
+  const now = nowISO(), today = localDate(), date = new Date(now);
   const { number, source } = await nextNumber('AUD', new Date().getFullYear());
   const docs = applicableDocuments(prestation || { providerId, samplingTypeId, siteId }, today);
   const documentsSnapshot = await Promise.all(docs.map(snapshotDocument));
@@ -95,9 +109,22 @@ export async function createAudit({ prestationId = null, gridId, kind = 'planifi
     protocolVersion: documentsSnapshot.find(d => d.type === 'PROTOCOLE')?.version || null,
     cctpVersion: documentsSnapshot.find(d => d.type === 'CCTP')?.version || null,
     startedAt: now, endedAt: null, status: 'en_cours',
+    compartments: [], sheets: {},
     responses: {}, gps: [], samples: [], equipmentChecks: [], dismissedAlerts: [],
     signatures: {}, lock: null, amendments: [], reports: [], conclusions: { strengths: '', vigilance: '', comment: '' }
   };
+  const site = store.get('site', audit.siteId);
+  if (grid.compartments?.length) {
+    const wanted = Array.isArray(compartments) && compartments.length ? compartments
+      : site?.compartments?.length ? site.compartments : prestation?.compartments?.length ? prestation.compartments : null;
+    audit.compartments = normalizeCompartments(grid, wanted);
+  } else if (Array.isArray(compartments)) audit.compartments = [...compartments];
+  audit.responses = prefillResponses(gridSnapshot, {
+    site, auditor: { name: session.user.name }, provider: store.get('provider', audit.providerId), prestation,
+    operators: audit.operatorIds.map(id => store.get('operator', id)).filter(Boolean),
+    date: localDate(date), time: localTime(date), compartments: audit.compartments,
+    at: now, by: session.user.id, byName: session.user.name
+  });
   await store.put('audit', audit, { action: 'create', reason: kind === 'inopine' ? 'Audit inopiné' : null });
   if (prestation) await addPrestationHistory(prestation, { event: 'audit-demarre', auditId: audit.id, label: `Audit ${number} démarré` });
   return store.get('audit', audit.id);
@@ -140,8 +167,44 @@ export async function setResponse(audit, itemId, patch, { reason = null } = {}) 
   return updateAudit(audit, a => {
     const prev = a.responses[itemId] || {};
     const r = { ...prev, ...patch, at: nowISO(), by: session.user.id, byName: session.user.name };
+    // Une valeur pré-remplie modifiée par l'auditeur n'est plus « pré-remplie ».
+    if (prev.prefilled && 'value' in patch && !('prefilled' in patch) && canonicalJSON(patch.value ?? null) !== canonicalJSON(prev.value ?? null)) delete r.prefilled;
     for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
     a.responses[itemId] = r;
+  }, { reason });
+}
+
+/* ---------- Données propres aux feuilles (grilles en feuilles) ---------- */
+/**
+ * Met à jour les données d'une feuille : audit.sheets[no] = {observations, notes, photos, conclusion:{status,
+ * comments}, instruments:{ph|o2|cond|turb:{model, serial, calibration}}, agents}. Les clés du patch remplacent
+ * celles de la feuille ; `conclusion` est fusionnée champ par champ et `instruments` appareil par appareil
+ * (puis champ par champ), une valeur null efface la clé. Passe par updateAudit (journal ; motif obligatoire
+ * et amendement tracé sur un audit signé).
+ */
+export async function updateSheet(audit, no, patch = {}, { reason = null } = {}) {
+  const merge = (cur, p) => {
+    const out = { ...(cur || {}) };
+    for (const [k, v] of Object.entries(p || {})) { if (v === null || v === undefined) delete out[k]; else out[k] = v; }
+    return out;
+  };
+  return updateAudit(audit, a => {
+    a.sheets = a.sheets || {};
+    const cur = a.sheets[no] || {};
+    const next = { ...cur };
+    for (const [k, v] of Object.entries(patch || {})) {
+      if (v === null || v === undefined) delete next[k];
+      else if (k === 'conclusion' && typeof v === 'object' && !Array.isArray(v)) next.conclusion = merge(cur.conclusion, v);
+      else if (k === 'instruments' && typeof v === 'object' && !Array.isArray(v)) {
+        const ins = { ...(cur.instruments || {}) };
+        for (const [key, fields] of Object.entries(v)) {
+          if (fields === null) delete ins[key];
+          else ins[key] = typeof fields === 'object' && !Array.isArray(fields) ? merge(ins[key], fields) : fields;
+        }
+        next.instruments = ins;
+      } else next[k] = v;
+    }
+    a.sheets[no] = next;
   }, { reason });
 }
 
@@ -190,8 +253,10 @@ export async function updateDeviation(dev, patch, { reason = null, event = null 
 /* ---------- Clôture, signature, verrouillage ---------- */
 /**
  * Projection du contenu probant de l'audit, couverte par l'empreinte de signature :
- * l'audit (hors signatures, verrou, métadonnées), les constats des écarts (hors suivi : statut,
- * responsable, échéance, actions correctives) et les médias (hors images de signature).
+ * l'audit (hors signatures, verrou, métadonnées) — dont les réponses, les compartiments retenus
+ * (compartments) et les données des feuilles (sheets : observations, conclusions, instruments…) —,
+ * les constats des écarts (hors suivi : statut, responsable, échéance, actions correctives) et les
+ * médias (hors images de signature).
  * Les écarts et médias ajoutés après le verrouillage relèvent du suivi et sont tracés au journal.
  */
 const DEVIATION_CONSTAT = ['id', 'number', 'date', 'time', 'itemId', 'itemCode', 'requirement', 'docRefs', 'description', 'auditorObservation', 'criticalityCode', 'typeCode', 'immediateAction', 'correctiveActionRequested', 'location', 'source', 'alertCode'];
@@ -202,6 +267,9 @@ export function auditContent(audit) {
   const media = auditMedia(audit.id).filter(m => m.link?.type !== 'signature' && before(m))
     .map(m => ({ id: m.id, sha256: m.sha256, link: m.link, takenAt: m.takenAt, derivedFrom: m.derivedFrom || null })).sort((a, b) => a.id.localeCompare(b.id));
   const { signatures, lock, amendments, reports, status, endedAt, updatedAt, updatedBy, updatedByName, _rev, _lv, _conflict, dismissedAlerts, ...content } = audit;
+  // compartments et sheets font partie du contenu scellé (présents dans `content` dès qu'ils existent).
+  if (audit.compartments !== undefined) content.compartments = audit.compartments;
+  if (audit.sheets !== undefined) content.sheets = audit.sheets;
   return { audit: content, deviations, media };
 }
 export async function auditContentHash(audit) { return sha256Hex(canonicalJSON(auditContent(audit))); }

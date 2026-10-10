@@ -4,7 +4,10 @@
  * § 6.4 équipements, § 7.3 échantillonnage, § 7.4 manutention des objets, § 7.5 enregistrements
  * techniques) et série NF EN ISO 5667 (échantillonnage de l'eau). Les articles de CCTP et de protocole
  * renvoient aux documents d'exemple et doivent être remplacés par les références réelles.
+ * La grille « en feuilles » du contrôle terrain HYDRECO — RCS ESC BIO 2026 (grid-bio-2026.js) est
+ * placée en tête : c'est la grille par défaut des stations du programme biologique.
  */
+import { GRID_BIO_2026 } from './grid-bio-2026.js';
 
 const C = (code, label, extra = {}) => ({ id: 'it-' + code, code, label, kind: 'conformity', required: true, evidenceOnNC: true, ...extra });
 const iso = (clause, requirement) => ({ docKey: 'ISO17025', docType: 'REFERENTIEL', article: clause, requirement });
@@ -217,4 +220,5 @@ export const GRID_RAPIDE = {
   ]
 };
 
-export const DEFAULT_GRIDS = [GRID_GENERAL, GRID_RAPIDE];
+export { GRID_BIO_2026 };
+export const DEFAULT_GRIDS = [GRID_BIO_2026, GRID_GENERAL, GRID_RAPIDE];

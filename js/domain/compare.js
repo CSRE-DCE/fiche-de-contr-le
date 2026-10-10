@@ -1,6 +1,8 @@
-/* Comparaison de deux audits successifs (critère par critère, appariés par code). Fichier pur. */
+/* Comparaison de deux audits successifs (critère par critère, appariés par code). Fichier pur.
+ * Les valeurs sont comparées sous leur forme lisible (formatValue) : une valeur objet (« fields ») est
+ * comparée champ par champ, sans tenir compte des métadonnées techniques (lat / lon / précision du relevé GPS). */
 import { allItems } from './grids.js';
-import { responseText } from './model.js';
+import { responseText, formatValue } from './model.js';
 
 const RANK = { C: 3, NA: 2, NO: 1, NV: 1, NC: 0 };
 
@@ -15,11 +17,11 @@ export function compareAudits(older, newer, { deviationsOld = [], deviationsNew 
     let change;
     if (!a) change = 'nouveau';
     else if (!b) change = 'retire';
-    else if ((ra?.status || null) === (rb?.status || null) && String(ra?.value ?? '') === String(rb?.value ?? '')) change = 'identique';
+    else if ((ra?.status || null) === (rb?.status || null) && formatValue(a, ra?.value) === formatValue(b, rb?.value)) change = 'identique';
     else if (a.kind === 'conformity' && ra?.status && rb?.status) change = RANK[rb.status] > RANK[ra.status] ? 'amelioration' : RANK[rb.status] < RANK[ra.status] ? 'degradation' : 'modifie';
     else change = 'modifie';
     rows.push({
-      code: (b || a).code, label: (b || a).label, section: (b || a).sectionTitle, kind: (b || a).kind,
+      code: (b || a).code, label: (b || a).label, section: (b || a).sectionTitle, kind: (b || a).kind, sheet: (b || a).sheet ?? null,
       before: a ? responseText(a, ra) : '', after: b ? responseText(b, rb) : '',
       beforeStatus: ra?.status || null, afterStatus: rb?.status || null, change
     });

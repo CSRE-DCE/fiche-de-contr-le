@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d3577">
+<title>Charte graphique — Fiches de contrôle terrain OEG</title>
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../css/sheet.css">
+<style>
+/* Mise en page propre à ce guide de style (le reste vient de styles.css et css/sheet.css). */
+body{padding-bottom:40px}
+.cg-wrap{max-width:1640px;margin:0 auto;padding:16px clamp(10px,2vw,28px) 40px}
+.cg-top{position:relative;top:auto;z-index:1}
+.cg-nav{display:flex;gap:8px;overflow-x:auto;padding:10px 0 12px;scrollbar-width:thin}
+.cg-nav a{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:6px 14px;border-radius:999px;background:#fff;border:2px solid var(--line);text-decoration:none;color:var(--brand);font-weight:700}
+.cg-nav a i{width:16px;height:16px;border-radius:50%;display:inline-block}
+.cg-h2{font-family:var(--font-cond);font-weight:800;text-transform:uppercase;color:var(--brand);font-size:clamp(22px,2.4vw,30px);margin:34px 0 6px;letter-spacing:.01em}
+.cg-lead{color:var(--muted);margin:0 0 14px;max-width:72em}
+.cg-swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:10px 0 4px}
+.cg-sw{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#fff;font-size:12.5px}
+.cg-sw b{display:block;height:44px}
+.cg-sw span{display:block;padding:5px 8px;font-family:"SFMono-Regular",Consolas,monospace}
+.cg-type{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.cg-type .card p{margin:4px 0}
+.cg-icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.cg-icon{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 6px 8px;text-align:center;color:var(--th-dark);font-size:12.5px;font-weight:600}
+.cg-icon .pills{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:6px}
+.cg-icon .pill{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--th-main);color:#fff}
+.cg-icon .big{color:var(--th-dark)}
+.cg-icon code{display:block;margin-top:2px;font-size:11.5px;color:var(--muted)}
+.cg-demo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;align-items:start}
+.cg-caption{font-size:12.5px;color:var(--oeg-muted);margin:4px 2px 0;font-style:italic}
+.cg-sheet-h{display:flex;align-items:center;gap:10px;margin:30px 0 8px}
+.cg-sheet-h h2{margin:0;font-family:var(--font-cond);font-weight:800;text-transform:uppercase;color:var(--brand);font-size:22px}
+.cg-sheet-h .badge{font-size:13px}
+@media print{.cg-top,.cg-h2,.cg-lead,.cg-sheet-h,.cg-intro,.cg-section-app,.cg-icons-sec{display:none!important}.cg-wrap{padding:0;max-width:none}}
+</style>
+</head>
+<body>
+<div class="cg-wrap">
+  <header class="cg-top app-top" style="border-radius:0 0 18px 18px">
+    <img class="logo" src="../icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="46" height="46">
+    <div class="titles"><h1>Charte graphique — fiches de contrôle terrain</h1><small>Office de l’Eau de Guyane · guide de style vivant (js/ui/sheet-chrome.js, js/ui/icons.js, css/sheet.css, styles.css)</small></div>
+    <a class="top-pill" href="../index.html">Application</a>
+  </header>
+  <nav class="cg-nav" id="cgNav" aria-label="Thèmes"></nav>
+  <div id="cg">Chargement…</div>
+</div>
+<script type="module">
+import { html, raw } from '../js/core/util.js';
+import { THEMES, OEG } from '../js/ui/themes.js';
+import { icon, ICON_NAMES } from '../js/ui/icons.js';
+import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines } from '../js/ui/sheet-chrome.js';
+
+const SITE = { id: 'site-09271503', name: 'Athanase', code: '09271503', bassin: 'Approuague', x: 356714, y: 465112, lat: 4.206867, lon: -52.291022 };
+const PHOTO = '../img/stations/09271503/RD.jpg';
+/* Repli si la grille BIO 2026 (js/domain/grid-bio-2026.js) n'est pas disponible. */
+let GRID = { header: { org: 'Office de l’Eau de Guyane', title: 'Contrôle terrain prestataire – HYDRECO – RCS ESC BIO 2026', subtitle: 'Fiche station de contrôle terrain',
+  tagline: 'L’eau au service des milieux naturels de Guyane', program: 'Suivi biologique des eaux douces de surface de Guyane',
+  slogan: 'La connaissance aujourd’hui pour les rivières de demain', website: 'www.eauguyane.fr' } };
+let SHEETS = [
+  { no: 1, title: 'Fiche station de contrôle terrain', kicker: 'Suivi biologique des eaux douces de surface de Guyane', theme: 'ocean', layout: 'station' },
+  { no: 2, title: 'Organisation, sécurité et déroulé de mission', kicker: '', theme: 'navy', layout: 'table' },
+  { no: 3, title: 'Prise d’informations de terrain – caractérisation de la station', kicker: 'Prise d’informations de terrain – caractérisation de la station', theme: 'green', layout: 'table' },
+  { no: 4, title: 'Physico-chimie, mesures in situ et flaconnage', kicker: '', theme: 'peach', layout: 'table' },
+  { no: 5, title: 'Physico-chimie – prélèvement, conditionnement et chaîne du froid', kicker: '', theme: 'orange', layout: 'table' },
+  { no: 6, title: 'Invertébrés aquatiques – protocole PEZADA', kicker: 'Suivi biologique des eaux douces de surface de Guyane', theme: 'violet', layout: 'table' },
+  { no: 7, title: 'Diatomées – IDGF', kicker: 'Fiche de contrôle terrain – Diatomées – IDGF', theme: 'sky', layout: 'table' },
+  { no: 8, title: 'Ichtyologie et mercure dans le biote', kicker: 'Suivi biologique des eaux douces de Guyane', theme: 'ocean', layout: 'split' },
+  { no: 9, title: 'Phytoplancton d’eau douce', kicker: 'Phytoplancton d’eau douce', theme: 'teal', layout: 'table' }
+];
+try {
+  const m = await import('../js/domain/grid-bio-2026.js');
+  if (m.GRID_BIO_2026?.sheets?.length) { GRID = m.GRID_BIO_2026; SHEETS = m.GRID_BIO_2026.sheets; }
+} catch (e) { /* grille non encore disponible : valeurs de repli */ }
+
+/* ---------- Tableau d'exemple (grand écran) et ses lignes en carte (petit écran) ---------- */
+const ROWS = [
+  { no: '1', label: 'Agent prestataire & fonction', short: 'A1', ic: 'person', value: html`<div class="st-fields"><span class="st-field"><span class="st-k">Nom :</span><input value="Dupont"></span><span class="st-field"><span class="st-k">Fonction :</span><input value="Chef d’équipe"></span></div>`, status: 'C', obs: '' },
+  { no: '2', label: 'Fiche terrain complétée', short: 'A2', ic: 'clipboard', value: html`<div class="st-choice"><button type="button" class="sel" aria-pressed="true">${checkSquare({ checked: true })}Oui</button><button type="button">${checkSquare({})}Non</button><button type="button">${checkSquare({})}Partielle</button></div>`, status: '', obs: '' },
+  { no: '3', label: 'Coordonnées du point', short: 'A3', ic: 'pin', value: html`<div class="st-fields"><span class="st-field"><span class="st-k">X :</span><input inputmode="decimal" value="356 702"></span><span class="st-field"><span class="st-k">Y :</span><input inputmode="decimal" value="465 130"></span><button type="button" class="st-gps">${icon('pin')}Relever</button></div>`, status: 'C', obs: '' },
+  { no: '4', label: 'Température de conservation', short: 'T° conserv.', ic: 'thermometer', value: html`<div class="st-fields"><span class="st-field"><input inputmode="decimal" value="11,5"><span class="st-unit">°C</span></span></div>`, status: 'NC', obs: 'Glacière sans pain de glace : 11,5 °C' },
+  { no: '5', label: 'Transport / acheminement', short: 'A13', ic: 'truck', value: html`<span class="st-dots"></span>`, status: 'NA', obs: '' }
+];
+const statusBtn = (code, cur) => html`<button type="button" class="st-chk${cur === code ? ' sel' : ''}" aria-pressed="${cur === code}" title="${code === 'NA' ? 'N/A' : code}">${checkSquare({ checked: cur === code })}<span class="st-chk-l">${code === 'NA' ? 'N/A' : code}</span></button>`;
+function table(withIcons) {
+  return html`<div class="st-wrap st-only-wide"><table class="st-table">
+    <thead><tr><th class="c-no">N°</th><th class="c-label">Point de contrôle</th><th class="c-short">Réf.</th><th class="c-value">Valeur / réponse</th><th class="c-c">C</th><th class="c-nc">NC</th><th class="c-na">N/A</th><th class="c-obs">Observations</th></tr></thead>
+    <tbody>${ROWS.map(r => html`<tr class="${r.status === 'NC' ? 'is-nc' : r.status ? '' : 'is-missing'}">
+      <td class="c-no">${r.no}</td>
+      <td class="c-label">${withIcons ? html`<span class="st-ic">${icon(r.ic)}</span>` : ''}${r.label}</td>
+      <td class="c-short">${r.short}</td>
+      <td class="c-value">${r.value}</td>
+      <td class="c-c">${statusBtn('C', r.status)}</td><td class="c-nc">${statusBtn('NC', r.status)}</td><td class="c-na">${statusBtn('NA', r.status)}</td>
+      <td class="c-obs"><textarea rows="1" aria-label="Observations">${r.obs}</textarea></td></tr>`)}</tbody></table></div>
+    <div class="st-cards st-only-narrow">${ROWS.slice(0, 4).map(r => html`<article class="st-row-card ${r.status === 'C' ? 'is-c' : r.status === 'NC' ? 'is-nc' : r.status === 'NA' ? 'is-na' : 'is-missing'}">
+      <div class="st-rc-head"><span class="st-rc-no">${r.no}</span>${withIcons ? html`<span class="st-rc-ic">${icon(r.ic)}</span>` : ''}<span class="st-rc-label">${r.label} <span class="req">*</span></span><span class="st-rc-short">${r.short}</span></div>
+      <div class="st-rc-value"><span class="st-rc-k">Valeur / réponse</span>${r.value}</div>
+      <div class="st-rc-status">${['C', 'NC', 'NA'].map(c => html`<button type="button" class="st-rc-btn ${c.toLowerCase()}${r.status === c ? ' sel' : ''}" aria-pressed="${r.status === c}">${c === 'NA' ? 'N/A' : c}</button>`)}</div>
+      <div class="st-rc-obs"><span class="st-rc-k">Observations</span><textarea aria-label="Observations">${r.obs}</textarea></div>
+      ${r.status === 'NC' ? html`<div class="st-rc-tools"><button class="btn ghost sm" type="button"><span class="ic">${icon('camera')}</span>Preuve</button><button class="btn danger-ghost sm" type="button"><span class="ic">${icon('warning')}</span>Écart</button></div>` : ''}
+    </article>`)}</div>`;
+}
+const conclusion = (opts) => blockCard({ icon: 'check', title: 'Conclusion du contrôle', body: html`
+  <div class="bc-options">${opts.map(([k, l], i) => html`<button type="button" class="bc-option${i === 0 ? ' sel' : ''}" aria-pressed="${i === 0}">${checkSquare({ checked: i === 0, cls: k === 'C' ? 'ok' : k === 'NC' ? 'nc' : k === 'NA' ? 'na' : '' })}${l}</button>`)}</div>
+  <div class="bc-fields"><div class="bc-field"><span class="bc-k">Nom du contrôleur OEG</span><span class="bc-v">Marie Contrôleuse</span></div><div class="bc-field"><span class="bc-k">Date</span><span class="bc-v">09/10/2026</span></div></div>
+  <div class="bc-field"><span class="bc-k">Signature</span><div class="bc-sign"></div></div>` });
+
+function sheetDemo(sh) {
+  const th = sh.theme;
+  const station = sh.layout === 'station';
+  const body = html`
+    ${oegHeader({ grid: GRID, sheet: sh, site: SITE })}
+    ${stationBanner({ site: SITE, kicker: sh.kicker || GRID.header.program, theme: th, photo: PHOTO, sheetNo: station ? null : sh.no })}
+    ${infoStrip(SITE)}
+    ${sh.layout === 'split' ? html`<div class="sheet-split">
+        ${sectionCard({ no: 'A', title: 'Ichtyologie', icon: 'fish', theme: 'ocean', cls: 'big', kicker: 'Suivi biologique des eaux douces de Guyane', body: table(true) })}
+        ${sectionCard({ no: 'B', title: 'Mercure / biote', icon: 'fish+drop', theme: 'rust', cls: 'big', kicker: 'Contaminants dans les milieux aquatiques', body: table(true) })}
+      </div>`
+      : sectionCard({ no: station ? '' : '1', icon: station ? 'edit' : '', title: station ? 'Repères terrain' : 'Contrôle terrain – extrait du tableau', right: html`<span class="badge brand">${ROWS.length} points</span>`, body: table(th === 'teal' || th === 'ocean') })}
+    <div class="sheet-blocks">
+      ${blockCard({ icon: 'chat', title: 'Observations / non-conformités / actions demandées', body: dotLines(4) })}
+      ${conclusion([['C', 'Conforme'], ['NC', 'Non conforme'], ['NA', 'Non applicable'], ['RES', 'À compléter / Réserve']])}
+    </div>
+    ${sheetFooter({ grid: GRID })}`;
+  return html`<div class="cg-sheet-h" id="th-${th}-${sh.no}"><h2>Feuille ${sh.no} — ${sh.title}</h2><span class="badge outline">thème ${th} · ${THEMES[th]?.label || ''}</span></div>
+    ${sheetFrame({ theme: th, cls: station ? 'layout-station is-portrait' : '', body })}`;
+}
+
+function swatches(name) {
+  const t = THEMES[name];
+  return html`<div class="cg-swatches">${Object.entries(t).filter(([k]) => k !== 'label').map(([k, v]) => html`<div class="cg-sw"><b style="background:${v}"></b><span>${k} ${v}</span></div>`)}</div>`;
+}
+
+const root = document.getElementById('cg');
+const order = ['ocean', 'navy', 'green', 'peach', 'orange', 'violet', 'sky', 'rust', 'teal'];
+document.getElementById('cgNav').innerHTML = String(html`<a href="#icones">${icon('star', { size: 18 })}Pictogrammes</a><a href="#app">${icon('home', { size: 18 })}Application</a>${SHEETS.map(s => html`<a href="#th-${s.theme}-${s.no}"><i style="background:${THEMES[s.theme]?.main}"></i>F${s.no} · ${s.theme}</a>`)}<a href="#th-rust"><i style="background:${THEMES.rust.main}"></i>rust</a>`);
+root.innerHTML = String(html`
+  <section class="cg-intro">
+    <h2 class="cg-h2">Palette et typographie</h2>
+    <p class="cg-lead">Couleurs relevées sur les maquettes (js/ui/themes.js) : une teinte par feuille. Polices libres locales : Barlow (texte), Barlow Condensed (titres en capitales), Montserrat (nom de la station).</p>
+    <div class="cg-swatches">${Object.entries(OEG).map(([k, v]) => html`<div class="cg-sw"><b style="background:${v}"></b><span>OEG.${k} ${v}</span></div>`)}</div>
+    <div class="cg-type" style="margin-top:12px">
+      <div class="card"><h2>Barlow — texte</h2><p style="font-weight:400">Regular 400 — La connaissance aujourd’hui pour les rivières de demain.</p><p style="font-weight:500">Medium 500 — Contrôle terrain prestataire – HYDRECO</p><p style="font-weight:600">SemiBold 600 — Coordonnées théoriques RGFG95</p><p style="font-weight:700">Bold 700 — Approuague · 09271503</p><p style="font-style:italic">Italique — Physico-chimie (in situ)</p></div>
+      <div class="card"><h2>Barlow Condensed — titres</h2><p style="font-family:var(--font-cond);font-weight:600;font-size:22px">SEMIBOLD 600 — PRÉLÈVEMENT</p><p style="font-family:var(--font-cond);font-weight:700;font-size:24px">BOLD 700 — FEUILLE 4 / 9</p><p style="font-family:var(--font-cond);font-weight:800;font-size:28px;color:var(--brand)">EXTRABOLD 800 — OFFICE DE L’EAU DE GUYANE</p></div>
+      <div class="card"><h2>Montserrat — station</h2><p style="font-family:var(--font-black);font-weight:800;font-size:26px">EXTRABOLD 800</p><p style="font-family:var(--font-black);font-weight:900;font-size:44px;color:var(--brand);line-height:1">ATHANASE</p></div>
+    </div>
+  </section>
+
+  <section class="cg-icons-sec th-ocean" id="icones" style="--th-main:#0b6cb4;--th-dark:#0d3577">
+    <h2 class="cg-h2">Pictogrammes (${ICON_NAMES.length})</h2>
+    <p class="cg-lead">icon(nom, { size, cls, title }) — SVG en ligne, couleur héritée (currentColor), lisibles de 18 à 48 px, seuls ou blancs sur pastille.</p>
+    <div class="cg-icons">${ICON_NAMES.map(n => html`<div class="cg-icon"><div class="pills"><span class="pill">${icon(n, { size: 26 })}</span><span class="big">${icon(n, { size: 36 })}</span>${icon(n, { size: 18 })}</div>${n}</div>`)}</div>
+  </section>
+
+  <section class="cg-section-app" id="app">
+    <h2 class="cg-h2">Composants de l’application</h2>
+    <p class="cg-lead">Boutons, champs, badges, listes et cartes (styles.css) — gros boutons tactiles (≥ 52 px), coins arrondis, fond bleuté très clair.</p>
+    <div class="cg-demo">
+      <div class="card"><h2>Boutons ${icon('check-circle', { size: 20 })}</h2>
+        <div class="btn-row"><button class="btn primary"><span class="ic">${icon('plus')}</span>Démarrer le contrôle</button><button class="btn accent"><span class="ic">${icon('pdf')}</span>Fiches (PDF)</button></div>
+        <div class="btn-row" style="margin-top:8px"><button class="btn ghost"><span class="ic">${icon('camera')}</span>Photo</button><button class="btn danger-ghost">Écart</button><button class="btn ok">Conforme</button><button class="btn ghost sm">Petit</button></div>
+        <div class="seg" style="margin-top:10px"><button class="sel ok"><span class="k">C</span><small>Conforme</small></button><button><span class="k">NC</span><small>Non conforme</small></button><button><span class="k">N/A</span><small>Non applicable</small></button></div>
+      </div>
+      <div class="card"><h2>Champs et badges</h2>
+        <div class="field"><label>Opérateurs HYDRECO <span class="req">*</span></label><input value="J. Martin, L. Pierre"></div>
+        <div class="field"><label>Niveau d’eau</label><select><option>Moyennes eaux</option></select></div>
+        <div class="row"><span class="badge ok">Conforme</span><span class="badge nc">2 NC</span><span class="badge warn">À planifier</span><span class="badge info">En cours</span><span class="badge brand">BIO 2026</span><span class="badge outline">09271503</span></div>
+        <div class="chips" style="margin-top:10px"><button class="chip sel">${icon('station')}Toutes <span class="count">38</span></button><button class="chip">${icon('drop')}Physico-chimie</button><button class="chip">${icon('fish')}Poissons</button></div>
+      </div>
+      <div class="card"><h2>Listes</h2><div class="list">
+        <a class="li stripe-info" href="#app"><span class="li-ic">${icon('station')}</span><div class="li-main"><div class="li-title">ATHANASE — 09271503</div><div class="li-sub">Approuague · à contrôler</div></div><span class="chev">${icon('chevron-right', { size: 20 })}</span></a>
+        <a class="li stripe-nc" href="#app"><span class="li-ic">${icon('clipboard')}</span><div class="li-main"><div class="li-title">AUD-2026-07-0012</div><div class="li-sub">2 non-conformités · en cours</div></div><span class="li-side"><span class="badge nc">2 NC</span></span></a>
+      </div>
+      <div class="kpis" style="margin-top:10px"><div class="kpi"><span class="v">38</span><span class="k">Stations BIO</span></div><div class="kpi alert-kpi"><span class="v">3</span><span class="k">Écarts en retard</span></div></div></div>
+    </div>
+    <h2 class="cg-h2">Petits composants des fiches</h2>
+    <div class="cg-demo">
+      <div class="card"><h2>Cases (checkSquare)</h2><div class="row">${checkSquare({})}${checkSquare({ checked: true })}${checkSquare({ checked: true, cls: 'ok' })}${checkSquare({ checked: true, cls: 'nc' })}${checkSquare({ checked: true, cls: 'na' })}${checkSquare({ cls: 'lg' })}${checkSquare({ checked: true, cls: 'lg' })}</div>
+        <div class="row" style="margin-top:10px">${checkSquare({ label: 'Conforme', cls: 'ok' })}${checkSquare({ label: 'Non conforme', cls: 'nc', checked: true })}${checkSquare({ label: 'Non applicable', cls: 'na' })}</div></div>
+      <div class="card"><h2>Silhouette de la Guyane (guyaneInset)</h2><div class="row">${guyaneInset(SITE, { size: 60 })}${guyaneInset(SITE, { size: 90, label: 'ATHANASE' })}${guyaneInset(SITE, { size: 120, theme: 'green', label: 'thème green' })}${guyaneInset(SITE, { size: 90, theme: 'violet' })}</div></div>
+      <div class="card"><h2>En-tête compact (mobile, onglets)</h2>${sheetFrame({ theme: 'peach', body: oegHeader({ grid: GRID, sheet: SHEETS[3], site: SITE, variant: 'compact' }) })}${sheetFrame({ theme: 'violet', body: oegHeader({ grid: GRID, sheet: SHEETS[5], site: SITE, variant: 'compact' }) })}</div>
+    </div>
+  </section>
+
+  ${SHEETS.map(sheetDemo)}
+  <div class="cg-sheet-h" id="th-rust"><h2>Thème rust (partie B de la feuille 8)</h2><span class="badge outline">rust · Cuivre</span></div>
+  ${sheetFrame({ theme: 'rust', body: html`${oegHeader({ grid: GRID, sheet: { no: 8, title: 'Mercure / biote', kicker: 'Contaminants dans les milieux aquatiques', layout: 'table' }, site: SITE })}${infoStrip(SITE)}
+    ${sectionCard({ no: 'B', title: 'Mercure / biote', icon: 'fish+drop', cls: 'big', kicker: 'Contaminants dans les milieux aquatiques', body: table(true) })}
+    ${blockCard({ icon: 'clipboard', title: 'Observations / non-conformités / actions demandées', body: dotLines(3) })}${sheetFooter({ grid: GRID })}` })}
+  <h2 class="cg-h2">Palettes détaillées</h2>
+  ${order.map(n => html`<h3>${n} — ${THEMES[n].label}</h3>${swatches(n)}`)}
+`);
+window.__CHARTE_READY__ = true;
+</script>
+</body>
+</html>

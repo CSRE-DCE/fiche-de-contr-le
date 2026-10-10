@@ -42,6 +42,20 @@ export function parseList(v) {
   if (Array.isArray(v)) return v.map(String).map(s => s.trim()).filter(Boolean);
   return String(v ?? '').split(/[;,|\n]/).map(s => s.trim()).filter(Boolean);
 }
+/**
+ * Valeur saisie dans un champ de critère (`item.input`, champ d'un groupe « fields », ou `kind`) convertie
+ * pour l'enregistrement : nombres (virgule acceptée) en Number, dates et heures normalisées ; une saisie
+ * illisible est conservée telle quelle pour être signalée par la validation. Vide ⇒ ''.
+ */
+export function parseInputValue(spec, v) {
+  if (v === null || v === undefined || String(v).trim() === '') return '';
+  switch (spec?.type || spec?.kind) {
+    case 'number': { const n = parseNumber(v); return n === null ? String(v).trim() : n; }
+    case 'date': return parseDate(v) || String(v).trim();
+    case 'time': return parseTime(v) || String(v).trim();
+    default: return typeof v === 'string' ? v : String(v);
+  }
+}
 export function parseBool(v) { const s = normalize(v); return ['oui', 'o', 'yes', 'y', 'vrai', 'true', '1', 'x'].includes(s) ? true : ['non', 'n', 'no', 'faux', 'false', '0'].includes(s) ? false : null; }
 
 /** Proposition de correspondance colonne → champ, d'après les en-têtes. */

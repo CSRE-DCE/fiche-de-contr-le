@@ -3,14 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#003d7a">
-<meta name="description" content="Audit terrain des prestations de prélèvement — Office de l'Eau de Guyane. Fonctionne hors connexion.">
+<meta name="theme-color" content="#0d3577">
+<meta name="description" content="Fiches de contrôle terrain des prestations de prélèvement et de suivi biologique — Office de l’Eau de Guyane. Fonctionne hors connexion.">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Audit prélèvements">
-<title>Audit prélèvements — OEG</title>
+<meta name="apple-mobile-web-app-title" content="Contrôle OEG">
+<title>Fiches de contrôle terrain — OEG</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" href="fonts/Barlow-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Barlow-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Barlow-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/BarlowCondensed-ExtraBold.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="css/sheet.css">
@@ -37,7 +42,7 @@
 <script src="version.js"></script>
 </head>
 <body>
-<div id="app"><div class="auth"><div class="auth-card"><img class="logo" src="icons/logo-oeg.png" alt="Office de l'Eau de Guyane"><h1>Audit des prestations de prélèvement</h1><p class="sub">Chargement…</p></div></div></div>
+<div id="app"><div class="auth"><div class="auth-card"><img class="logo" src="icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="84" height="84"><h1>Fiches de contrôle terrain</h1><p class="sub">Office de l’Eau de Guyane — chargement…</p></div></div></div>
 <div id="toast-root" aria-live="polite"></div>
 <noscript><p style="padding:20px">Cette application nécessite JavaScript.</p></noscript>
 <script src="vendor/leaflet/leaflet.js"></script>

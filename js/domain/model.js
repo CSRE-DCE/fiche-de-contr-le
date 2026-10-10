@@ -25,6 +25,36 @@ export const ITEM_KINDS = {
   info: 'Information (sans réponse)'
 };
 
+/**
+ * Champ « Valeur / réponse » d'un critère de conformité (`item.input`, grilles en feuilles) :
+ *  {type:'text', placeholder?} · {type:'longtext'} · {type:'number', unit?, min?, max?, step?}
+ *  {type:'date'} · {type:'time'} · {type:'select', options:[…]}
+ *  {type:'fields', fields:[{key, label?, type, unit?, unitKey?, min?, max?, step?, options?, showIf?:{key, value}}], gps?:true}
+ *    → la valeur est un OBJET {clé: valeur}. `choice` = cases exclusives ; `showIf` : champ utile seulement
+ *      si value[showIf.key] === showIf.value ; `unitKey` : unité lue dans un autre champ (ex. mL / L) ;
+ *      `gps: true` : le groupe contient x / y (RGFG95 / UTM 22N), le relevé GPS ajoute lat, lon, accuracy, at.
+ * Un critère « valeur seule » n'a pas d'`input` : son `kind` (text, number, select…) en tient lieu ; un critère
+ * `kind: 'fields'` (+ `fields`, `gps`) porte une valeur objet sans statut (non proposé dans l'éditeur de grilles).
+ */
+export const INPUT_TYPES = {
+  text: 'Texte court', longtext: 'Texte libre', number: 'Valeur numérique', date: 'Date', time: 'Heure',
+  select: 'Liste de choix', fields: 'Groupe de champs'
+};
+export const FIELD_TYPES = { text: 'Texte', number: 'Nombre', date: 'Date', time: 'Heure', choice: 'Choix exclusif' };
+
+/** Valeurs pré-remplies à la création d'un audit (`item.prefill`). */
+export const PREFILL_SOURCES = {
+  'site.name': 'Nom de la station', 'site.code': 'Code SANDRE', 'site.bassin': 'Bassin versant', 'site.riverName': 'Cours d’eau',
+  'site.commune': 'Commune', 'site.her': 'Hydro-écorégion', 'site.pressions': 'Pressions', 'site.strahler': 'Rang de Strahler',
+  'site.xy': 'Coordonnées théoriques (X / Y)', 'audit.date': 'Date de l’audit', 'audit.time': 'Heure de début',
+  'auditor.name': 'Nom du contrôleur', 'provider.name': 'Prestataire', 'prestation.operators': 'Opérateurs du prestataire'
+};
+
+/** Conclusion d'une feuille (choix du contrôleur, jamais automatique). Libellés propres à chaque feuille : block.options. */
+export const SHEET_CONCLUSIONS = {
+  C: 'Conforme', NC: 'Non conforme', NA: 'Non applicable', AC: 'À compléter', RES: 'Sous réserve'
+};
+
 /** Modules spécialisés pouvant être insérés dans une section de grille. */
 export const SECTION_MODULES = {
   '': 'Aucun',
@@ -130,18 +160,87 @@ export const ALERT_LEVELS = {
   info: { label: 'Information', cls: 'info', rank: 1 }
 };
 
-/** Libellé lisible d'une valeur de réponse. */
+/**
+ * Description du champ de saisie d'un critère : `item.input` s'il existe (critère de conformité des
+ * grilles en feuilles), sinon déduite du `kind` (critère « valeur seule » ou grilles générales).
+ * Retourne null pour un critère de conformité sans valeur (statut seul).
+ */
+export function itemInput(item) {
+  if (!item) return null;
+  if (item.input) return item.input;
+  if (item.kind === 'conformity' || item.kind === 'info' || item.kind === 'photo') return null;
+  if (item.kind === 'fields') return { type: 'fields', fields: item.fields || [], gps: !!item.gps };
+  return { type: item.kind, options: item.options, unit: item.unit, min: item.min, max: item.max, step: item.step };
+}
+
+const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const blank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && !v.length);
+/** Le champ d'un groupe est-il utile pour la valeur donnée (condition `showIf`) ? */
+export function fieldShown(field, obj) { return !field.showIf || (obj || {})[field.showIf.key] === field.showIf.value; }
+
+/** Une valeur est-elle vide ? Objet « fields » : vide si aucun champ affiché n'est renseigné. */
+export function isEmptyValue(item, value) {
+  if (blank(value)) return true;
+  if (!isPlainObject(value)) return false;
+  const fields = itemInput(item)?.fields;
+  if (fields?.length) return !fields.some(f => fieldShown(f, value) && !blank(value[f.key]));
+  return !Object.values(value).some(v => !blank(v));
+}
+
+function frDate(v) {
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}))?/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' ' + m[4] : ''}` : String(v);
+}
+const optionLabel = (options, v) => {
+  const o = (options || []).find(x => (x && typeof x === 'object' ? x.value : x) === v);
+  return o && typeof o === 'object' ? (o.label ?? o.value) : v;
+};
+/** Valeur scalaire lisible selon la description du champ (type, unité, options). */
+function scalarText(spec, v, unit) {
+  const type = spec?.type || spec?.kind;
+  if (type === 'boolean' || v === true || v === false) v = v === true ? 'Oui' : v === false ? 'Non' : v;
+  else if (Array.isArray(v)) v = v.map(x => optionLabel(spec?.options, x)).join(', ');
+  else if (type === 'number' && v !== '' && !isNaN(Number(String(v).replace(',', '.')))) v = String(v).replace('.', ',');
+  else if (type === 'date' || type === 'datetime') v = frDate(v);
+  else if (type === 'time') v = String(v).slice(0, 5);
+  else if (type === 'select' || type === 'choice') v = optionLabel(spec?.options, v);
+  const u = unit ?? spec?.unit;
+  return u && type === 'number' ? `${v} ${u}` : String(v);
+}
+
+/**
+ * Formatage lisible d'une valeur (tableaux, PDF, CSV, comparaison) :
+ * scalaires (nombres avec unité et virgule décimale, dates JJ/MM/AAAA, Oui / Non, listes),
+ * objets « fields » → « Nom : Dupont · Fonction : Chef d’équipe » (champs masqués par showIf ignorés,
+ * coordonnées techniques lat / lon / précision non reprises).
+ */
+export function formatValue(item, value) {
+  if (blank(value)) return '';
+  const input = itemInput(item);
+  if (isPlainObject(value)) {
+    const fields = input?.type === 'fields' ? input.fields || [] : [];
+    if (!fields.length) return Object.entries(value).filter(([, v]) => !blank(v) && typeof v !== 'object').map(([k, v]) => `${k} : ${v}`).join(' · ');
+    const used = new Set(fields.filter(f => f.unitKey && !blank(value[f.key])).map(f => f.unitKey));
+    const parts = [];
+    for (const f of fields) {
+      if (!fieldShown(f, value) || used.has(f.key) || blank(value[f.key])) continue;
+      let t = scalarText(f, value[f.key], f.unitKey ? (value[f.unitKey] || f.unit) : f.unit);
+      // Choix « Autre » / « Écart(s) » suivi de sa précision : « Autre : pompe » (une seule mention).
+      const detail = f.type === 'choice' && fields.find(d => d.showIf?.key === f.key && d.showIf.value === value[f.key] && d.label === value[f.key] && !blank(value[d.key]));
+      if (detail) { t = `${t} : ${scalarText(detail, value[detail.key])}`; used.add(detail.key); }
+      parts.push(f.label ? `${f.label} : ${t}` : t);
+    }
+    return parts.join(' · ');
+  }
+  return scalarText(input || {}, value);
+}
+
+/** Libellé lisible d'une réponse : statut · valeur. */
 export function responseText(item, r) {
   if (!r) return '';
   const parts = [];
   if (r.status) parts.push(RESPONSES[r.status]?.label || r.status);
-  if (r.value !== undefined && r.value !== null && r.value !== '') {
-    let v = r.value;
-    if (item?.kind === 'boolean') v = v === true ? 'Oui' : v === false ? 'Non' : v;
-    if (Array.isArray(v)) v = v.join(', ');
-    if (item?.kind === 'number' && item.unit) v = `${String(v).replace('.', ',')} ${item.unit}`;
-    if (item?.kind === 'datetime' && /T/.test(v)) v = v.replace('T', ' ');
-    parts.push(String(v));
-  }
+  const v = formatValue(item, r.value);
+  if (v) parts.push(v);
   return parts.join(' · ');
 }

@@ -9,9 +9,9 @@ import { fmtDate, fmtDateTime, fmtTime, nowISO, localDate, bytesToBase64, base64
 import { toCSV, objectsToRows } from '../formats/csv.js';
 import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
-import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, ACTION_STATUS } from '../domain/model.js';
-import { allItems } from '../domain/grids.js';
-import { isOverdue } from '../domain/summary.js';
+import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS } from '../domain/model.js';
+import { allItems, sheetOf } from '../domain/grids.js';
+import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
 import { auditState } from './audits.js';
 
@@ -31,7 +31,8 @@ export const COLUMNS = {
     { label: 'Critères contrôlés', get: a => a._s.counts.controlled }, { label: 'Conformes', get: a => a._s.counts.C }, { label: 'Non conformes', get: a => a._s.counts.NC },
     { label: 'Non applicables', get: a => a._s.counts.NA }, { label: 'Non observés', get: a => a._s.counts.NO }, { label: 'Non vérifiables', get: a => a._s.counts.NV },
     { label: 'Écarts', get: a => a._s.deviationsCount }, ...['OBS', 'MIN', 'MAJ', 'CRIT'].map(c => ({ label: `Écarts ${crit(c)}`, get: a => a._s.byCriticality.find(x => x.code === c)?.count || 0 })),
-    { label: 'Empreinte scellée', get: a => a.lock?.contentHash || '' }, { label: 'Modifications après signature', get: a => (a.amendments || []).length }
+    { label: 'Empreinte scellée', get: a => a.lock?.contentHash || '' }, { label: 'Modifications après signature', get: a => (a.amendments || []).length },
+    { label: 'Compartiments contrôlés', get: a => (a.compartments || []).map(k => (a.gridSnapshot?.compartments || []).find(c => c.key === k)?.label || k).join(' ; ') }
   ],
   deviations: [
     { label: 'Numéro', get: d => d.number }, { label: 'Date', get: d => fmtDate(d.date) }, { label: 'Heure', get: d => d.time }, { label: 'Audit', get: d => d.auditNumber },
@@ -45,7 +46,7 @@ export const COLUMNS = {
     { label: 'Date de clôture', get: d => fmtDate(d.closedAt) }, { label: 'Localisation GPS', get: d => d.location ? `${d.location.lat.toFixed(6)}, ${d.location.lon.toFixed(6)}` : '' }
   ],
   prestations: [
-    { label: 'Référence', get: p => p.ref }, { label: 'Date prévue', get: p => fmtDate(p.plannedDate) }, { label: 'Heure', get: p => p.plannedTime }, { label: 'Date indicative', get: p => p.dateIndicative ? 'Oui' : '' },
+    { label: 'Référence', get: p => p.ref }, { label: 'Date prévue', get: p => p.plannedDate ? fmtDate(p.plannedDate) : 'À planifier' }, { label: 'Heure', get: p => p.plannedTime }, { label: 'Date indicative', get: p => p.dateIndicative ? 'Oui' : '' },
     { label: 'Site', get: p => name('site', p.siteId) }, { label: 'Code site', get: p => name('site', p.siteId, s => s.code) }, { label: 'Prestataire', get: p => name('provider', p.providerId) },
     { label: 'Campagne', get: p => name('campaign', p.campaignId, c => c.label) }, { label: 'Type de prélèvement', get: p => name('samplingType', p.samplingTypeId) }, { label: 'Marché', get: p => p.marketRef },
     { label: 'Statut', get: p => PRESTATION_STATUS[p.status]?.label || p.status }, { label: 'Audits', get: p => store.filter('audit', a => a.prestationId === p.id && a.status !== 'abandonne').map(a => a.number).join(', ') },
@@ -62,11 +63,23 @@ export const COLUMNS = {
 
 export function auditsWithSummary(audits) { return audits.map(a => ({ ...a, _s: auditState(a).summary })); }
 
+/** Réponses critère par critère (valeurs lisibles : formatValue ; objets « fields » en « Libellé : valeur · … »). */
 export function responsesRows(audits) {
-  const rows = [['Audit', 'Date', 'Section', 'Domaine', 'Code', 'Critère', 'Réponse', 'Valeur', 'Observation', 'Heure', 'Auteur']];
+  const rows = [['Audit', 'Date', 'Feuille', 'Section', 'Domaine', 'Code', 'Réf. courte', 'Critère', 'Réponse', 'Valeur', 'Observation', 'Pré-rempli', 'Heure', 'Auteur']];
   for (const a of audits) for (const it of allItems(a.gridSnapshot)) {
     const r = a.responses?.[it.id]; if (!r) continue;
-    rows.push([a.number, fmtDate(a.startedAt), it.sectionTitle, it.domain === 'transport' ? 'Transport' : 'Prélèvement', it.code, it.label, RESPONSES[r.status]?.label || '', r.value === undefined ? '' : (Array.isArray(r.value) ? r.value.join(', ') : String(r.value)), r.comment || '', fmtTime(r.at), r.byName || '']);
+    const sheet = it.sheet !== undefined ? sheetOf(a.gridSnapshot, it.sheet) : null;
+    rows.push([a.number, fmtDate(a.startedAt), sheet ? `${sheet.no} – ${sheet.tab || sheet.title}` : '', it.sectionTitle, it.domain === 'transport' ? 'Transport' : 'Prélèvement', it.code, it.short || '', it.label, RESPONSES[r.status]?.label || '', formatValue(it, r.value), r.comment || '', r.prefilled ? 'Oui' : '', fmtTime(r.at), r.byName || '']);
+  }
+  return rows;
+}
+
+/** Synthèse par feuille des audits en feuilles : décomptes, conclusion du contrôleur, observations / notes des encadrés. */
+export function sheetsRows(audits) {
+  const rows = [['Audit', 'Date', 'Site', 'Feuille', 'Titre', 'C', 'NC', 'N/A', 'Non renseignés', 'Total', 'Conclusion', 'Commentaires', 'Observations', 'Notes', 'Photos / références', 'Agent(s) prestataire(s)']];
+  for (const a of audits) for (const st of sheetSummary({ audit: a })) {
+    const d = a.sheets?.[st.no] || {};
+    rows.push([a.number, fmtDate(a.startedAt), name('site', a.siteId), st.no, st.title, st.C, st.NC, st.NA, st.unanswered, st.total, st.conclusionLabel, st.comments, d.observations || '', d.notes || '', d.photos || '', d.agents || '']);
   }
   return rows;
 }
