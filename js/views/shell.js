@@ -49,7 +49,7 @@ export function renderShell(root, { lock }) {
       <img class="logo" src="icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="46" height="46">
       <div class="titles"><h1>Fiches de contrôle terrain</h1><small>${org.orgName || 'Office de l’Eau de Guyane'}</small></div>
       <button class="top-pill" data-act="shell-sync" id="netPill" title="État de la connexion et de la synchronisation"><span class="dot"></span><span class="lbl" id="netLbl">…</span></button>
-      <button class="top-pill" data-act="shell-account" title="Mon compte">${icon('user', { size: 20 })}<span class="lbl">${session.user.name.split(' ')[0]}</span></button>
+      <button class="top-pill pill-account" data-act="shell-account" title="Mon compte">${icon('user', { size: 20 })}<span class="lbl">${session.user.name.split(' ')[0]}</span></button>
       <button class="top-pill" data-act="shell-lock" title="Verrouiller la session" aria-label="Verrouiller la session">${icon('lock', { size: 20 })}</button>
     </header>
     <div class="app-shell">

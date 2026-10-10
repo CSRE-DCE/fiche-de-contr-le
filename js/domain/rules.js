@@ -6,7 +6,9 @@
  *
  * Grilles en feuilles : règles `item.alerts` appliquées à la valeur saisie (`input` numérique, ou champ
  * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps) aux
- * coordonnées théoriques de la station, ancienneté des calibrations des sondes (module « instruments »).
+ * coordonnées théoriques de LA station du critère (tournée : `stationSites[clé]`), ancienneté des calibrations
+ * des sondes (module « instruments », donnée de tournée : une alerte par appareil). Une alerte liée à un critère
+ * de station porte `stationKey`.
  */
 import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAnswerable, sheetsOf } from './grids.js';
 import { itemInput } from './model.js';
@@ -98,11 +100,14 @@ export function calibrationStatus(calibration, auditDate, maxDays = 30) {
 }
 
 /**
- * Calcule les alertes d'un audit.
- * input : {audit, grid, ctx, point, site, prestation, operators, settings, today, mediaCounts, includeMissing}
+ * Calcule les alertes d'un audit (grille EFFECTIVE pour une tournée).
+ * input : {audit, grid, ctx, point, site, prestation, operators, settings, today, mediaCounts, includeMissing,
+ *          stationSites?: {[clé de station]: site}, prestations?: [{prestation, station}] (toutes celles de la tournée)}
  */
 export function computeAlerts(input) {
-  const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {} } = input;
+  const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {}, stationSites = {} } = input;
+  const siteOf = it => (it?.station && stationSites[it.station.key]) || site;
+  const stationKeyOf = it => (it?.station && !it.shared ? it.station.key : null);
   const today = input.today || (audit.startedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
   const auditDate = (audit.startedAt || today).slice(0, 10);
   const responses = audit.responses || {};
@@ -110,7 +115,9 @@ export function computeAlerts(input) {
   const add = a => out.push({ level: 'attention', ...a, key: a.key || `${a.code}:${a.itemId || a.target?.id || ''}` });
   const structure = grid ? visibleStructure(grid, responses, ctx) : [];
   const visibleIds = new Set(structure.filter(s => s.visible).flatMap(s => s.visibleItems.map(i => i.id)));
-  const items = grid ? allItems(grid).filter(i => visibleIds.has(i.id)) : [];
+  const itemsById = new Map();
+  for (const s of structure) if (s.visible) for (const i of s.visibleItems) if (!itemsById.has(i.id)) itemsById.set(i.id, i);
+  const items = grid ? allItems(grid).filter(i => visibleIds.has(i.id)).map(i => ({ ...i, station: itemsById.get(i.id)?.station || i.station })) : [];
   const sectionOfModule = mod => structure.find(s => s.visible && s.module === mod)?.id || null;
 
   // 1. Mauvais point de prélèvement (écart GPS)
@@ -162,11 +169,13 @@ export function computeAlerts(input) {
     });
   }
 
-  // 5. Prestation différente de celle programmée
-  if (prestation) {
+  // 5. Prestation différente de celle programmée (tournée : chaque prestation comparée à SA station)
+  const prestationList = input.prestations?.length ? input.prestations : prestation ? [{ prestation, station: { siteId: audit.siteId, pointId: audit.pointId, key: null } }] : [];
+  for (const { prestation, station } of prestationList) {
+    if (!prestation) continue;
     const diffs = [];
-    if (audit.siteId && prestation.siteId && audit.siteId !== prestation.siteId) diffs.push('site différent');
-    if (audit.pointId && (prestation.pointIds || []).length && !prestation.pointIds.includes(audit.pointId)) diffs.push('point de prélèvement différent');
+    if (station?.siteId && prestation.siteId && station.siteId !== prestation.siteId) diffs.push('site différent');
+    if (station?.pointId && (prestation.pointIds || []).length && !prestation.pointIds.includes(station.pointId)) diffs.push('point de prélèvement différent');
     if (audit.providerId && prestation.providerId && audit.providerId !== prestation.providerId) diffs.push('prestataire différent');
     if (audit.samplingTypeId && prestation.samplingTypeId && audit.samplingTypeId !== prestation.samplingTypeId) diffs.push('type de prélèvement différent');
     const planned = (prestation.operatorIds || []);
@@ -174,7 +183,7 @@ export function computeAlerts(input) {
     if (planned.length && present.length && !present.some(id => planned.includes(id))) diffs.push('aucun des opérateurs programmés n’est présent');
     if (prestation.plannedDate && Math.abs(daysBetween(prestation.plannedDate, auditDate)) > (Number(settings.dateToleranceDays) || 0) && !prestation.dateIndicative) diffs.push(`date programmée le ${fmtDate(prestation.plannedDate)}`);
     if (diffs.length) add({
-      code: 'PRESTATION_DIFFERENT', level: 'attention', target: { type: 'prestation', id: prestation.id },
+      code: 'PRESTATION_DIFFERENT', level: 'attention', target: { type: 'prestation', id: prestation.id }, stationKey: station?.key || null,
       title: 'Prestation différente de celle programmée',
       message: `Constat : ${diffs.join(', ')}.`,
       deviation: { requirement: 'Prestation réalisée conformément à la programmation', description: `Écart avec la prestation programmée ${prestation.ref || ''} : ${diffs.join(', ')}.`, typeCode: 'DOCUMENTAIRE' }
@@ -202,7 +211,7 @@ export function computeAlerts(input) {
       if (cmp(rule.op, x, rule.value)) {
         const shown = fr(x);
         add({
-          code: rule.code || 'ITEM_RULE', level: rule.level || 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet,
+          code: rule.code || 'ITEM_RULE', level: rule.level || 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, stationKey: stationKeyOf(it),
           key: `${rule.code || 'ITEM_RULE'}:${it.id}${rule.field ? ':' + rule.field : ''}`,
           title: (rule.title || it.label).replace('{value}', shown),
           message: (rule.message || `${it.label} : valeur ${shown}`).replace('{value}', shown),
@@ -211,11 +220,13 @@ export function computeAlerts(input) {
       }
     }
     // Coordonnées X / Y saisies éloignées des coordonnées théoriques de la station (critères « fields » gps)
-    if (spec?.type === 'fields' && spec.gps && r?.value && r.status !== 'NA' && site) {
+    const itSite = siteOf(it);
+    if (spec?.type === 'fields' && spec.gps && r?.value && r.status !== 'NA' && itSite) {
+      const site = itSite;
       const d = xyDistance(r.value, site);
       const threshold = Number(grid?.settings?.gpsThresholdM) || Number(settings.gpsThresholdM) || 100;
       if (d !== null && d > threshold) add({
-        code: 'GPS_XY_FAR', level: 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, key: 'GPS_XY_FAR:' + it.id,
+        code: 'GPS_XY_FAR', level: 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, stationKey: stationKeyOf(it), key: 'GPS_XY_FAR:' + it.id,
         title: 'Coordonnées éloignées de la station',
         message: `${it.label} : position X ${r.value.x} / Y ${r.value.y} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
         deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
@@ -250,12 +261,15 @@ export function computeAlerts(input) {
     }
   }
 
-  // 7. Calibration des appareils de mesure (module « instruments » des feuilles visibles)
+  // 7. Calibration des appareils de mesure (module « instruments » des feuilles visibles ; donnée de tournée :
+  //    audit.sheets[String(no)], une seule fois par feuille même si elle est répétée pour chaque station)
   if (grid?.layout === 'sheets') {
     const maxDays = Number(grid.settings?.calibrationMaxDays) || 30;
+    const done = new Set();
     for (const sh of sheetsOf(grid, responses, ctx)) {
-      if (!(sh.modules || []).includes('instruments')) continue;
-      const data = audit.sheets?.[sh.no]?.instruments || {};
+      if (!(sh.modules || []).includes('instruments') || done.has(String(sh.no))) continue;
+      done.add(String(sh.no));
+      const data = audit.sheets?.[String(sh.no)]?.instruments || {};
       for (const ins of sh.instruments || DEFAULT_INSTRUMENTS) {
         const st = calibrationStatus(data[ins.key]?.calibration, auditDate, maxDays);
         if (!st.ok) add({
@@ -270,10 +284,13 @@ export function computeAlerts(input) {
 
   // 8. Informations obligatoires absentes (affichées lors de la clôture)
   if (input.includeMissing) {
+    const counted = new Set();
     for (const s of structure) {
       if (!s.visible) continue;
-      const missing = s.visibleItems.filter(it => isAnswerable(it) && it.required && !isAnswered(it, mediaCounts[it.id] ? { ...(responses[it.id] || {}), mediaCount: mediaCounts[it.id] } : responses[it.id]));
-      if (missing.length) add({ code: 'REQUIRED_MISSING', level: 'info', sectionId: s.id, key: 'REQUIRED_MISSING:' + s.id, title: 'Information obligatoire absente', message: `${missing.length} critère(s) obligatoire(s) sans réponse dans « ${s.title} » : ${missing.slice(0, 4).map(i => i.code || i.label).join(', ')}${missing.length > 4 ? '…' : ''}` });
+      const missing = s.visibleItems.filter(it => !counted.has(it.id) && isAnswerable(it) && it.required && !isAnswered(it, mediaCounts[it.id] ? { ...(responses[it.id] || {}), mediaCount: mediaCounts[it.id] } : responses[it.id]));
+      for (const it of missing) if (it.shared) counted.add(it.id);
+      const where = s.station && (grid?.stations || []).length > 1 ? ` — ${s.station.name}` : '';
+      if (missing.length) add({ code: 'REQUIRED_MISSING', level: 'info', sectionId: s.id, sheet: s.sheet, stationKey: s.station?.key || null, key: 'REQUIRED_MISSING:' + s.id, title: 'Information obligatoire absente', message: `${missing.length} critère(s) obligatoire(s) sans réponse dans « ${s.title}${where} » : ${missing.slice(0, 4).map(i => i.code || i.label).join(', ')}${missing.length > 4 ? '…' : ''}` });
     }
   }
 

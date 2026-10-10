@@ -56,6 +56,10 @@ export const TARGETS = {
       { key: 'her', label: 'Hydro-écorégion', hints: ['hydro ecoregion', 'her'] },
       { key: 'strahler', label: 'Rang de Strahler', hints: ['strahler', 'rang de strahler'] },
       { key: 'compartments', label: 'Compartiments à contrôler (clés séparées par « ; »)', hints: ['compartiments', 'compartiment'] },
+      { key: 'types', label: 'Types de tournée (bio ; ce ; eso)', hints: ['types de tournee', 'type de tournee', 'suivi'] },
+      { key: 'nature', label: 'Nature du point d’eau (eaux souterraines)', hints: ['nature du point', 'type point', 'type de point'] },
+      { key: 'usage', label: 'Usage (eaux souterraines)', hints: ['usage'] },
+      { key: 'aquifere', label: 'Aquifère (eaux souterraines)', hints: ['aquifere', 'nappe'] },
       { key: 'lat', label: 'Latitude (WGS84)', hints: ['latitude', 'lat'] },
       { key: 'lon', label: 'Longitude (WGS84)', hints: ['longitude', 'lon', 'lng'] },
       { key: 'x', label: 'X (RGFG95 / UTM 22N)', hints: ['x', 'x l93', 'easting'] },
@@ -232,15 +236,24 @@ function buildSite(row, mapping) {
   const existing = store.find('site', s => s.code === code);
   const warnings = [];
   const entity = { id: existing?.id || 'site-' + code, code, name, networks: parseList(get(row, mapping, 'networks')), kind: String(get(row, mapping, 'kind') || existing?.kind || ''), commune: String(get(row, mapping, 'commune') || ''), bassin: String(get(row, mapping, 'bassin') || ''), masseEau: String(get(row, mapping, 'masseEau') || ''), lat: lat !== null ? +lat.toFixed(6) : null, lon: lon !== null ? +lon.toFixed(6) : null, x, y };
-  // Champs de la fiche station BIO 2026 : conservés s'ils ne sont pas fournis par le fichier.
-  for (const k of ['riverName', 'her', 'strahler']) { const v = String(get(row, mapping, k) ?? '').trim(); if (v || existing?.[k] === undefined) entity[k] = v || existing?.[k] || ''; }
+  // Champs de la fiche station (grille CT-2026) : conservés s'ils ne sont pas fournis par le fichier.
+  for (const k of ['riverName', 'her', 'strahler', 'nature', 'usage', 'aquifere']) { const v = String(get(row, mapping, k) ?? '').trim(); if (v || existing?.[k] === undefined) entity[k] = v || existing?.[k] || ''; }
+  // Type de code : BSS pour un point d'eau souterraine (code « BSS… »), sinon SANDRE.
+  entity.codeType = /^BSS/i.test(code) ? 'BSS' : existing?.codeType || 'SANDRE';
   const comps = parseList(get(row, mapping, 'compartments')).map(c => normalize(c).replace(/\s+/g, ''));
   if (comps.length) {
-    const known = ['organisation', 'physico', 'invertebres', 'diatomees', 'poissons', 'phytoplancton'];
+    const known = ['organisation', 'physico', 'eso', 'invertebres', 'diatomees', 'poissons', 'phytoplancton'];
     const bad = comps.filter(c => !known.includes(c));
     if (bad.length) warnings.push(`compartiment(s) inconnu(s) ignoré(s) : ${bad.join(', ')}`);
-    entity.compartments = [...new Set(['organisation', ...comps.filter(c => known.includes(c))])];
+    entity.compartments = known.filter(c => c === 'organisation' || comps.includes(c));
   }
+  const types = parseList(get(row, mapping, 'types')).map(t => normalize(t).replace(/\s+/g, ''));
+  if (types.length) {
+    const alias = { bio: 'bio', biologie: 'bio', hydrobiologie: 'bio', ce: 'ce', coursdeau: 'ce', eso: 'eso', eauxsouterraines: 'eso', eausouterraine: 'eso' };
+    const bad = types.filter(t => !alias[t]);
+    if (bad.length) warnings.push(`type(s) de tournée inconnu(s) ignoré(s) : ${bad.join(', ')}`);
+    entity.types = ['bio', 'ce', 'eso'].filter(k => types.some(t => alias[t] === k));
+  } else if (existing?.types === undefined && entity.codeType === 'BSS') entity.types = ['eso'];
   return { entity, existing, errors, warnings, extra: existing ? null : { type: 'point', entity: { id: 'pt-' + code, siteId: entity.id, code, name: 'Point de prélèvement ' + name, lat: entity.lat, lon: entity.lon } } };
 }
 function buildPoint(row, mapping) {

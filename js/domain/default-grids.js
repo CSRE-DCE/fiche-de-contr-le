@@ -4,10 +4,11 @@
  * § 6.4 équipements, § 7.3 échantillonnage, § 7.4 manutention des objets, § 7.5 enregistrements
  * techniques) et série NF EN ISO 5667 (échantillonnage de l'eau). Les articles de CCTP et de protocole
  * renvoient aux documents d'exemple et doivent être remplacés par les références réelles.
- * La grille « en feuilles » du contrôle terrain HYDRECO — RCS ESC BIO 2026 (grid-bio-2026.js) est
- * placée en tête : c'est la grille par défaut des stations du programme biologique.
+ * La grille unique « en feuilles » du contrôle terrain des prestations de prélèvement 2026 (CT-2026,
+ * grid-ct-2026.js : hydrobiologie, cours d'eau, eaux souterraines ; tournées) est placée en tête : c'est la
+ * grille par défaut des tournées de contrôle.
  */
-import { GRID_BIO_2026 } from './grid-bio-2026.js';
+import { GRID_CT_2026 } from './grid-ct-2026.js';
 
 const C = (code, label, extra = {}) => ({ id: 'it-' + code, code, label, kind: 'conformity', required: true, evidenceOnNC: true, ...extra });
 const iso = (clause, requirement) => ({ docKey: 'ISO17025', docType: 'REFERENTIEL', article: clause, requirement });
@@ -220,5 +221,8 @@ export const GRID_RAPIDE = {
   ]
 };
 
-export { GRID_BIO_2026 };
-export const DEFAULT_GRIDS = [GRID_BIO_2026, GRID_GENERAL, GRID_RAPIDE];
+export { GRID_CT_2026 };
+/** Identifiant de la grille des tournées de contrôle terrain 2026 (et de l'ancienne grille CT-BIO-2026, archivée à la mise à niveau). */
+export const CT_GRID_ID = GRID_CT_2026.id;
+export const OLD_BIO_GRID_ID = 'grid-ct-bio-2026-v1';
+export const DEFAULT_GRIDS = [GRID_CT_2026, GRID_GENERAL, GRID_RAPIDE];

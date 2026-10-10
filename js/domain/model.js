@@ -1,17 +1,29 @@
 /* Vocabulaire métier : réponses, statuts, types d'objets. Fichier pur (aucune dépendance). */
 
-/** Réponses possibles à un critère de conformité. */
+/** Réponses possibles à un critère de conformité. Grille CT-2026 : échelle C / P / NC / N/A
+ * (« Perfectible » : observation obligatoire, comme pour une non-conformité). */
 export const RESPONSES = {
   C: { label: 'Conforme', short: 'C', cls: 'ok', icon: '✓' },
+  P: { label: 'Perfectible', short: 'P', cls: 'perf', icon: '≈' },
   NC: { label: 'Non conforme', short: 'NC', cls: 'nc', icon: '✗' },
   NA: { label: 'Non applicable', short: 'NA', cls: 'na', icon: '—' },
   NO: { label: 'Non observé', short: 'NO', cls: 'no', icon: '◌' },
   NV: { label: 'Non vérifiable', short: 'NV', cls: 'nv', icon: '?' }
 };
 export const DEFAULT_RESPONSES = ['C', 'NC', 'NA', 'NO'];
+/** Échelle à quatre niveaux des grilles de contrôle terrain (CT-2026) et réponses exigeant une observation. */
+export const SCALE_CPNC = ['C', 'P', 'NC', 'NA'];
+export const JUSTIFY_CPNC = ['P', 'NC'];
+/** Criticité proposée par défaut pour un écart créé depuis une réponse (jamais créé automatiquement). */
+export const DEFAULT_CRITICALITY = { P: 'OBS', NC: 'MIN' };
+export function defaultCriticality(status) { return DEFAULT_CRITICALITY[status] || 'MIN'; }
+
+/** Types de tournée (grille CT-2026 : `grid.types[].key`) et types de code de station. */
+export const AUDIT_TYPES = { bio: 'Hydrobiologie', ce: 'Cours d’eau', eso: 'Eaux souterraines' };
+export const CODE_TYPES = { SANDRE: 'Code SANDRE', BSS: 'Code BSS' };
 
 export const ITEM_KINDS = {
-  conformity: 'Conformité (C / NC / NA / NO / NV)',
+  conformity: 'Conformité (C / P / NC / NA / NO / NV)',
   boolean: 'Oui / Non',
   select: 'Liste de choix',
   multiselect: 'Choix multiples',
@@ -29,9 +41,10 @@ export const ITEM_KINDS = {
  * Champ « Valeur / réponse » d'un critère de conformité (`item.input`, grilles en feuilles) :
  *  {type:'text', placeholder?} · {type:'longtext'} · {type:'number', unit?, min?, max?, step?}
  *  {type:'date'} · {type:'time'} · {type:'select', options:[…]}
- *  {type:'fields', fields:[{key, label?, type, unit?, unitKey?, min?, max?, step?, options?, showIf?:{key, value}}], gps?:true}
+ *  {type:'fields', fields:[{key, label?, type, unit?, unitKey?, min?, max?, step?, options?, placeholder?, showIf?}], gps?:true}
  *    → la valeur est un OBJET {clé: valeur}. `choice` = cases exclusives ; `showIf` : champ utile seulement
- *      si value[showIf.key] === showIf.value ; `unitKey` : unité lue dans un autre champ (ex. mL / L) ;
+ *      si value[showIf.key] === showIf.value (`value` peut être une liste : l'une des valeurs ; `showIf` peut
+ *      être une liste de conditions : l'une suffit — voir fieldShown) ; `unitKey` : unité lue dans un autre champ (ex. mL / L) ;
  *      `gps: true` : le groupe contient x / y (RGFG95 / UTM 22N), le relevé GPS ajoute lat, lon, accuracy, at.
  * Un critère « valeur seule » n'a pas d'`input` : son `kind` (text, number, select…) en tient lieu ; un critère
  * `kind: 'fields'` (+ `fields`, `gps`) porte une valeur objet sans statut (non proposé dans l'éditeur de grilles).
@@ -42,18 +55,22 @@ export const INPUT_TYPES = {
 };
 export const FIELD_TYPES = { text: 'Texte', number: 'Nombre', date: 'Date', time: 'Heure', choice: 'Choix exclusif' };
 
-/** Valeurs pré-remplies à la création d'un audit (`item.prefill`). */
+/** Valeurs pré-remplies à la création d'un audit (`item.prefill`) ; critères des feuilles « station » : valeurs de LA station. */
 export const PREFILL_SOURCES = {
-  'site.name': 'Nom de la station', 'site.code': 'Code SANDRE', 'site.bassin': 'Bassin versant', 'site.riverName': 'Cours d’eau',
+  'site.name': 'Nom de la station', 'site.code': 'Code de la station (SANDRE / BSS)', 'site.bassin': 'Bassin versant', 'site.riverName': 'Cours d’eau',
   'site.commune': 'Commune', 'site.her': 'Hydro-écorégion', 'site.pressions': 'Pressions', 'site.strahler': 'Rang de Strahler',
-  'site.xy': 'Coordonnées théoriques (X / Y)', 'audit.date': 'Date de l’audit', 'audit.time': 'Heure de début',
+  'site.xy': 'Coordonnées théoriques (X / Y)', 'audit.date': 'Date de l’audit', 'audit.time': 'Heure de début (ou d’arrivée sur la station)',
+  'audit.kind': 'Type d’audit (inopiné / avec rendez-vous)', 'tournee.stationCount': 'Nombre de stations de la tournée',
   'auditor.name': 'Nom du contrôleur', 'provider.name': 'Prestataire', 'prestation.operators': 'Opérateurs du prestataire'
 };
 
 /** Conclusion d'une feuille (choix du contrôleur, jamais automatique). Libellés propres à chaque feuille : block.options. */
 export const SHEET_CONCLUSIONS = {
-  C: 'Conforme', NC: 'Non conforme', NA: 'Non applicable', AC: 'À compléter', RES: 'Sous réserve'
+  C: 'Conforme', P: 'Perfectible', NC: 'Non conforme', NA: 'Non applicable', AC: 'À compléter', RES: 'Sous réserve'
 };
+/** Options du « Bilan – Satisfaisant ? » (fiche eaux souterraines) : conclusions des feuilles F3, F4, F5 (cours d'eau,
+ * eaux souterraines) et F10. */
+export const BILAN_OPTIONS = [['C', 'Satisfaisant'], ['P', 'Perfectible'], ['NC', 'Non satisfaisant']];
 
 /** Modules spécialisés pouvant être insérés dans une section de grille. */
 export const SECTION_MODULES = {
@@ -170,13 +187,23 @@ export function itemInput(item) {
   if (item.input) return item.input;
   if (item.kind === 'conformity' || item.kind === 'info' || item.kind === 'photo') return null;
   if (item.kind === 'fields') return { type: 'fields', fields: item.fields || [], gps: !!item.gps };
-  return { type: item.kind, options: item.options, unit: item.unit, min: item.min, max: item.max, step: item.step };
+  const spec = { type: item.kind, options: item.options, unit: item.unit, min: item.min, max: item.max, step: item.step };
+  if (item.placeholder) spec.placeholder = item.placeholder;
+  return spec;
 }
 
 const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const blank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && !v.length);
-/** Le champ d'un groupe est-il utile pour la valeur donnée (condition `showIf`) ? */
-export function fieldShown(field, obj) { return !field.showIf || (obj || {})[field.showIf.key] === field.showIf.value; }
+/**
+ * Le champ d'un groupe est-il utile pour la valeur donnée (condition `showIf`) ?
+ * showIf : {key, value} (égalité), {key, value: [...]} (l'une des valeurs) ou [{…}, {…}] (l'une des conditions).
+ */
+export function fieldShown(field, obj) {
+  if (!field?.showIf) return true;
+  const o = obj || {};
+  const one = c => !c || (Array.isArray(c.value) ? c.value.includes(o[c.key]) : o[c.key] === c.value);
+  return Array.isArray(field.showIf) ? field.showIf.some(one) : one(field.showIf);
+}
 
 /** Une valeur est-elle vide ? Objet « fields » : vide si aucun champ affiché n'est renseigné. */
 export function isEmptyValue(item, value) {
@@ -226,7 +253,7 @@ export function formatValue(item, value) {
       if (!fieldShown(f, value) || used.has(f.key) || blank(value[f.key])) continue;
       let t = scalarText(f, value[f.key], f.unitKey ? (value[f.unitKey] || f.unit) : f.unit);
       // Choix « Autre » / « Écart(s) » suivi de sa précision : « Autre : pompe » (une seule mention).
-      const detail = f.type === 'choice' && fields.find(d => d.showIf?.key === f.key && d.showIf.value === value[f.key] && d.label === value[f.key] && !blank(value[d.key]));
+      const detail = f.type === 'choice' && fields.find(d => !Array.isArray(d.showIf) && d.showIf?.key === f.key && d.showIf.value === value[f.key] && d.label === value[f.key] && !blank(value[d.key]));
       if (detail) { t = `${t} : ${scalarText(detail, value[detail.key])}`; used.add(detail.key); }
       parts.push(f.label ? `${f.label} : ${t}` : t);
     }

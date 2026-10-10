@@ -4,11 +4,13 @@
  *   méthodes, unités, contenants, réglages par défaut — tous administrables ensuite.
  * - oegReferential(DATA) : sites, points, prestataires/partenaires/régie, opérateurs et campagnes repris
  *   du référentiel des fiches terrain OEG (js/data.js), pour démarrer avec les stations réelles.
- * - oegProgramme(DATA, …) : prestations programmées déduites des sessions de campagne des fiches terrain.
+ * - oegProgramme(DATA, …) : prestations programmées déduites des sessions de campagne des fiches terrain
+ *   (programme cours d'eau : réseaux Chimie et RCO — ceProgramme(DATA) — tournées « ce » de la grille CT-2026).
  * - bioProgramme(DATA) : programme RCS ESC BIO 2026 (une prestation HYDRECO « à planifier » par station BIO).
- * Les sites sont enrichis pour les fiches de contrôle BIO 2026 (cours d'eau, hydro-écorégion, listes BIO,
- * compartiments à contrôler, accès, difficultés, photos) ; seules les données de la station ATHANASE
- * (09271503) sont connues (maquettes) : les autres stations ont des champs vides à compléter.
+ * Les sites sont enrichis pour les fiches de contrôle 2026 (grille CT-2026) : types de tournée (`types` : bio, ce,
+ * eso), type de code (`codeType` : SANDRE ou BSS), compartiments à contrôler, cours d'eau, hydro-écorégion, listes
+ * BIO, accès, difficultés, photos ; eaux souterraines : nature, aquifère, usage. Seules les données de la station
+ * ATHANASE (09271503) sont connues (maquettes) : les autres stations ont des champs vides à compléter.
  * - demoData() : jeu d'exemple FICTIF (documents « EXEMPLE », prestataire de démonstration).
  * Les identifiants sont déterministes : deux appareils initialisés séparément produisent les mêmes
  * identifiants pour les mêmes objets, ce qui évite les doublons à la synchronisation.
@@ -113,7 +115,38 @@ function monthRange(label) {
 /** Listes des fiches terrain biologiques déterminant les compartiments à contrôler. */
 export const BIO_LISTS = ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO'];
 export const BIO_CAMPAIGN = { id: 'camp-BIO-2026', code: 'BIO-2026', label: 'RCS ESC BIO 2026', network: 'BIO', start: '2026-09-01', end: '2026-12-15' };
-export const BIO_GRID_ID = 'grid-ct-bio-2026-v1';
+/** Grille des tournées de contrôle terrain 2026 (CT-2026) ; BIO_GRID_ID : ancien nom, conservé pour compatibilité. */
+export const CT_GRID_ID = 'grid-ct-2026-v1';
+export const BIO_GRID_ID = CT_GRID_ID;
+/** Réseaux du programme cours d'eau installé avec le référentiel (prestations « ce »). */
+export const CE_NETWORKS = ['Chimie', 'RCO'];
+/** Ordre des compartiments de la grille CT-2026. */
+export const COMPARTMENT_ORDER = ['organisation', 'physico', 'eso', 'invertebres', 'diatomees', 'poissons', 'phytoplancton'];
+export const orderCompartments = list => COMPARTMENT_ORDER.filter(k => list.includes(k));
+
+/** Usage d'un point d'eau souterraine déduit de sa nature (type de point des fiches terrain). */
+export function esoUsage(typePoint) {
+  return /AEP|Unité de traitement|exploitation/i.test(String(typePoint || '')) ? 'Alimentation en eau potable' : 'Surveillance (piézomètre)';
+}
+/**
+ * Types de tournée d'une station (une station peut en avoir plusieurs) : bio (listes BIO_CE / BIO_FISH / BIO_PHYTO),
+ * ce (réseaux Chimie, RCO, EL), eso (réseau ESO).
+ */
+export function stationTypes(site) {
+  const out = [];
+  if ((site.bioLists || []).length) out.push('bio');
+  if ((site.networks || []).some(n => ['Chimie', 'RCO', 'EL'].includes(n))) out.push('ce');
+  if ((site.networks || []).includes('ESO')) out.push('eso');
+  return out;
+}
+/** Compartiments à contrôler d'une station selon ses types (biologie : listes BIO ; ce : physico ; eso : eso). */
+export function stationCompartments(site) {
+  const types = site.types || stationTypes(site);
+  const list = [...bioCompartments(site.bioLists || [])];
+  if (types.includes('ce')) list.push('organisation', 'physico');
+  if (types.includes('eso')) list.push('organisation', 'eso');
+  return orderCompartments([...new Set(list)]);
+}
 
 /** Compartiments à contrôler déduits des listes BIO : 'organisation' toujours ; BIO_CE ⇒ physico + invertébrés + diatomées ; BIO_FISH ⇒ poissons ; BIO_PHYTO ⇒ phytoplancton. */
 export function bioCompartments(lists = []) {
@@ -125,10 +158,11 @@ export function bioCompartments(lists = []) {
   return out;
 }
 
-/** Champs « station » ajoutés aux sites (fiche station BIO 2026), vides par défaut. */
+/** Champs « station » ajoutés aux sites (fiche station, grille CT-2026), vides par défaut. */
 export function emptyStationFields() {
   return {
-    riverName: '', strahler: '', her: '', typo: '', bioLists: [], compartments: [],
+    riverName: '', strahler: '', her: '', typo: '', bioLists: [], compartments: [], types: [], codeType: 'SANDRE',
+    nature: '', usage: '', aquifere: '',
     access: { summary: '', details: '', modes: [] }, difficulties: '', photos: {}, photoSource: '', samplingPoints: []
   };
 }
@@ -172,6 +206,7 @@ export function oegReferential(DATA) {
     if (site.her === '' && s.her !== undefined && s.her !== null) site.her = s.her;
     if (!site.typo && s.typo) site.typo = s.typo;
     if (extra.bioList && !site.bioLists.includes(extra.bioList)) site.bioLists.push(extra.bioList);
+    if (network === 'ESO') Object.assign(site, { codeType: 'BSS', nature: s.type_point || '', aquifere: s.aquifere || '', usage: esoUsage(s.type_point), matrixId: 'mat-ESO' });
   };
   for (const k of ['RCO13', 'RCO25', 'RCO_BIO12']) (DATA[k] || []).forEach(s => add(s, 'RCO'));
   for (const k of ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO', 'BIO_ADNE']) (DATA[k] || []).forEach(s => add(s, 'BIO', { bioList: BIO_LISTS.includes(k) ? k : null }));
@@ -180,7 +215,8 @@ export function oegReferential(DATA) {
   (DATA.EL_STATIONS || []).forEach(s => add(s, 'EL', { kind: s.type === 'MEC' ? 'Eau côtière' : 'Eau de transition', matrixId: 'mat-EL' }));
   for (const st of sites.values()) {
     st.bioLists = BIO_LISTS.filter(k => st.bioLists.includes(k));
-    st.compartments = bioCompartments(st.bioLists);
+    st.types = stationTypes(st);
+    st.compartments = stationCompartments(st);
     if (STATION_DETAILS[st.code]) Object.assign(st, structuredClone(STATION_DETAILS[st.code]));
   }
   const site = [...sites.values()];
@@ -215,7 +251,7 @@ export function bioProgramme(DATA) {
       siteId: 'site-' + code, pointIds: ['pt-' + code], plannedDate: '', plannedTime: '', dateIndicative: true, frequency: 'Par campagne',
       samplingTypeId: 'stype-HYDROBIO', matrixId: 'mat-ESU', providerId: 'prov-HYDRECO', partnerId: null,
       operatorIds: [], team: '', protocolDocKey: '', cctpDocKey: '', methodId: '', controlLevel: 'complet', status: 'prevue', statusHistory: [],
-      gridId: BIO_GRID_ID, compartments,
+      gridId: CT_GRID_ID, auditType: 'bio', compartments,
       source: { kind: 'programme-bio-2026', externalId: 'BIO-2026|' + code, label: 'Programme RCS ESC BIO 2026 (HYDRECO)' },
       notes: `Campagne ${BIO_CAMPAIGN.label} (${BIO_CAMPAIGN.start.split('-').reverse().join('/')} → ${BIO_CAMPAIGN.end.split('-').reverse().join('/')}) — date à planifier. Listes : ${lists.join(', ')}.`
     });
@@ -226,6 +262,7 @@ export function bioProgramme(DATA) {
 /**
  * Prestations programmées déduites des fiches terrain (réseaux Chimie, EL et RCO) : une prestation par
  * station et par session, attribuée à l'organisme indiqué. Date indicative = 1er jour du mois de session.
+ * Tournées « cours d'eau » de la grille CT-2026 (auditType 'ce', compartiments organisation + physico).
  */
 export function oegProgramme(DATA, { networks = ['Chimie', 'EL', 'RCO'] } = {}) {
   const out = [];
@@ -239,6 +276,7 @@ export function oegProgramme(DATA, { networks = ['Chimie', 'EL', 'RCO'] } = {}) 
       siteId: 'site-' + code, pointIds: ['pt-' + code], plannedDate: r.start || '', plannedTime: '', dateIndicative: true, frequency: 'Par campagne',
       samplingTypeId: stype, matrixId: network === 'EL' ? 'mat-EL' : 'mat-ESU', providerId: providerIdFromLabel(providerLabel), partnerId: null,
       operatorIds: [], team: '', protocolDocKey: '', cctpDocKey: '', methodId: '', controlLevel: 'complet', status: 'prevue', statusHistory: [],
+      gridId: CT_GRID_ID, auditType: 'ce', compartments: ['organisation', 'physico'],
       source: { kind: 'programme-oeg', externalId, label: 'Programme des fiches terrain OEG' }, notes: `Session ${sessionLabel} — date indicative (mois de campagne).`
     });
   };
@@ -247,6 +285,8 @@ export function oegProgramme(DATA, { networks = ['Chimie', 'EL', 'RCO'] } = {}) 
   if (networks.includes('RCO')) for (const s of DATA.RCO13 || []) for (const sess of ['S1 - Octobre 2026', 'S2 - Décembre 2026', 'S3 - Février 2027', 'S4 - Avril 2027']) mk('RCO', s, sess, s.operateur, 'stype-PC');
   return out.filter(p => p.providerId);
 }
+/** Programme cours d'eau 2026 installé avec le référentiel : réseaux Chimie et RCO (prestataires OEG / Titulaire du marché). */
+export function ceProgramme(DATA) { return oegProgramme(DATA, { networks: CE_NETWORKS }); }
 
 /** Jeu de démonstration FICTIF, clairement identifié, pour prendre en main l'application. */
 export function demoData({ today = localDate(), siteIds = [] } = {}) {

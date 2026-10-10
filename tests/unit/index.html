@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tests unitaires — Fiches de contrôle terrain OEG</title>
+<style>
+  body{font:15px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:24px;color:#14284b;background:#f4f9fd}
+  h1{font-size:20px;margin:0 0 6px}
+  #sum{font-weight:700;margin:10px 0 16px}
+  .ok{color:#1b7a43}.ko{color:#c62828}
+  li{margin:2px 0}
+  pre{white-space:pre-wrap;background:#fff;border:1px solid #f3c1bd;border-radius:8px;padding:8px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>Tests unitaires (navigateur, sans Node)</h1>
+<p>Paramètre facultatif <code>?files=grid-ct-2026,core</code> pour n’exécuter que certains fichiers.</p>
+<div id="sum">Exécution…</div>
+<ul id="list"></ul>
+<script type="module">
+import { runAll, FILES } from './all.js';
+const list = document.getElementById('list');
+const only = new URLSearchParams(location.search).get('files');
+const files = only ? only.split(',').map(f => `./${f.trim()}.test.js`) : FILES;
+const res = await runAll({
+  files,
+  onResult(r) {
+    const li = document.createElement('li');
+    li.className = r.ok ? 'ok' : 'ko';
+    li.textContent = (r.ok ? '✓ ' : '✗ ') + (r.file ? r.file.replace('./', '') + ' › ' : '') + r.name;
+    if (!r.ok) { const pre = document.createElement('pre'); pre.textContent = r.error; li.appendChild(pre); }
+    list.appendChild(li);
+  }
+});
+document.getElementById('sum').textContent = `${res.passed} réussi(s), ${res.failed} échec(s)`;
+document.getElementById('sum').className = res.failed ? 'ko' : 'ok';
+window.__UNIT_RESULTS__ = res;
+</script>
+</body>
+</html>

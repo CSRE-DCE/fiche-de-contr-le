@@ -1,5 +1,7 @@
 /* Exports : tableaux (CSV, Excel), registre des écarts, historique, données complètes, dossiers de
- * preuve et sauvegarde chiffrée. Chaque export est tracé au journal. */
+ * preuve et sauvegarde chiffrée. Chaque export est tracé au journal.
+ * Tournées (grille CT-2026) : colonnes « Type de tournée » et « Station(s) » ; réponses et synthèses par feuille
+ * établies sur la grille EFFECTIVE de l'audit (un critère partagé par les stations n'apparaît qu'une fois). */
 import { store, LOCAL_ONLY } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes, storeRemoteBytes } from '../core/media.js';
@@ -10,17 +12,28 @@ import { toCSV, objectsToRows } from '../formats/csv.js';
 import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
 import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS } from '../domain/model.js';
-import { allItems, sheetOf } from '../domain/grids.js';
+import { allItems, sheetOf, gridType } from '../domain/grids.js';
 import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
-import { auditState } from './audits.js';
+import { auditState, effectiveGrid, auditContext, auditTypeOf } from './audits.js';
 
 const name = (type, id, f = x => x.name || x.label) => { const e = store.get(type, id); return e ? f(e) : ''; };
 const crit = code => store.all('criticality').find(c => c.code === code)?.label || code || '';
+/** Libellé du type de tournée d'un audit (grille CT-2026), '' pour une grille historique. */
+const typeLabel = a => gridType(a.gridSnapshot, auditTypeOf(a))?.label || '';
+/** Stations de la tournée : « ATHANASE (09271503) ; … ». */
+const stationsLabel = a => (a.stations || []).map(st => { const s = store.get('site', st.siteId); return s ? `${s.name} (${s.code})` : st.key; }).join(' ; ');
+/** Station d'un écart : nom de la station, « Commun à la tournée » pour un écart de tournée d'un audit multi-stations. */
+const deviationStation = d => {
+  if (d.stationKey) { const a = store.get('audit', d.auditId); const st = (a?.stations || []).find(x => x.key === d.stationKey); return name('site', st?.siteId || d.siteId) || d.stationKey; }
+  const a = store.get('audit', d.auditId);
+  return (a?.stations || []).length > 1 ? 'Commun à la tournée' : name('site', d.siteId);
+};
 
 export const COLUMNS = {
   audits: [
     { label: 'Numéro', get: a => a.number }, { label: 'Type', get: a => a.kind === 'inopine' ? 'Inopiné' : 'Planifié' },
+    { label: 'Type de tournée', get: typeLabel }, { label: 'Nombre de stations', get: a => (a.stations || []).length || (a.siteId ? 1 : 0) }, { label: 'Stations', get: stationsLabel },
     { label: 'Date', get: a => fmtDate(a.startedAt) }, { label: 'Début', get: a => fmtTime(a.startedAt) }, { label: 'Fin', get: a => fmtTime(a.endedAt) },
     { label: 'Statut', get: a => a.lock?.lockedAt ? 'Signé — verrouillé' : AUDIT_STATUS[a.status]?.label || a.status },
     { label: 'Prestataire', get: a => name('provider', a.providerId) }, { label: 'Nature', get: a => PROVIDER_KINDS[store.get('provider', a.providerId)?.kind] || '' },
@@ -28,7 +41,7 @@ export const COLUMNS = {
     { label: 'Prestation', get: a => name('prestation', a.prestationId, p => p.ref) }, { label: 'Campagne', get: a => name('campaign', a.campaignId, c => c.label) },
     { label: 'Grille', get: a => `${a.gridCode} v${a.gridVersion}` }, { label: 'Version protocole', get: a => a.protocolVersion || '' }, { label: 'Version CCTP', get: a => a.cctpVersion || '' },
     { label: 'Auditeur', get: a => a.auditorName }, { label: 'Appareil', get: a => a.device?.name || '' }, { label: 'Version application', get: a => a.appVersion },
-    { label: 'Critères contrôlés', get: a => a._s.counts.controlled }, { label: 'Conformes', get: a => a._s.counts.C }, { label: 'Non conformes', get: a => a._s.counts.NC },
+    { label: 'Critères contrôlés', get: a => a._s.counts.controlled }, { label: 'Conformes', get: a => a._s.counts.C }, { label: 'Perfectibles', get: a => a._s.counts.P || 0 }, { label: 'Non conformes', get: a => a._s.counts.NC },
     { label: 'Non applicables', get: a => a._s.counts.NA }, { label: 'Non observés', get: a => a._s.counts.NO }, { label: 'Non vérifiables', get: a => a._s.counts.NV },
     { label: 'Écarts', get: a => a._s.deviationsCount }, ...['OBS', 'MIN', 'MAJ', 'CRIT'].map(c => ({ label: `Écarts ${crit(c)}`, get: a => a._s.byCriticality.find(x => x.code === c)?.count || 0 })),
     { label: 'Empreinte scellée', get: a => a.lock?.contentHash || '' }, { label: 'Modifications après signature', get: a => (a.amendments || []).length },
@@ -36,7 +49,7 @@ export const COLUMNS = {
   ],
   deviations: [
     { label: 'Numéro', get: d => d.number }, { label: 'Date', get: d => fmtDate(d.date) }, { label: 'Heure', get: d => d.time }, { label: 'Audit', get: d => d.auditNumber },
-    { label: 'Prestataire', get: d => name('provider', d.providerId) }, { label: 'Site', get: d => name('site', d.siteId) }, { label: 'Critère', get: d => d.itemCode || '' },
+    { label: 'Prestataire', get: d => name('provider', d.providerId) }, { label: 'Site', get: d => name('site', d.siteId) }, { label: 'Station', get: deviationStation }, { label: 'Critère', get: d => d.itemCode || '' },
     { label: 'Exigence concernée', get: d => d.requirement }, { label: 'Référence documentaire', get: d => (d.docRefs || []).map(r => [r.docKey, r.article].filter(Boolean).join(' § ')).join(' ; ') },
     { label: 'Description factuelle', get: d => d.description }, { label: 'Observation de l’auditeur', get: d => d.auditorObservation },
     { label: 'Criticité', get: d => crit(d.criticalityCode) }, { label: 'Type d’écart', get: d => name('deviationType', 'dtype-' + d.typeCode) || d.typeCode || '' },
@@ -63,23 +76,34 @@ export const COLUMNS = {
 
 export function auditsWithSummary(audits) { return audits.map(a => ({ ...a, _s: auditState(a).summary })); }
 
-/** Réponses critère par critère (valeurs lisibles : formatValue ; objets « fields » en « Libellé : valeur · … »). */
+/**
+ * Réponses critère par critère (valeurs lisibles : formatValue ; objets « fields » en « Libellé : valeur · … ») :
+ * grille effective ; « Station » = station du critère, « Commun à la tournée » pour un critère de tournée.
+ */
 export function responsesRows(audits) {
-  const rows = [['Audit', 'Date', 'Feuille', 'Section', 'Domaine', 'Code', 'Réf. courte', 'Critère', 'Réponse', 'Valeur', 'Observation', 'Pré-rempli', 'Heure', 'Auteur']];
-  for (const a of audits) for (const it of allItems(a.gridSnapshot)) {
-    const r = a.responses?.[it.id]; if (!r) continue;
-    const sheet = it.sheet !== undefined ? sheetOf(a.gridSnapshot, it.sheet) : null;
-    rows.push([a.number, fmtDate(a.startedAt), sheet ? `${sheet.no} – ${sheet.tab || sheet.title}` : '', it.sectionTitle, it.domain === 'transport' ? 'Transport' : 'Prélèvement', it.code, it.short || '', it.label, RESPONSES[r.status]?.label || '', formatValue(it, r.value), r.comment || '', r.prefilled ? 'Oui' : '', fmtTime(r.at), r.byName || '']);
+  const rows = [['Audit', 'Date', 'Type de tournée', 'Station', 'Feuille', 'Section', 'Domaine', 'Code', 'Réf. courte', 'Critère', 'Réponse', 'Valeur', 'Observation', 'Pré-rempli', 'Heure', 'Auteur']];
+  for (const a of audits) {
+    const multi = (a.stations || []).length > 1, type = typeLabel(a);
+    for (const it of allItems(effectiveGrid(a))) {
+      const r = a.responses?.[it.id]; if (!r) continue;
+      const sheet = it.sheet !== undefined ? sheetOf(a.gridSnapshot, it.sheet) : null;
+      const station = it.station && !it.shared ? it.station.name : multi ? 'Commun à la tournée' : name('site', a.siteId);
+      rows.push([a.number, fmtDate(a.startedAt), type, station, sheet ? `${sheet.no} – ${sheet.tab || sheet.title}` : '', it.sectionTitle, it.domain === 'transport' ? 'Transport' : 'Prélèvement', it.code, it.short || '', it.label, RESPONSES[r.status]?.label || '', formatValue(it, r.value), r.comment || '', r.prefilled ? 'Oui' : '', fmtTime(r.at), r.byName || '']);
+    }
   }
   return rows;
 }
 
-/** Synthèse par feuille des audits en feuilles : décomptes, conclusion du contrôleur, observations / notes des encadrés. */
+/**
+ * Synthèse par feuille (instance) des audits en feuilles : décomptes C / P / NC / N/A (critères partagés comptés
+ * une fois, dans la 1re station), conclusion du contrôleur, observations / notes des encadrés.
+ */
 export function sheetsRows(audits) {
-  const rows = [['Audit', 'Date', 'Site', 'Feuille', 'Titre', 'C', 'NC', 'N/A', 'Non renseignés', 'Total', 'Conclusion', 'Commentaires', 'Observations', 'Notes', 'Photos / références', 'Agent(s) prestataire(s)']];
-  for (const a of audits) for (const st of sheetSummary({ audit: a })) {
-    const d = a.sheets?.[st.no] || {};
-    rows.push([a.number, fmtDate(a.startedAt), name('site', a.siteId), st.no, st.title, st.C, st.NC, st.NA, st.unanswered, st.total, st.conclusionLabel, st.comments, d.observations || '', d.notes || '', d.photos || '', d.agents || '']);
+  const rows = [['Audit', 'Date', 'Type de tournée', 'Station', 'Feuille', 'N° affiché', 'Titre', 'C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total', 'Conclusion', 'Commentaires', 'Observations', 'Notes', 'Photos / références', 'Agent(s) prestataire(s)']];
+  for (const a of audits) for (const st of sheetSummary({ audit: a, grid: effectiveGrid(a), ctx: auditContext(a) })) {
+    const d = a.sheets?.[st.instanceKey] || {};
+    const station = st.station ? st.station.name : (a.stations || []).length > 1 ? 'Commun à la tournée' : name('site', a.siteId);
+    rows.push([a.number, fmtDate(a.startedAt), typeLabel(a), station, st.no, st.index ? `${st.index} / ${st.sheetTotal}` : '', st.title, st.C, st.P, st.NC, st.NA, st.unanswered, st.total, st.conclusionLabel, st.comments, d.observations || '', d.notes || '', d.photos || '', d.agents || '']);
   }
   return rows;
 }

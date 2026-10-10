@@ -1,7 +1,7 @@
 {
   "name": "Fiches de contrôle terrain — OEG",
   "short_name": "Contrôle OEG",
-  "description": "Fiches de contrôle terrain de l’Office de l’Eau de Guyane : contrôle des prestations de prélèvement et de suivi biologique (stations, feuilles 1 à 9, écarts, rapports PDF) — fonctionne hors connexion.",
+  "description": "Fiches de contrôle terrain de l’Office de l’Eau de Guyane : contrôle des prestations de prélèvement en tournée (cours d’eau, eaux souterraines, suivi biologique), échelle C / P / NC / N/A, écarts, rapports PDF — fonctionne hors connexion.",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",
@@ -20,7 +20,7 @@
   "shortcuts": [
     { "name": "Stations", "url": "./index.html#/" },
     { "name": "Planning", "url": "./index.html#/planning" },
-    { "name": "Audit inopiné", "url": "./index.html#/nouvel-audit" },
+    { "name": "Nouvelle tournée", "short_name": "Tournée", "url": "./index.html#/nouvel-audit" },
     { "name": "Écarts ouverts", "url": "./index.html#/ecarts" }
   ]
 }

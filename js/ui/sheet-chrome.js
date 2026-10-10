@@ -49,7 +49,10 @@ function themed(theme, base, cls = '') {
   const t = themeName(theme);
   return raw(`class="${[base, t ? 'th-' + t : '', cls].filter(Boolean).join(' ').replace(/"/g, '')}"${t ? ` style="${themeVars(t)}"` : ''}`);
 }
-const swoosh = (cls = '') => raw(`<svg class="swoosh ${cls}" viewBox="0 0 120 20" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="${DECOR.swoosh}"/></svg>`);
+/* Trait de pinceau : <span> coloré par background-color et découpé par un masque CSS (css/sheet.css, même tracé
+ * que DECOR.swoosh). Un <svg> en ligne à cet endroit déclenche un défaut d'impression de Chromium (bloc étiré
+ * jusqu'au bas de la page) ; le masque CSS s'imprime correctement. */
+const swoosh = (cls = '') => raw(`<span class="swoosh ${cls}" aria-hidden="true"></span>`);
 const cssURL = u => String(u).replace(/["\\\n\r]/g, c => encodeURIComponent(c));
 const fmtCoord = v => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? '—' : String(Math.round(Number(v))));
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, '\'').trim();
@@ -72,52 +75,73 @@ export function sheetFrame({ theme = 'ocean', cls = '', body = '' } = {}) {
 }
 
 /* ---------- En-tête OEG ---------- */
-/** En-tête de feuille : logo rond, titres de grid.header, slogan, pavé « Station NOM · Feuille n / 9 »,
- * titre de la feuille. variant 'compact' : une ligne (mobile, barre d'onglets). */
-export function oegHeader({ grid = null, sheet = null, site = null, sheetCount = 9, variant = 'default' } = {}) {
+const present = v => v !== null && v !== undefined && v !== '';
+/** En-tête de feuille : logo rond, titres de grid.header, slogan, pavé « Station NOM · Feuille n / N »,
+ * titre de la feuille.
+ * - title / subtitle : titre et sous-titre RÉSOLUS (ex. headerTitle(grid, { provider, auditType, campaign }) →
+ *   « Contrôle terrain prestataire – HYDRECO – RCS ESC BIO 2026 ») ; à défaut grid.header.title / subtitle
+ *   (un modèle contenant encore « {prestataire} » ou « {programme} » n'est pas affiché).
+ * - index / total : numéro AFFICHÉ de la feuille (rang parmi les feuilles visibles, à partir de 1) et
+ *   nombre de feuilles ; à défaut sheet.index / sheet.total (instances de sheetsOf), puis sheet.no / sheetCount.
+ * - stationIndex / stationTotal : rang de la station dans la tournée (« Station 2 / 3 »), si plus d'une.
+ * - variant : 'default' (en-tête clair des maquettes), 'band' (bandeau bleu de la feuille 2, titre de la
+ *   feuille sous le bandeau), 'compact' (une ligne : mobile, barre d'onglets). */
+export function oegHeader({ grid = null, sheet = null, site = null, sheetCount = 9, variant = 'default', title = '', subtitle = '',
+  index = null, total = null, stationIndex = null, stationTotal = null } = {}) {
   const h = { ...DEFAULT_HEADER, ...(grid?.header || {}) };
-  const no = sheet?.no ?? '';
+  const tpl = s => /\{[^}]*\}/.test(String(s || ''));
+  const mainTitle = title || (tpl(h.title) ? '' : h.title);
+  const subTitle = subtitle || (tpl(h.subtitle) ? '' : h.subtitle);
+  const no = present(index) ? index : present(sheet?.index) ? sheet.index : (sheet?.no ?? '');
+  const count = present(total) ? total : present(sheet?.total) ? sheet.total : sheetCount;
   const name = site?.name || '';
   const isStation = sheet?.layout === 'station';
   const sheetTitle = sheet?.title && !isStation ? sheet.title : '';
   const kicker = sheet?.kicker && sheetTitle && !norm(sheet.kicker).includes(norm(sheetTitle)) && !norm(sheetTitle).includes(norm(sheet.kicker)) ? sheet.kicker : '';
+  const tour = present(stationIndex) && Number(stationTotal) > 1 ? html`<span class="oh-st-tour">${icon('route', { size: 14 })}Station ${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : '';
+  const sheetNo = no !== '' ? html`Feuille <b>${no}&nbsp;/&nbsp;${count}</b>` : '';
   const logo = html`<img class="oh-logo" src="${LOGO_URL}" alt="Office de l’Eau de Guyane" width="96" height="96">`;
   if (variant === 'compact') {
     return html`<header class="oeg-header compact">
       ${logo}
       <div class="oh-c-main">
-        <div class="oh-c-org"><span class="oh-c-oeg">${h.org}</span>${h.title ? html`<span class="oh-c-prog"> · ${h.title}</span>` : ''}</div>
-        <div class="oh-c-title">${sheet?.title || h.subtitle}</div>
+        <div class="oh-c-org"><span class="oh-c-oeg">${h.org}</span>${mainTitle ? html`<span class="oh-c-prog"> · ${mainTitle}</span>` : ''}</div>
+        <div class="oh-c-title">${sheet?.title || subTitle}</div>
       </div>
-      ${name ? html`<div class="oh-c-station"><span>Station</span><b>${name}</b></div>` : ''}
-      ${no !== '' ? html`<div class="oh-c-sheet">Feuille <b>${no}&nbsp;/&nbsp;${sheetCount}</b></div>` : ''}
+      ${name ? html`<div class="oh-c-station"><span>${present(stationIndex) && Number(stationTotal) > 1 ? `Station ${stationIndex} / ${stationTotal}` : 'Station'}</span><b>${name}</b></div>` : ''}
+      ${sheetNo ? html`<div class="oh-c-sheet">${sheetNo}</div>` : ''}
     </header>`;
   }
-  return html`<header class="oeg-header${isStation ? ' is-station' : ''}${name && !isStation ? ' has-station' : ''}">
+  const band = variant === 'band';
+  const titleBlock = sheetTitle ? html`<div class="oh-sheet-title${band ? ' is-after' : ''}"><h2>${sheetTitle}</h2>${kicker ? html`<span class="oh-kicker">${swoosh('oh-kicker-swoosh')}${kicker}</span>` : ''}</div>` : '';
+  return html`<header class="oeg-header${band ? ' band' : ''}${isStation ? ' is-station' : ''}${name && !isStation ? ' has-station' : ''}">
     ${logo}
     <div class="oh-titles">
       <div class="oh-org">${h.org}</div>
-      ${h.title ? html`<div class="oh-title">${h.title}</div>` : ''}
-      ${h.subtitle ? html`<div class="oh-sub">${h.subtitle}</div>` : ''}
+      ${mainTitle ? html`<div class="oh-title">${mainTitle}</div>` : ''}
+      ${subTitle ? html`<div class="oh-sub">${subTitle}</div>` : ''}
     </div>
     ${h.tagline ? html`<div class="oh-tagline"><span>${h.tagline}</span>${swoosh('oh-tag-swoosh')}</div>` : ''}
     ${name && !isStation ? html`<div class="oh-station">
-      <span class="oh-st-k">Station</span><span class="oh-st-name">${name}</span>${swoosh('oh-st-swoosh')}
-      ${no !== '' ? html`<span class="oh-st-sheet">Feuille <b>${no}&nbsp;/&nbsp;${sheetCount}</b></span>` : ''}
+      ${tour}<span class="oh-st-k">Station</span><span class="oh-st-name">${name}</span>${swoosh('oh-st-swoosh')}
+      ${sheetNo ? html`<span class="oh-st-sheet">${sheetNo}</span>` : ''}
     </div>` : ''}
-    ${sheetTitle ? html`<div class="oh-sheet-title"><h2>${sheetTitle}</h2>${kicker ? html`<span class="oh-kicker">${swoosh('oh-kicker-swoosh')}${kicker}</span>` : ''}</div>` : ''}
-  </header>`;
+    ${band ? '' : titleBlock}
+  </header>${band ? titleBlock : ''}`;
 }
 
 /* ---------- Bandeau station ---------- */
 /** Grand bandeau « Station / NOM » + surtitre + silhouette de la Guyane + photo fondue à droite.
- * Options supplémentaires : sheetNo / sheetCount (pastille « Feuille n / 9 »), tagline. */
-export function stationBanner({ site, kicker = '', theme = 'ocean', photo = null, sheetNo = null, sheetCount = 9, tagline = 'Des rivières vivantes pour demain' } = {}) {
+ * Options supplémentaires : sheetNo / sheetCount (pastille « Feuille n / N », numéro affiché), tagline,
+ * stationIndex / stationTotal (« Station 2 / 3 » d'une tournée, si plus d'une station). */
+export function stationBanner({ site, kicker = '', theme = 'ocean', photo = null, sheetNo = null, sheetCount = 9, tagline = 'Des rivières vivantes pour demain',
+  stationIndex = null, stationTotal = null } = {}) {
   const name = site?.name || 'Station';
-  return html`<div ${themed(theme, 'station-banner', photo ? 'has-photo' : '')}>
+  const tour = present(stationIndex) && Number(stationTotal) > 1;
+  return html`<div ${themed(theme, 'station-banner', [photo ? 'has-photo' : '', sheetNo ? 'has-sheet' : ''].filter(Boolean).join(' '))}>
     ${photo ? html`<div class="sb-photo" style="background-image:url(&quot;${cssURL(photo)}&quot;)" role="img" aria-label="Photographie de la station ${name}"></div>` : ''}
     <div class="sb-text">
-      <span class="sb-k">Station</span>
+      <span class="sb-k">Station${tour ? html`<span class="sb-tour">${icon('route', { size: 16 })}${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : ''}</span>
       <span class="sb-name">${name}</span>
       ${swoosh('sb-swoosh')}
       ${kicker ? html`<span class="sb-kicker">${kicker}</span>` : ''}
@@ -129,12 +153,20 @@ export function stationBanner({ site, kicker = '', theme = 'ocean', photo = null
 }
 
 /* ---------- Bandeau d'information ---------- */
-/** Code SANDRE / Bassin versant / Coordonnées théoriques RGFG95 (X, Y). */
-export function infoStrip(site, { theme } = {}) {
+/** Code SANDRE / Bassin versant / Coordonnées théoriques RGFG95 (X, Y).
+ * Point d'eau souterraine (site.codeType === 'BSS', ou option codeType) : « Code BSS » et, si la station
+ * n'a pas de bassin versant, « Commune » à la place. */
+export function infoStrip(site, { theme, codeType = '' } = {}) {
   const s = site || {};
-  return html`<div ${themed(theme, 'info-strip')}>
-    <div class="is-cell"><span class="is-ic">${icon('database')}</span><div class="is-txt"><span class="is-k">Code SANDRE</span><span class="is-v">${s.code || '—'}</span></div></div>
-    <div class="is-cell"><span class="is-ic">${icon('basin')}</span><div class="is-txt"><span class="is-k">Bassin versant</span><span class="is-v">${s.bassin || s.bv || '—'}</span></div></div>
+  const bss = String(codeType || s.codeType || '').toUpperCase() === 'BSS';
+  const bassin = s.bassin || s.bv || '';
+  const code = String(s.code || '');
+  const second = bss && !bassin
+    ? html`<div class="is-cell is-commune"><span class="is-ic">${icon('map')}</span><div class="is-txt"><span class="is-k">Commune</span><span class="is-v">${s.commune || '—'}</span></div></div>`
+    : html`<div class="is-cell"><span class="is-ic">${icon('basin')}</span><div class="is-txt"><span class="is-k">Bassin versant</span><span class="is-v">${bassin || '—'}</span></div></div>`;
+  return html`<div ${themed(theme, 'info-strip', bss ? 'is-bss' : '')}>
+    <div class="is-cell"><span class="is-ic">${icon('database')}</span><div class="is-txt"><span class="is-k">${bss ? 'Code BSS' : 'Code SANDRE'}</span><span class="is-v${code.length > 10 ? ' is-long' : ''}">${code || '—'}</span></div></div>
+    ${second}
     <div class="is-cell is-coords"><span class="is-ic">${icon('pin')}</span><div class="is-txt"><span class="is-k">Coordonnées théoriques RGFG95</span>
       <span class="is-xy"><span>X&nbsp;:&nbsp;<b>${fmtCoord(s.x)}</b></span><span>Y&nbsp;:&nbsp;<b>${fmtCoord(s.y)}</b></span></span></div></div>
   </div>`;
@@ -166,11 +198,60 @@ export function blockCard({ icon: ic = 'chat', title = '', theme, body = '', cls
   </section>`;
 }
 
-/** Case carrée façon maquette (affichage). cls : 'ok' | 'nc' | 'na' (couleur), 'lg' ; attrs : attributs HTML bruts. */
+/** Case carrée façon maquette (affichage). cls : 'ok' | 'p' | 'nc' | 'na' (couleur), 'lg' ; attrs : attributs HTML bruts. */
 export function checkSquare({ checked = false, label = '', cls = '', attrs = '' } = {}) {
   const box = html`<span class="chk${checked ? ' on' : ''}${label ? '' : (cls ? ' ' + cls : '')}" role="img" aria-label="${checked ? 'Case cochée' : 'Case non cochée'}"${label ? '' : raw(attrs ? ' ' + attrs : '')}>${checked ? icon('check', { size: 16 }) : ''}</span>`;
   if (!label) return box;
   return html`<span class="chk-wrap${cls ? ' ' + cls : ''}"${raw(attrs ? ' ' + attrs : '')}>${box}<span class="chk-l">${label}</span></span>`;
+}
+
+/* ---------- Échelle C / P / NC / N/A (avenant n° 1) ---------- */
+/** Colonnes de statut des tableaux de feuille, dans l'ordre d'affichage. cls = suffixe des classes CSS :
+ * colonne .c-<cls>, bouton de carte .st-rc-btn.<cls>, case .chk.<cls>, ligne tr.is-<cls> / .st-row-card.is-<cls>. */
+export const STATUS_SCALE = [
+  { code: 'C', short: 'C', label: 'Conforme / satisfaisant', cls: 'c' },
+  { code: 'P', short: 'P', label: 'Perfectible', cls: 'p' },
+  { code: 'NC', short: 'NC', label: 'Non conforme', cls: 'nc' },
+  { code: 'NA', short: 'N/A', label: 'Non applicable', cls: 'na' }
+];
+const scaleOf = codes => (codes || STATUS_SCALE.map(s => s.code)).map(c => STATUS_SCALE.find(s => s.code === c)).filter(Boolean);
+/** Cellules d'en-tête « C | P | NC | N/A » (th.c-c, th.c-p, th.c-nc, th.c-na, infobulle = libellé complet). */
+export function statusHeadCells(codes = null) {
+  return scaleOf(codes).map(s => html`<th class="c-${s.cls}" scope="col" title="${s.label}"><abbr title="${s.label}">${s.short}</abbr></th>`);
+}
+/** Légende de l'échelle (sous un tableau ou dans une fiche vierge). */
+export function statusLegend(codes = null) {
+  return html`<p class="st-legend">${scaleOf(codes).map(s => html`<span class="st-lg st-lg-${s.cls}"><b>${s.short}</b>${s.label}</span>`)}</p>`;
+}
+
+/* ---------- Tournée ---------- */
+/** Badge « Commun à la tournée » d'un critère partagé entre les stations (réponse unique). */
+export function sharedBadge(label = 'Commun à la tournée') {
+  return html`<span class="shared-badge" title="Réponse unique pour toutes les stations de la tournée">${icon('route', { size: 14 })}${label}</span>`;
+}
+
+/** Sélecteur des stations d'une tournée : pastilles numérotées « 1 ATHANASE » avec avancement.
+ * stations : [{ key, name, code?, answered?, total?, nc?, p?, href? }] (ordre de passage) ; current : clé
+ * de la station affichée ; act : data-act des pastilles sans href (data-key = clé) ; addAct / addLabel :
+ * bouton d'ajout ; label : intitulé à gauche (texte) ; extra : HTML ajouté en fin de barre. */
+export function tourStations({ stations = [], current = '', act = 'tour-station', addAct = '', addLabel = 'Ajouter une station', label = 'Tournée', extra = '', theme } = {}) {
+  const pill = (s, i) => {
+    const total = Number(s.total) || 0, answered = Math.min(total, Number(s.answered) || 0);
+    const pc = total ? Math.round(answered * 100 / total) : 0;
+    const cls = ['ts-pill', s.key === current ? 'is-current' : '', total && answered >= total ? 'is-done' : '', s.nc ? 'has-nc' : ''].filter(Boolean).join(' ');
+    const inner = html`<span class="ts-no">${i + 1}</span>
+      <span class="ts-txt"><span class="ts-name">${s.name || s.key}</span><span class="ts-meta">${s.code ? html`<span class="ts-code">${s.code}</span>` : ''}${total ? html`<span>${answered}&nbsp;/&nbsp;${total}</span>` : ''}${s.nc ? html`<span class="ts-flag nc" title="${s.nc} non-conformité(s)">${s.nc}&nbsp;NC</span>` : ''}${s.p ? html`<span class="ts-flag p" title="${s.p} point(s) perfectible(s)">${s.p}&nbsp;P</span>` : ''}</span></span>
+      <span class="ts-bar" aria-hidden="true"><i style="width:${pc}%"></i></span>`;
+    const aria = raw(`${s.key === current ? ' aria-current="true"' : ''} aria-label="${String(`Station ${i + 1} : ${s.name || s.key}${total ? ` — ${answered} sur ${total} points renseignés` : ''}`).replace(/"/g, '&quot;')}"`);
+    return s.href ? html`<a class="${cls}" href="${s.href}"${aria}>${inner}</a>`
+      : html`<button type="button" class="${cls}" data-act="${act}" data-key="${s.key}"${aria}>${inner}</button>`;
+  };
+  return html`<nav ${themed(theme, 'tour-stations')} aria-label="Stations de la tournée">
+    ${label ? html`<span class="ts-label">${icon('route', { size: 20 })}<span>${label}<small>${stations.length} station${stations.length > 1 ? 's' : ''}</small></span></span>` : ''}
+    <div class="ts-list">${stations.map(pill)}</div>
+    ${addAct ? html`<button type="button" class="ts-add" data-act="${addAct}">${icon('plus', { size: 18 })}<span>${addLabel}</span></button>` : ''}
+    ${extra ? H(extra) : ''}
+  </nav>`;
 }
 
 /** Lignes pointillées vides (zones à écrire à la main : fiches vierges, encadrés non remplis). */
