@@ -1,21 +1,23 @@
 /* Création d'une tournée de contrôle terrain (#/nouvel-audit) — grille CT-2026 (avenant n° 1, § F) :
  * type de tournée (hydrobiologie, cours d'eau, eaux souterraines), prestataire contrôlé (Titulaire du
  * marché – lot 1, OEG en régie, HYDRECO, NBC en premier, puis les autres), date, audit inopiné ou avec
- * rendez-vous, stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
+ * rendez-vous, contrôleurs OEG de la tournée (binôme : agents connus autorisés à auditer, agent connecté coché et
+ * obligatoire), stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
  * prestataire mises en avant, ordre modifiable, station la plus proche par GPS), compartiments (biologie :
  * pré-cochés selon les stations) et opérateurs → createAudit → #/audit/<id>.
  * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine.
  * Option avancée : audit sur une grille historique (un seul site), ?mode=general — formulaire d'origine. */
 import { html, sortBy, localDate, addDays, haversine, fmtDistance, fmtDate, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
-import { can } from '../core/auth.js';
+import { session } from '../core/session.js';
+import { can, ROLES } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
 import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
-import { createAudit, gridsFor } from '../app/audits.js';
+import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
 import { getPosition } from '../ui/gps.js';
 import { pref } from '../app/settings.js';
 import { TYPE_STYLES } from '../ui/map.js';
@@ -45,7 +47,8 @@ function initDraft(q) {
   if (site && !stations.some(s => s.siteId === site.id)) stations.unshift({ siteId: site.id, prestationId: matchPrestation(site.id, providerId, type)?.id || null });
   return {
     key: JSON.stringify(q), type, providerId, date: localDate(), kind: q.kind === 'inopine' || !pres.length ? 'inopine' : 'planifie',
-    stations, compartments: null, operatorIds: [...new Set(pres.flatMap(p => p.operatorIds || []))], search: ''
+    stations, compartments: null, operatorIds: [...new Set(pres.flatMap(p => p.operatorIds || []))], search: '',
+    controllerIds: [session.user?.id].filter(Boolean), userId: session.user?.id || null
   };
 }
 
@@ -113,10 +116,23 @@ function selectedHTML(d) {
   })}</ol>`;
 }
 
+/** Contrôleurs OEG de la tournée : agents connus autorisés à auditer ; l'agent connecté est coché et obligatoire. */
+function controllersHTML(d) {
+  const me = session.user?.id;
+  const agents = tourAgents();
+  const ids = new Set([me, ...(d.controllerIds || [])]);
+  return html`<div class="checks an-ctrls">${agents.map(u => {
+      const on = ids.has(u.id), mine = u.id === me;
+      return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${u.id}" data-change="setCtrl" ${on ? 'checked' : ''} ${mine ? 'disabled' : ''}> ${icon('user', { size: 20 })} ${u.name}${mine ? html` <small class="muted">(vous)</small>` : html` <small class="muted">${ROLES[u.role] || u.role}</small>`}</label>`;
+    })}</div>
+    <p class="note">${agents.length > 1 ? 'Cochez le ou les collègues qui contrôlent avec vous : chacun pourra saisir dans la tournée en se connectant sur la tablette (« Changer d’agent »), et chaque saisie reste attribuée à son auteur.' : html`Vous êtes le seul agent connu sur cet appareil. Les collègues s’ajoutent dans <a href="#/administration">Administration › Agents de cette tablette</a> ; ils pourront aussi « Rejoindre la tournée » plus tard.`}</p>`;
+}
+
 /* ---------- Écran de création de tournée ---------- */
 function tourForm(q) {
   const grid = ctGrid();
-  if (!draft || draft.key !== JSON.stringify(q)) draft = initDraft(q);
+  // Brouillon propre à l'agent connecté (tablette partagée : « Changer d'agent » repart d'un brouillon neuf).
+  if (!draft || draft.key !== JSON.stringify(q) || draft.userId !== session.user?.id) draft = initDraft(q);
   const d = draft;
   const types = gridTypes(grid);
   const { featured, others } = providerLists(grid);
@@ -148,7 +164,10 @@ function tourForm(q) {
             <button type="button" class="${d.kind === 'planifie' ? 'sel brand' : ''}" data-act="setKind" data-v="planifie" aria-pressed="${d.kind === 'planifie'}"><span class="k">${icon('calendar', { size: 18 })}</span>Avec rendez-vous</button></div></div>
         </div></section>
 
-      <section class="card">${step(4, 'Stations de la tournée', 'dans l’ordre de passage')}
+      <section class="card">${step(4, 'Contrôleurs OEG de la tournée', 'binôme ou équipe de l’OEG')}
+        ${controllersHTML(d)}</section>
+
+      <section class="card">${step(5, 'Stations de la tournée', 'dans l’ordre de passage')}
         ${selectedHTML(d)}
         <div class="an-add">
           <div class="an-add-bar">
@@ -159,13 +178,13 @@ function tourForm(q) {
           <div id="anCands">${candidatesHTML(d)}</div>
         </div></section>
 
-      <section class="card">${step(5, 'Compartiments à contrôler')}
+      <section class="card">${step(6, 'Compartiments à contrôler')}
         ${typeDef && typeDef.compartments.length > 1
           ? html`<div class="checks an-comps">${(grid.compartments || []).filter(c => c.always || typeDef.compartments.includes(c.key)).map(c => html`<label class="check ${comps.includes(c.key) ? 'sel' : ''}"><input type="checkbox" value="${c.key}" data-change="setComp" ${comps.includes(c.key) ? 'checked' : ''} ${c.always ? 'disabled' : ''}> ${icon(c.icon || 'check', { size: 20 })} ${c.label}</label>`)}</div>
             <p class="note">Pré-cochés selon les compartiments des stations choisies ; l’organisation, la sécurité et la traçabilité sont toujours contrôlées.</p>`
           : html`<ul class="an-fixed">${(grid.compartments || []).filter(c => comps.includes(c.key)).map(c => html`<li>${icon(c.icon || 'check', { size: 20 })}${c.label}</li>`)}</ul>`}</section>
 
-      <section class="card">${step(6, 'Opérateurs du prestataire')}
+      <section class="card">${step(7, 'Opérateurs du prestataire')}
         ${!d.providerId ? html`<p class="note">Choisissez d’abord le prestataire.</p>`
           : ops.length ? html`<div class="checks">${ops.map(o => html`<label class="check ${(d.operatorIds || []).includes(o.id) ? 'sel' : ''}"><input type="checkbox" value="${o.id}" data-change="setOps" ${(d.operatorIds || []).includes(o.id) ? 'checked' : ''}> ${operatorName(o)}</label>`)}</div>
             <p class="note">D’autres opérateurs pourront être ajoutés dans la tournée.</p>`
@@ -173,7 +192,7 @@ function tourForm(q) {
 
       <div class="an-submit">
         <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}
-          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}</span></div>
+          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}${(d.controllerIds || []).length > 1 ? ` · ${d.controllerIds.length} contrôleurs` : ''}</span></div>
         <button class="btn primary lg" type="submit" ${d.providerId && d.stations.length ? '' : 'disabled'}><span class="ic">${icon('route')}</span>Démarrer la tournée</button>
       </div>
     </form>`;
@@ -243,6 +262,11 @@ export default {
       this.refresh();
     },
     setOps() { draft.operatorIds = [...document.querySelectorAll('[data-change=setOps]')].filter(i => i.checked).map(i => i.value); this.refresh(); },
+    setCtrl() {
+      const me = session.user?.id;
+      draft.controllerIds = [me, ...[...document.querySelectorAll('[data-change=setCtrl]')].filter(i => i.checked && i.value !== me).map(i => i.value)].filter(Boolean);
+      this.refresh();
+    },
     showAll() { draft.showAll = true; const box = document.getElementById('anCands'); if (box) box.innerHTML = String(candidatesHTML(draft)); },
     anSearch(el) { draft.search = el.value; const box = document.getElementById('anCands'); if (box) box.innerHTML = String(candidatesHTML(draft)); },
     addSt(el) {
@@ -283,6 +307,8 @@ export default {
         auditType: d.type, gridId: grid.id || CT_GRID, providerId: d.providerId, kind: d.kind,
         stations: d.stations.map(s => ({ siteId: s.siteId, prestationId: s.prestationId || null })),
         compartments: chosenCompartments(grid, d), operatorIds: d.operatorIds || [],
+        // Contrôleurs OEG de la tournée (binôme) : l'agent connecté et les collègues cochés.
+        controllerIds: d.controllerIds || [],
         // Date de la tournée enregistrée sur l'audit (audit.date) : dates pré-remplies, listes, alertes et PDF.
         date: d.date || localDate()
       });

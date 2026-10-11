@@ -1,5 +1,6 @@
 /* Profils et matrice des droits — partagés par l'application (affichage, contrôles locaux) et par le
- * serveur de synchronisation (contrôle effectif des écritures). Fichier pur. */
+ * serveur de synchronisation (contrôle effectif des écritures) ; contrôleurs OEG d'une tournée (binôme) et droit
+ * de saisie dans une tournée. Fichier pur. */
 export const ROLES = {
   admin: 'Administrateur',
   rq: 'Responsable qualité',
@@ -27,6 +28,51 @@ export const PERMISSIONS = {
 };
 
 export function roleCan(role, perm) { return (PERMISSIONS[perm] || []).includes(role); }
+
+/* ---------- Contrôleurs OEG d'une tournée (binôme sur une tablette partagée) ---------- */
+/**
+ * Identifiants des contrôleurs OEG de la tournée, dans l'ordre : audit.controllerIds ; audit antérieur sans
+ * contrôleurs enregistrés : son auteur (auditorId).
+ */
+export function auditControllerIds(audit) {
+  const ids = Array.isArray(audit?.controllerIds) ? [...new Set(audit.controllerIds.filter(Boolean))] : [];
+  return ids.length ? ids : audit?.auditorId ? [audit.auditorId] : [];
+}
+/**
+ * Contrôleurs [{ id, name }] : nom enregistré dans la tournée (audit.controllerNames : { id: nom }), à défaut
+ * `names` ({ id: nom }, ex. profils des agents), à défaut le nom de l'auteur de la tournée.
+ */
+export function auditControllers(audit, names = {}) {
+  return auditControllerIds(audit).map(id => ({
+    id, name: audit?.controllerNames?.[id] || names?.[id] || (id === audit?.auditorId ? audit?.auditorName : '') || ''
+  }));
+}
+/** Noms des contrôleurs séparés par des virgules (« A. Dupont, B. Martin ») : pré-remplissages, fiches, rapports. */
+export function controllerNamesText(audit, names = {}) {
+  return auditControllers(audit, names).map(c => c.name).filter(Boolean).join(', ');
+}
+export function isAuditController(audit, userId) { return !!userId && auditControllerIds(audit).includes(userId); }
+
+/**
+ * Droit de saisir dans une tournée (fonction pure) : profil autorisé à réaliser des audits ET contrôleur de la
+ * tournée, ou encadrement (audit.editOthers). Tournée verrouillée (signée) : jamais (modification motivée à part).
+ */
+export function canEditAuditAs(audit, user) {
+  if (!audit || !user) return false;
+  if (audit.lock?.lockedAt) return false;
+  if (!roleCan(user.role, 'audit.edit')) return false;
+  return isAuditController(audit, user.id) || roleCan(user.role, 'audit.editOthers');
+}
+/**
+ * L'agent peut-il rejoindre la tournée (bandeau « Rejoindre la tournée ») ? Profil autorisé à réaliser des audits,
+ * pas encore contrôleur, tournée ni verrouillée, ni abandonnée, ni déjà signée par un contrôleur (sa signature
+ * couvre la liste des contrôleurs).
+ */
+export function canJoinAudit(audit, user) {
+  if (!audit || !user || !roleCan(user.role, 'audit.edit')) return false;
+  if (audit.lock?.lockedAt || audit.status === 'abandonne' || audit.status === 'signe' || audit.signatures?.auditor) return false;
+  return !isAuditController(audit, user.id);
+}
 
 export const REFERENTIAL_TYPES = ['provider', 'operator', 'site', 'point', 'equipment', 'samplingType', 'matrix', 'method', 'unit', 'criticality', 'deviationType', 'container', 'campaign', 'document', 'grid'];
 

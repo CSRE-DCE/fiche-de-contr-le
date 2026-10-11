@@ -15,19 +15,22 @@ import { store } from './store.js';
 import { wrapDEK, unwrapDEK, importDEK, newDEKRaw } from './crypto.js';
 import { uuid, nowISO } from './util.js';
 
-import { ROLES, PERMISSIONS } from '../domain/permissions.js';
+import { ROLES, PERMISSIONS, isAuditController } from '../domain/permissions.js';
 export { ROLES, PERMISSIONS };
 
 export function can(perm, user = session.user) {
   if (!user) return false;
   return (PERMISSIONS[perm] || []).includes(user.role);
 }
-/** Droit d'éditer un audit précis (auteur ou encadrement). */
+/**
+ * Droit de saisir dans une tournée précise : contrôleur OEG de la tournée (audit.controllerIds ; audit antérieur :
+ * son auteur) ou encadrement (audit.editOthers). Tournée verrouillée : non (modification motivée à part).
+ */
 export function canEditAudit(audit, user = session.user) {
   if (!audit || !user) return false;
   if (audit.lock?.lockedAt) return false;
   if (!can('audit.edit', user)) return false;
-  return audit.auditorId === user.id || can('audit.editOthers', user);
+  return isAuditController(audit, user.id) || can('audit.editOthers', user);
 }
 
 /* ---------- trousseau de clés local ---------- */

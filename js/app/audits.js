@@ -7,15 +7,21 @@
  * un critère de station, identifiant d'origine pour un critère de tournée ou partagé), réponses pré-remplies à la
  * création ou à l'ajout d'une station (prefilled: true), données propres aux feuilles (audit.sheets[instanceKey] :
  * observations, notes, photos, conclusion, agents ; appareils de mesure de F4 : audit.sheets['4'].instruments)
- * mises à jour par updateSheet. Tous les consommateurs utilisent la grille effective : effectiveGrid(audit). */
+ * mises à jour par updateSheet. Tous les consommateurs utilisent la grille effective : effectiveGrid(audit).
+ * Tournée en BINÔME (tablette partagée) : contrôleurs OEG de la tournée (audit.controllerIds, noms figés dans
+ * audit.controllerNames {id: nom}, historique audit.controllerLog ; audit antérieur sans contrôleurs : son auteur),
+ * choisis à la création, rejoints (« Rejoindre la tournée ») ou retirés avec motif ; chaque saisie reste attribuée à
+ * l'agent connecté (réponse : by / byName). */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
-import { can } from '../core/auth.js';
+import { can, canEditAudit } from '../core/auth.js';
+import { roleCan, auditControllerIds, auditControllers, controllerNamesText, isAuditController, canJoinAudit } from '../domain/permissions.js';
 import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addDays, localDate, localTime } from '../core/util.js';
 import {
   allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, stationProgress, prefillResponses, normalizeCompartments,
-  isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries
+  isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries,
+  isEnteredResponse
 } from '../domain/grids.js';
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
@@ -168,6 +174,119 @@ export function gridsFor(prestation) {
 const defaultPointId = siteId => store.find('point', p => p.siteId === siteId)?.id || null;
 const sessionStamp = at => ({ at, by: session.user.id, byName: session.user.name });
 
+/* ---------- Contrôleurs OEG de la tournée (binôme) ---------- */
+/** Noms des agents connus (profils « user ») : {id: nom} ; l'agent connecté avec son nom de session. */
+export function agentNames() {
+  const out = Object.fromEntries(store.all('user').map(u => [u.id, u.name]));
+  if (session.user?.id) out[session.user.id] = out[session.user.id] || session.user.name;
+  return out;
+}
+/** Agents pouvant contrôler une tournée : profils actifs autorisés à réaliser des audits (agent connecté inclus). */
+export function tourAgents() {
+  const list = store.filter('user', u => u.active !== false && roleCan(u.role, 'audit.edit'));
+  if (session.user && roleCan(session.user.role, 'audit.edit') && !list.some(u => u.id === session.user.id)) list.push({ id: session.user.id, name: session.user.name, username: session.user.username, role: session.user.role });
+  return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+}
+/** Contrôleurs de la tournée [{id, name}] (noms figés dans la tournée, à défaut profils). */
+export const tourControllers = audit => auditControllers(audit, agentNames());
+/** « A. Dupont, B. Martin » : contrôleurs de la tournée (Agent(s) OEG, Contrôleur OEG, fiches, rapports, listes). */
+export const controllersLabel = audit => controllerNamesText(audit, agentNames());
+export { auditControllerIds, isAuditController, canJoinAudit };
+
+/** Contrôleurs demandés à la création : agent connecté toujours inclus (en tête), agents actifs autorisés à auditer. */
+function resolveControllers(ids) {
+  const me = session.user;
+  const out = [{ id: me.id, name: me.name }];
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (!id || out.some(c => c.id === id)) continue;
+    const u = store.get('user', id);
+    if (!u) throw new Error(`Agent inconnu sur cet appareil : ${id}`);
+    if (u.active === false) throw new Error(`Le compte de ${u.name} est désactivé.`);
+    if (!roleCan(u.role, 'audit.edit')) throw new Error(`Le profil de ${u.name} ne permet pas de réaliser des audits.`);
+    out.push({ id: u.id, name: u.name });
+  }
+  return out;
+}
+/** Réponses pré-remplies avec les noms des contrôleurs (Agent(s) OEG, Contrôleur OEG) et encore non modifiées. */
+function refreshControllerPrefill(a, names) {
+  const g = a.gridSnapshot;
+  const grid = isSheetGrid(g) && (a.stations || []).length ? expandGrid(g, a.stations, sitesById(a.stations), { provider: store.get('provider', a.providerId) }) : g;
+  if (!grid) return;
+  for (const it of allItems(grid).filter(i => i.prefill === 'auditor.name')) {
+    const r = a.responses?.[it.id];
+    if (r?.prefilled && !r.status) a.responses[it.id] = { ...r, value: names };
+  }
+}
+function controllerChange(audit) {
+  const cur = store.get('audit', audit.id);
+  if (cur.lock?.lockedAt) throw new Error('Tournée signée et verrouillée : la liste des contrôleurs ne peut plus changer.');
+  if (cur.status === 'abandonne') throw new Error('Tournée abandonnée.');
+  if (cur.signatures?.auditor) throw new Error('Tournée déjà signée par un contrôleur : rouvrez-la avant de modifier la liste des contrôleurs.');
+  return cur;
+}
+/**
+ * Ajoute un contrôleur à la tournée : l'agent connecté (« Rejoindre la tournée », droit audit.edit) ou, par un
+ * contrôleur de la tournée (ou l'encadrement), un autre agent actif autorisé à auditer. Rien n'est effacé : les
+ * saisies restent attribuées à leurs auteurs ; noms pré-remplis (Agent(s) OEG, Contrôleur OEG) mis à jour s'ils
+ * n'ont pas été modifiés ; historique (audit.controllerLog) et journal d'audit.
+ */
+export async function addController(audit, userId = session.user?.id, { reason = null } = {}) {
+  const cur = controllerChange(audit);
+  const self = userId === session.user.id;
+  if (self ? !can('audit.edit') : !canEditAudit(cur)) throw new Error(self ? 'Votre profil ne permet pas de réaliser des audits.' : 'Seul un contrôleur de la tournée peut y ajouter un agent.');
+  if (isAuditController(cur, userId)) return cur;
+  const u = self ? { id: session.user.id, name: session.user.name, role: session.user.role, active: true } : store.get('user', userId);
+  if (!u) throw new Error('Agent inconnu sur cet appareil.');
+  if (u.active === false || !roleCan(u.role, 'audit.edit')) throw new Error(`${u.name} ne peut pas contrôler une tournée (compte désactivé ou profil sans droit d’audit).`);
+  const before = tourControllers(cur);
+  const after = [...before, { id: u.id, name: u.name }];
+  const now = nowISO();
+  return updateAudit(cur, a => {
+    a.controllerIds = after.map(c => c.id);
+    a.controllerNames = Object.fromEntries(after.map(c => [c.id, c.name]));
+    a.controllerLog = [...(a.controllerLog || []), { ...sessionStamp(now), action: 'ajout', userId: u.id, name: u.name, reason: reason || null }];
+    refreshControllerPrefill(a, after.map(c => c.name).filter(Boolean).join(', '));
+  }, { action: 'controller-add', reason: reason || (self ? `${u.name} rejoint la tournée` : `${u.name} ajouté(e) aux contrôleurs de la tournée`) });
+}
+/** « Rejoindre la tournée » : l'agent connecté devient contrôleur de la tournée. */
+export const joinTour = (audit, opts) => addController(audit, session.user.id, opts);
+/**
+ * Retire un contrôleur de la tournée (motif obligatoire), par un contrôleur de la tournée ou l'encadrement ;
+ * jamais le dernier. Ses saisies restent dans la tournée, attribuées à leur auteur.
+ */
+export async function removeController(audit, userId, { reason = null } = {}) {
+  const cur = controllerChange(audit);
+  if (!canEditAudit(cur)) throw new Error('Seul un contrôleur de la tournée peut en retirer un autre.');
+  const before = tourControllers(cur);
+  const gone = before.find(c => c.id === userId);
+  if (!gone) throw new Error('Cet agent n’est pas contrôleur de la tournée.');
+  if (before.length <= 1) throw new Error('Une tournée compte au moins un contrôleur.');
+  if (!String(reason || '').trim()) throw new Error('Un motif est obligatoire pour retirer un contrôleur de la tournée.');
+  const after = before.filter(c => c.id !== userId);
+  const now = nowISO();
+  return updateAudit(cur, a => {
+    a.controllerIds = after.map(c => c.id);
+    a.controllerNames = Object.fromEntries(after.map(c => [c.id, c.name]));
+    a.controllerLog = [...(a.controllerLog || []), { ...sessionStamp(now), action: 'retrait', userId, name: gone.name, reason }];
+    refreshControllerPrefill(a, after.map(c => c.name).filter(Boolean).join(', '));
+  }, { action: 'controller-remove', reason: `${gone.name} retiré(e) des contrôleurs de la tournée — ${reason}` });
+}
+/**
+ * Saisies par agent (onglet Infos) : [{id, name, responses, controller}] — réponses saisies (hors pré-remplissages)
+ * comptées pour leur dernier auteur (by / byName), contrôleurs de la tournée en premier.
+ */
+export function entriesByAgent(audit) {
+  const ctrl = tourControllers(audit);
+  const rows = new Map(ctrl.map(c => [c.id, { id: c.id, name: c.name, responses: 0, controller: true }]));
+  for (const r of Object.values(audit?.responses || {})) {
+    if (!isEnteredResponse(r)) continue;
+    const id = r.by || ('nom:' + (r.byName || '?'));
+    if (!rows.has(id)) rows.set(id, { id, name: r.byName || agentNames()[r.by] || 'Agent inconnu', responses: 0, controller: false });
+    rows.get(id).responses++;
+  }
+  return [...rows.values()];
+}
+
 /**
  * Crée un audit (une tournée). Tout ce qui sert de référence est FIGÉ dans l'audit : copie de la grille, instantané
  * des documents applicables (version + empreinte), identification de l'appareil et de l'application.
@@ -181,9 +300,12 @@ const sessionStamp = at => ({ at, by: session.user.id, byName: session.user.name
  * organisation + physico ; eaux souterraines : organisation + eso). Les critères `prefill` reçoivent une valeur
  * initiale (sans statut, prefilled: true), ceux des feuilles station avec les données de LEUR station ; dates
  * pré-remplies = date de la tournée ; heure d'arrivée pré-remplie seulement pour une tournée du jour.
+ * controllerIds : contrôleurs OEG de la tournée (binôme), agent connecté toujours inclus (défaut : lui seul) ;
+ * « Agent(s) OEG » et « Contrôleur OEG » pré-remplis avec leurs noms (« A. Dupont, B. Martin »).
  */
-export async function createAudit({ prestationId = null, gridId = null, kind = 'planifie', providerId = null, siteId = null, pointId = null, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null, auditType = null, stations = null, campaignId = null, date = null } = {}) {
+export async function createAudit({ prestationId = null, gridId = null, kind = 'planifie', providerId = null, siteId = null, pointId = null, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null, auditType = null, stations = null, campaignId = null, date = null, controllerIds = null } = {}) {
   if (!can('audit.create')) throw new Error('Votre profil ne permet pas de créer un audit.');
+  const controllers = resolveControllers(controllerIds);
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error(`Date de tournée invalide : ${date}`);
   // Stations demandées (compatibilité : prestationId / siteId seuls = une station).
   const req = (Array.isArray(stations) && stations.length ? stations : [{ siteId, prestationId, pointId }]).map(s => {
@@ -229,6 +351,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     matrixId: matrixId || prestation?.matrixId || site0?.matrixId || typeDef?.matrixId || null,
     campaignId: campaignId || prestation?.campaignId || null,
     auditorId: session.user.id, auditorName: session.user.name, auditorRole: session.user.role,
+    controllerIds: controllers.map(c => c.id), controllerNames: Object.fromEntries(controllers.map(c => [c.id, c.name])), controllerLog: [],
     device: { id: session.device.id, name: session.device.name, userAgent: navigator.userAgent },
     appVersion: appVersion(),
     gridId: grid.id, gridCode: grid.code, gridVersion: grid.version, gridSnapshot,
@@ -260,7 +383,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
   // Tournée saisie après coup (date passée) : pas d'heure d'arrivée pré-remplie avec l'heure actuelle.
   const time = tourDate === today ? localTime(new Date(now)) : '';
   audit.responses = prefillResponses(eff, {
-    site: site0, auditor: { name: session.user.name }, provider, prestation,
+    site: site0, auditor: { name: controllers.map(c => c.name).filter(Boolean).join(', ') }, provider, prestation,
     operators: audit.operatorIds.map(id => store.get('operator', id)).filter(Boolean),
     date: tourDate, time, kind, stationCount: list.length, compartments: audit.compartments, auditType: type,
     // Heure d'arrivée pré-remplie pour la 1re station seulement (les suivantes : à l'arrivée sur place).
@@ -296,7 +419,7 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
   const provider = store.get('provider', cur.providerId);
   const eff = expandGrid(cur.gridSnapshot, stations, sitesById(stations), { provider });
   const pre = prefillResponses(eff, {
-    onlyStation: st.key, site, prestation, auditor: { name: cur.auditorName }, provider,
+    onlyStation: st.key, site, prestation, auditor: { name: controllersLabel(cur) }, provider,
     operators: (cur.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean),
     date: tourDate, time: tourDate === localDate(d) ? localTime(d) : '', kind: cur.kind, compartments: cur.compartments, auditType: auditTypeOf(cur), ...sessionStamp(now)
   });
@@ -521,8 +644,8 @@ export async function updateDeviation(dev, patch, { reason = null, event = null 
 /**
  * Projection du contenu probant de l'audit, couverte par l'empreinte de signature :
  * l'audit (hors signatures, verrou, métadonnées) — dont les réponses, le type de tournée (auditType), les stations
- * (stations, ordre de passage), les compartiments retenus (compartments) et les données des feuilles (sheets :
- * observations, conclusions, instruments…) —,
+ * (stations, ordre de passage), les compartiments retenus (compartments), les contrôleurs OEG de la tournée
+ * (controllerIds, controllerNames) et les données des feuilles (sheets : observations, conclusions, instruments…) —,
  * les constats des écarts (hors suivi : statut, responsable, échéance, actions correctives) et les
  * médias (hors images de signature).
  * Les écarts et médias ajoutés après le verrouillage relèvent du suivi et sont tracés au journal.
@@ -535,8 +658,8 @@ export function auditContent(audit) {
   const media = auditMedia(audit.id).filter(m => m.link?.type !== 'signature' && before(m))
     .map(m => ({ id: m.id, sha256: m.sha256, link: m.link, takenAt: m.takenAt, derivedFrom: m.derivedFrom || null })).sort((a, b) => a.id.localeCompare(b.id));
   const { signatures, lock, amendments, reports, status, endedAt, updatedAt, updatedBy, updatedByName, _rev, _lv, _conflict, dismissedAlerts, ...content } = audit;
-  // Type de tournée, stations, compartiments et données des feuilles font partie du contenu scellé.
-  for (const k of ['auditType', 'stations', 'compartments', 'sheets']) if (audit[k] !== undefined) content[k] = audit[k];
+  // Type de tournée, stations, compartiments, contrôleurs et données des feuilles font partie du contenu scellé.
+  for (const k of ['auditType', 'stations', 'compartments', 'controllerIds', 'controllerNames', 'sheets']) if (audit[k] !== undefined) content[k] = audit[k];
   return { audit: content, deviations, media };
 }
 export async function auditContentHash(audit) { return sha256Hex(canonicalJSON(auditContent(audit))); }
@@ -549,8 +672,12 @@ export async function reopenAudit(audit) {
   return updateAudit(audit, a => { a.status = 'en_cours'; a.endedAt = null; a.signatures = {}; }, { action: 'reopen', reason: 'Réouverture avant signature' });
 }
 
-/** Enregistre une signature (role : 'auditor' | 'provider'). */
+/**
+ * Enregistre une signature (role : 'auditor' | 'provider'). Signature « contrôleur » (auditor) : par n'importe quel
+ * contrôleur OEG de la tournée (ou l'encadrement) ; elle couvre la liste des contrôleurs.
+ */
 export async function signAudit(audit, role, { bytes, mime, name, fn = '', refused = false, comment = '' }) {
+  if (role === 'auditor' && !canEditAudit(store.get('audit', audit.id) || audit)) throw new Error('Seul un contrôleur de la tournée peut la signer.');
   const contentHash = await auditContentHash(audit);
   let media = null;
   if (bytes) media = await saveMedia(bytes, { mime, kind: 'signature', name: `signature-${role}.png`, link: { type: 'signature', id: audit.id, itemId: role }, auditId: audit.id });
@@ -595,7 +722,7 @@ export async function verifyAuditSeal(audit) {
 
 export async function abandonAudit(audit, reason) {
   if (audit.lock?.lockedAt) throw new Error('Un audit signé ne peut pas être abandonné.');
-  if (!(audit.auditorId === session.user.id || can('audit.delete'))) throw new Error('Droit insuffisant.');
+  if (!(isAuditController(audit, session.user.id) || can('audit.delete'))) throw new Error('Droit insuffisant.');
   return updateAudit(audit, a => { a.status = 'abandonne'; a.abandonReason = reason; a.endedAt = nowISO(); }, { action: 'abandon', reason });
 }
 
