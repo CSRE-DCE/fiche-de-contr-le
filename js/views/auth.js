@@ -1,5 +1,7 @@
 /* Écrans hors session : première configuration de l'appareil (mode autonome ou « Rejoindre une équipe »
- * par un dépôt GitHub privé de données), ouverture de session, messages. */
+ * par un dépôt GitHub privé de données : compte de l'administrateur qui configure la tablette, avec le jeton de
+ * la tablette ; deuxième tablette : il y retrouve son profil), ouverture de session « Qui utilise la tablette ? »
+ * (tuiles des agents de la tablette, aide si un agent n'y figure pas), messages. */
 import { html } from '../core/util.js';
 import { session } from '../core/session.js';
 import * as auth from '../core/auth.js';
@@ -24,8 +26,8 @@ export function renderMessage(root, { title, message }) {
 /** Aide pas à pas : dépôt privé et jeton « fine-grained » (reprise dans l'écran Synchronisation). */
 export function tokenHelp() {
   return html`<ol class="note" style="padding-left:20px;margin:6px 0">
-    <li>Le dépôt de données est un dépôt GitHub <b>privé</b>, distinct du dépôt public de l’application (ex. <span class="mono">CSRE-DCE/fiche-de-controle-donnees</span>), créé vide ou avec un simple README par l’administrateur, qui y invite chaque membre de l’équipe.</li>
-    <li>Sur GitHub : <b>Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token</b>.</li>
+    <li>Le dépôt de données est un dépôt GitHub <b>privé</b>, distinct du dépôt public de l’application (ex. <span class="mono">CSRE-DCE/fiche-de-controle-donnees</span>), créé vide ou avec un simple README par l’administrateur.</li>
+    <li><b>Un jeton par tablette</b>, créé par l’administrateur depuis son compte GitHub et nommé d’après la tablette (« Tablette 1 », « Tablette 2 »…) : les agents n’ont pas besoin de compte GitHub. Sur GitHub : <b>Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token</b>.</li>
     <li><b>Resource owner</b> : le propriétaire du dépôt de données (l’organisation doit autoriser les jetons fine-grained) ; <b>Expiration</b> : 90 jours par exemple (le jeton se renouvelle depuis l’écran Synchronisation).</li>
     <li><b>Repository access</b> : <i>Only select repositories</i> → uniquement le dépôt de données.</li>
     <li><b>Permissions › Repository permissions › Contents</b> : <i>Read and write</i> (Metadata : lecture, ajoutée automatiquement). Aucune autre permission.</li>
@@ -45,9 +47,22 @@ export function probeSummary(p) {
 
 const errText = e => e?.message === 'Failed to fetch' ? 'GitHub injoignable : vérifiez la connexion réseau.' : (e?.message || String(e));
 
+/**
+ * Deuxième tablette : profils de l'équipe déjà rattachés au login du jeton (l'administrateur qui configure) —
+ * « C'est moi » réutilise ce profil (même identité sur les deux tablettes) ; sinon nouveau compte.
+ */
+function profilesChoice(p, chosen) {
+  const list = p?.profiles || [];
+  if (!list.length) return '';
+  return html`<div class="card" style="margin:6px 0 10px"><b>Vous êtes déjà dans l’équipe ?</b>
+    <p class="note">Profil(s) rattaché(s) au compte GitHub @${p.login} (le propriétaire de ce jeton). Choisissez le vôtre pour garder la même identité sur toutes les tablettes (tournées, saisies, journal).</p>
+    <div class="checks" style="grid-template-columns:1fr">${list.map(u => html`<label class="check ${chosen === u.id ? 'sel' : ''}"><input type="radio" name="profileId" value="${u.id}" data-change="pick-profile" ${chosen === u.id ? 'checked' : ''}><span>C’est moi : <b>${u.name}</b> <small class="muted">(${u.username} · ${auth.ROLES[u.role] || u.role})</small></span></label>`)}
+      <label class="check ${chosen ? '' : 'sel'}"><input type="radio" name="profileId" value="" data-change="pick-profile" ${chosen ? '' : 'checked'}><span>Créer un nouveau compte</span></label></div></div>`;
+}
+
 export function renderSetup(root, { onDone }) {
   let mode = 'standalone';
-  let probe = null, probeKey = '';
+  let probe = null, probeKey = '', profileId = '';
   const draw = () => {
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
       <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
@@ -76,10 +91,10 @@ export function renderSetup(root, { onDone }) {
         <p class="hint" id="setupErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="setupBtn">Créer et ouvrir la session</button>
       </form>` : html`<form data-submit="team" autocomplete="off" id="teamForm">
-        <div class="banner info">Les données de l’équipe sont partagées par un dépôt GitHub <b>privé</b>, lu et écrit directement depuis cet appareil avec votre jeton d’accès personnel (aucun serveur). Sur l’appareil, elles restent chiffrées et la session s’ouvre ensuite hors connexion.</div>
+        <div class="banner info">Les données de l’équipe sont partagées par un dépôt GitHub <b>privé</b>, lu et écrit directement depuis cette tablette avec <b>le jeton d’accès de la tablette</b>, créé par l’administrateur (aucun serveur ; les agents n’ont pas besoin de compte GitHub). Sur la tablette, les données restent chiffrées et la session s’ouvre ensuite hors connexion.</div>
         <h3>Dépôt de données de l’équipe</h3>
         <div class="field"><label>Dépôt GitHub (propriétaire/nom) <span class="req">*</span></label><input name="repoSpec" required placeholder="CSRE-DCE/fiche-de-controle-donnees" autocapitalize="none" spellcheck="false"></div>
-        <div class="field"><label>Jeton d’accès « fine-grained » <span class="req">*</span></label><input name="token" type="password" required placeholder="github_pat_…" autocomplete="off" spellcheck="false"><div class="hint">Limité à ce dépôt, permission « Contents : Read and write ». Conservé chiffré sur cet appareil.</div></div>
+        <div class="field"><label>Jeton d’accès « fine-grained » de la tablette <span class="req">*</span></label><input name="token" type="password" required placeholder="github_pat_…" autocomplete="off" spellcheck="false"><div class="hint">Un jeton par tablette (nommé « Tablette 1 », « Tablette 2 »…), limité à ce dépôt, permission « Contents : Read and write ». Conservé chiffré sur cette tablette.</div></div>
         <details><summary>Comment créer le dépôt et le jeton ?</summary>${tokenHelp()}</details>
         <details><summary>Options avancées</summary><div class="grid2">
           <div class="field"><label>Branche</label><input name="branch" value="${auth.TEAM_DEFAULTS.branch}" autocapitalize="none" spellcheck="false"></div>
@@ -92,14 +107,16 @@ export function renderSetup(root, { onDone }) {
           <label class="check sel"><input type="checkbox" name="oeg" checked> Reprendre le référentiel des fiches terrain OEG (stations, organismes, préleveurs, campagnes)</label>
           <label class="check" style="margin-top:8px"><input type="checkbox" name="demo"> Ajouter des données de démonstration fictives</label>
         </div>
-        <h3>Cet appareil et votre compte local</h3>
-        <div class="field"><label>Nom de l’appareil</label><input name="deviceName" value="${auth.defaultDeviceName()}" required></div>
+        <h3>Cette tablette et le compte de l’administrateur</h3>
+        <div class="field"><label>Nom de la tablette</label><input name="deviceName" value="${auth.defaultDeviceName()}" required placeholder="ex. Tablette 1"></div>
+        <p class="note" id="teamAccountHelp">Le compte créé ici est celui de la personne qui configure la tablette — en général <b>l’administrateur</b>, propriétaire du jeton. Les autres agents n’ont pas besoin de compte GitHub : ils sont ajoutés ensuite dans <b>Administration › Agents de cette tablette</b>, chacun choisissant son mot de passe.</p>
+        <div id="teamProfiles"></div>
         <div class="field"><label>Nom et prénom</label><input name="name" required autocomplete="name"></div>
         <div class="grid2">
           <div class="field"><label>Identifiant local</label><input name="username" required autocapitalize="none" autocomplete="username"></div>
           <div class="field"><label>Mot de passe (8 caractères min.)</label><input name="password" type="password" required minlength="8" autocomplete="new-password"></div>
         </div>
-        <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"><div class="hint">Ce mot de passe ouvre la session sur cet appareil, y compris hors connexion. Il n’est jamais envoyé à GitHub.</div></div>
+        <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"><div class="hint">Ce mot de passe ouvre la session sur cette tablette, y compris hors connexion. Il n’est jamais envoyé à GitHub.</div></div>
         <p class="hint" id="setupErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="teamBtn">Rejoindre l’équipe</button>
       </form>`}
@@ -112,27 +129,41 @@ export function renderSetup(root, { onDone }) {
     return { apiUrl: v.apiUrl || auth.TEAM_DEFAULTS.apiUrl, owner: r.owner, repo: r.repo, branch: v.branch || auth.TEAM_DEFAULTS.branch, prefix: v.prefix ?? auth.TEAM_DEFAULTS.prefix };
   };
   const keyOf = v => [v.repoSpec, v.token, v.branch, v.prefix, v.apiUrl].map(x => String(x || '').trim()).join('|');
+  /** Profil existant choisi (« C'est moi ») : nom et identifiant repris du profil, non modifiables. */
+  function applyProfile(form) {
+    const u = (probe?.profiles || []).find(x => x.id === profileId) || null;
+    const name = form.querySelector('[name=name]'), username = form.querySelector('[name=username]');
+    if (u) { name.value = u.name; username.value = u.username; }
+    else if (name.readOnly) { name.value = ''; username.value = ''; }
+    name.readOnly = username.readOnly = !!u;
+    form.querySelector('#teamProfiles').innerHTML = String(profilesChoice(probe, profileId));
+  }
   async function check(form) {
     const v = formValues(form), box = form.querySelector('#teamProbe'), initBox = form.querySelector('#teamInit');
-    probe = null; probeKey = '';
+    probe = null; probeKey = ''; profileId = '';
     box.innerHTML = String(html`<p class="note">Vérification auprès de GitHub…</p>`);
     const { probeTeam } = await import('../app/sync.js');
     try {
-      probe = await probeTeam(settingsOf(v), String(v.token || '').trim());
+      probe = await probeTeam(settingsOf(v), String(v.token || '').trim(), { profiles: true });
       probeKey = keyOf(v);
       box.innerHTML = String(probeSummary(probe));
       initBox.hidden = probe.initialized || !probe.repo.private;
       form.querySelector('#teamBtn').textContent = probe.initialized ? 'Rejoindre l’équipe' : 'Initialiser le dépôt et créer l’équipe';
+      // Deuxième tablette : l'administrateur retrouve son profil (choisi par défaut s'il est seul).
+      profileId = probe.profiles?.length === 1 ? probe.profiles[0].id : '';
+      applyProfile(form);
       return probe;
     } catch (e) {
       box.innerHTML = String(html`<div class="banner nc">${errText(e)}</div>`);
       initBox.hidden = true;
+      applyProfile(form);
       throw e;
     }
   }
   draw();
   bind(root, {
-    mode(el) { mode = el.dataset.value; probe = null; probeKey = ''; draw(); },
+    mode(el) { mode = el.dataset.value; probe = null; probeKey = ''; profileId = ''; draw(); },
+    'pick-profile'(el) { profileId = el.value || ''; applyProfile(el.closest('form')); },
     async standalone(form) {
       const v = formValues(form), err = form.querySelector('#setupErr'), btn = form.querySelector('#setupBtn');
       err.textContent = '';
@@ -168,9 +199,10 @@ export function renderSetup(root, { onDone }) {
         if (!p.initialized && !wasChecked) { err.textContent = 'Dépôt à initialiser : vérifiez les options ci-dessus puis validez à nouveau.'; btn.disabled = false; btn.textContent = 'Initialiser le dépôt et créer l’équipe'; return; }
       } catch (e) { err.textContent = errText(e); btn.disabled = false; btn.textContent = label; return; }
       const token = String(v.token).trim(), init = !p.initialized;
+      const mine = !init ? (p.profiles || []).find(x => x.id === profileId) : null;
       btn.textContent = 'Préparation de l’appareil…';
       try {
-        await auth.setupTeam({ deviceName: v.deviceName, account: { name: v.name, username: v.username, password: v.password }, team: { ...p.team, orgName: v.orgName || p.equipe?.orgName || '' }, token, login: p.login, role: init ? 'admin' : (p.member?.role || 'auditeur') });
+        await auth.setupTeam({ deviceName: v.deviceName, account: { id: mine?.id || null, name: mine?.name || v.name, username: mine?.username || v.username, password: v.password }, team: { ...p.team, orgName: v.orgName || p.equipe?.orgName || '' }, token, login: p.login, role: init ? 'admin' : (p.member?.role || mine?.role || 'auditeur') });
       } catch (e) { err.textContent = errText(e); btn.disabled = false; btn.textContent = label; return; }
       // L'appareil est configuré : les étapes suivantes n'empêchent pas l'ouverture de la session.
       try {
@@ -188,33 +220,47 @@ export function renderSetup(root, { onDone }) {
   });
 }
 
-export async function renderLogin(root, { message = '', onUnlocked }) {
+/**
+ * Ouverture de session « Qui utilise la tablette ? » : une tuile par agent de la tablette (derniers connectés en
+ * premier), mot de passe de l'agent, aide si un agent n'y figure pas (ajout par un administrateur).
+ * pick : 'last' = dernier agent connecté présélectionné ; 'none' (après « Changer d'agent ») = l'agent suivant
+ * touche d'abord son nom (sauf agent unique).
+ */
+export async function renderLogin(root, { message = '', onUnlocked, pick = 'last' }) {
   const users = await auth.knownUsers();
-  let selected = users[0]?.username || '';
+  let selected = pick === 'none' && users.length > 1 ? '' : users[0]?.username || '';
   const draw = () => {
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
       <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
-      <h1>Audit des prestations de prélèvement</h1>
-      <p class="sub">${navigator.onLine ? 'Ouverture de session' : 'Hors connexion — ouverture de session locale'}</p>
-      ${message ? html`<div class="banner info">${message}</div>` : ''}
+      <h1>Qui utilise la tablette ?</h1>
+      <p class="sub">Fiches de contrôle terrain — ${navigator.onLine ? 'touchez votre nom puis saisissez votre mot de passe' : 'hors connexion : ouverture de session locale'}</p>
+      ${message ? html`<div class="banner info" id="loginMsg">${message}</div>` : ''}
       <form data-submit="login" autocomplete="off">
-        <div class="user-tiles">${users.map(u => html`<button type="button" class="user-tile ${u.username === selected ? 'sel' : ''}" data-act="pick" data-u="${u.username}">
+        <div class="user-tiles" role="group" aria-label="Agents de cette tablette">${users.map(u => html`<button type="button" class="user-tile ${u.username === selected ? 'sel' : ''}" data-act="pick" data-u="${u.username}" aria-pressed="${u.username === selected}">
           <span class="avatar">${(u.name || u.username).split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase()}</span>
-          <span><b>${u.name}</b><br><span class="tiny muted">${auth.ROLES[u.role] || u.role} · ${u.username}</span></span></button>`)}</div>
-        <div class="field"><label>Mot de passe</label><input name="password" type="password" required autocomplete="current-password" autofocus></div>
+          <span><b>${u.name}</b><br><span class="tiny muted">${auth.ROLES[u.role] || u.role} · ${u.username}${u.disabled ? ' · désactivé' : ''}</span></span></button>`)}</div>
+        <div class="field"><label for="loginPw">Mot de passe${users.length > 1 ? html` <b id="loginWho">${selected ? '— ' + (users.find(u => u.username === selected)?.name || '') : '(touchez d’abord votre nom)'}</b>` : ''}</label><input id="loginPw" name="password" type="password" required autocomplete="current-password" autofocus></div>
         <p class="hint" id="loginErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="loginBtn">Ouvrir la session</button>
       </form>
+      <p class="note login-help" id="loginHelp">Votre nom n’apparaît pas ? Demandez à un administrateur de vous ajouter sur cette tablette : <b>Administration › Agents de cette tablette</b>.</p>
       ${footer()}
     </div></div>`);
     root.querySelector('input[name=password]')?.focus();
   };
   draw();
   bind(root, {
-    pick(el) { selected = el.dataset.u; root.querySelectorAll('.user-tile').forEach(t => t.classList.toggle('sel', t === el)); root.querySelector('input[name=password]').focus(); },
+    pick(el) {
+      selected = el.dataset.u;
+      root.querySelectorAll('.user-tile').forEach(t => { t.classList.toggle('sel', t === el); t.setAttribute('aria-pressed', String(t === el)); });
+      const who = root.querySelector('#loginWho'); if (who) who.textContent = '— ' + (users.find(u => u.username === selected)?.name || '');
+      const pw = root.querySelector('input[name=password]'); pw.value = ''; root.querySelector('#loginErr').textContent = ''; pw.focus();
+    },
     async login(form) {
       const v = formValues(form), err = form.querySelector('#loginErr'), btn = form.querySelector('#loginBtn');
-      err.textContent = ''; btn.disabled = true; btn.textContent = 'Vérification…';
+      err.textContent = '';
+      if (!selected) { err.textContent = 'Touchez d’abord votre nom.'; return; }
+      btn.disabled = true; btn.textContent = 'Vérification…';
       try {
         const r = await auth.unlock(selected, v.password);
         if (!r.ok) { err.textContent = r.error; btn.disabled = false; btn.textContent = 'Ouvrir la session'; return; }

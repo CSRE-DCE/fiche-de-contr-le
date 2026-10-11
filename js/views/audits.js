@@ -1,5 +1,6 @@
 /* Liste et historique des audits : par prestataire, site, point, statut, période ; sélection de deux
- * audits à comparer. */
+ * audits à comparer. Contrôleurs OEG de chaque tournée (binôme) affichés ; « Mes audits » : tournées dont l'agent
+ * connecté est contrôleur ; tournées en cours de l'agent connecté en tête de liste. */
 import { html, fmtDate, sortBy, normalize, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -7,7 +8,7 @@ import { navigate } from '../ui/router.js';
 import { toast, downloadBlob } from '../ui/dom.js';
 import { pageTitle, auditBadge, options, empty, siteName, providerName, badge, progressBar, tourStationsLabel, auditSiteIds } from '../ui/components.js';
 import { AUDIT_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
-import { auditState } from '../app/audits.js';
+import { auditState, controllersLabel, isAuditController } from '../app/audits.js';
 
 let selected = [];
 
@@ -19,11 +20,13 @@ function filtered(q) {
   if (q.point) list = list.filter(a => a.pointId === q.point || (a.stations || []).some(st => st.pointId === q.point));
   if (q.statut === 'verrouille') list = list.filter(a => a.lock?.lockedAt);
   else if (q.statut) list = list.filter(a => a.status === q.statut && !a.lock?.lockedAt);
-  if (q.mine) list = list.filter(a => a.auditorId === session.user.id);
+  if (q.mine) list = list.filter(a => isAuditController(a, session.user.id));
   if (q.du) list = list.filter(a => auditDate(a) >= q.du);
   if (q.au) list = list.filter(a => auditDate(a) <= q.au);
-  if (q.q) { const t = normalize(q.q); list = list.filter(a => normalize(`${a.number} ${tourStationsLabel(a)} ${siteName(a.siteId)} ${providerName(a.providerId)} ${a.auditorName}`).includes(t)); }
-  return [...list].sort(byAuditDateDesc);
+  if (q.q) { const t = normalize(q.q); list = list.filter(a => normalize(`${a.number} ${tourStationsLabel(a)} ${siteName(a.siteId)} ${providerName(a.providerId)} ${a.auditorName} ${controllersLabel(a)}`).includes(t)); }
+  // Tournées en cours dont l'agent connecté est contrôleur (tablette partagée) : en tête ; puis par date.
+  const mineOpen = a => a.status === 'en_cours' && !a.lock?.lockedAt && isAuditController(a, session.user?.id) ? 0 : 1;
+  return q.vue === 'historique' ? [...list].sort(byAuditDateDesc) : [...list].sort(byAuditDateDesc).sort((a, b) => mineOpen(a) - mineOpen(b));
 }
 
 export default {
@@ -47,7 +50,7 @@ export default {
           ${points.length > 1 ? html`<div class="field"><label>Point</label><select data-change="qsel" data-k="point">${options(points, q.point, { placeholder: 'Tous', label: p => p.code })}</select></div>` : ''}
           <div class="field"><label>Du</label><input type="date" value="${q.du || ''}" data-change="qsel" data-k="du"></div>
           <div class="field"><label>Au</label><input type="date" value="${q.au || ''}" data-change="qsel" data-k="au"></div>
-          <div class="field"><label>Recherche</label><input type="search" value="${q.q || ''}" data-change="qsel" data-k="q" placeholder="numéro, site, auditeur…"></div>
+          <div class="field"><label>Recherche</label><input type="search" value="${q.q || ''}" data-change="qsel" data-k="q" placeholder="numéro, site, contrôleur…"></div>
         </div><button class="btn ghost sm" data-act="reset">Effacer</button>
       </details>
       <div class="banner info row between"><span>Comparer deux audits successifs : cochez-en deux (${selected.length}/2).</span>${selected.length === 2 ? html`<button class="btn primary sm" data-act="compare">Comparer</button>` : ''}</div>
@@ -55,7 +58,7 @@ export default {
         <div class="li ${a.lock?.lockedAt ? 'stripe-ok' : a.status === 'abandonne' ? '' : 'stripe-info'}">
           <input type="checkbox" aria-label="Sélectionner pour comparaison" data-change="sel" data-id="${a.id}" ${selected.includes(a.id) ? 'checked' : ''}>
           <a class="li-main" href="#/audit/${a.id}" style="text-decoration:none;color:inherit"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div>
-            <div class="li-sub">${fmtDate(auditDate(a))} · ${providerName(a.providerId)} · ${a.auditorName} · ${a.kind === 'inopine' ? 'inopiné' : 'planifié'}</div>
+            <div class="li-sub">${fmtDate(auditDate(a))} · ${providerName(a.providerId)} · <span class="au-ctrl" title="Contrôleur(s) OEG de la tournée">${controllersLabel(a) || a.auditorName}</span>${isAuditController(a, session.user?.id) ? ' (vous)' : ''} · ${a.kind === 'inopine' ? 'inopiné' : 'planifié'}</div>
             <div class="row" style="gap:6px;margin-top:6px">${auditBadge(a)}${badge(`${n.C} C · ${n.P || 0} P · ${n.NC} NC`, n.NC ? 'nc' : n.P ? 'perf' : 'ok')}${devs ? badge(`${devs} écart(s)`, 'warn') : ''}${(a.amendments || []).length ? badge(`${a.amendments.length} modif. après signature`, 'nv') : ''}</div>
             ${a.status === 'en_cours' ? html`<div style="margin-top:6px">${progressBar(st.progress.percent)}</div>` : ''}</a>
           <span class="chev">›</span></div>`; })}</div>`

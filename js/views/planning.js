@@ -13,6 +13,7 @@ import { PRESTATION_STATUS, auditDate, byAuditDateDesc } from '../domain/model.j
 import { isPrestationLate } from '../domain/summary.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { prestationType } from './station-sheet.js';
+import { isAuditController, controllerNamesText } from '../domain/permissions.js';
 
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -105,7 +106,8 @@ export default {
       aplanifier: all.filter(p => !p.plannedDate && !CLOSED.includes(p.status)).length
     };
     for (const id of [...picked]) if (!store.get('prestation', id)) picked.delete(id);
-    const inProgress = store.filter('audit', a => a.status === 'en_cours' && a.auditorId === session.user.id);
+    // Tournées en cours dont l'agent connecté est contrôleur (binôme : aussi celles créées par un collègue).
+    const inProgress = store.filter('audit', a => a.status === 'en_cours' && isAuditController(a, session.user.id));
     const period = q.jour ? '' : (q.periode || 'semaine');
     const chips = [['jour', 'Aujourd’hui', counts.jour], ['semaine', '7 jours', counts.semaine], ['avenir', 'À venir'], ['aplanifier', 'À planifier', counts.aplanifier], ['retard', 'En retard', counts.retard], ['nonauditees', 'Non auditées', counts.nonauditees], ['toutes', 'Toutes']];
     const grouped = groupBy(list, p => p.plannedDate || '');
@@ -114,7 +116,7 @@ export default {
         ${can('audit.create') ? html`<a class="btn primary" href="#/nouvel-audit"><span class="ic">${icon('plus')}</span>Nouvelle tournée</a><a class="btn accent" href="#/nouvel-audit?kind=inopine"><span class="ic">${icon('warning')}</span>Audit inopiné</a>` : ''}
         <button class="btn ghost" data-act="prepare" title="Synchroniser et télécharger les documents pour le terrain"><span class="ic">🧳</span>Préparer le terrain</button>
         ${can('planning.manage') ? html`<button class="btn ghost" data-act="newPrestation"><span class="ic">＋</span>Prestation</button>` : ''}`)}
-      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
+      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))} · ${controllerNamesText(a)}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
       <div class="chips" style="margin-bottom:10px">${chips.map(([k, l, n]) => html`<button class="chip ${period === k ? 'sel' : ''}" data-act="q" data-k="periode" data-v="${k}">${l}${n !== undefined ? html`<span class="count">${n}</span>` : ''}</button>`)}
         <button class="chip ${q.mode === 'calendrier' ? 'sel' : ''}" data-act="q" data-k="mode" data-v="${q.mode === 'calendrier' ? '' : 'calendrier'}">🗓️ Calendrier</button></div>
       <details class="card" ${q.prestataire || q.campagne || q.statut || q.q ? 'open' : ''}><summary>Filtres${q.prestataire || q.campagne || q.statut || q.q ? ' (actifs)' : ''}</summary>

@@ -17,7 +17,7 @@ import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowIS
 import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate } from '../domain/model.js';
 import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
-import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace } from './audits.js';
+import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace, tourControllers, entriesByAgent } from './audits.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { refLabel } from './documents.js';
 import { orgSettings } from './settings.js';
@@ -74,7 +74,10 @@ export async function buildAuditReport(auditId) {
   // Date de l'audit = date de la tournée (la même que celle des écrans et des fiches de contrôle PDF).
   const date = auditDate(audit);
   const entryDay = audit.startedAt ? localDate(new Date(audit.startedAt)) : '';
-  const doc = new PDFDocument({ title, author: audit.auditorName, subject: `Audit terrain de prestation de prélèvement — ${stations.length ? stations.map(x => x.name).join(', ') : site?.name || ''}`, keywords: `audit;prélèvement;${audit.number}` });
+  // Contrôleurs OEG de la tournée (binôme) : partout où figure le contrôleur OEG.
+  const controllers = tourControllers(audit);
+  const controllersText = controllers.map(c => c.name).filter(Boolean).join(', ') || audit.auditorName || '';
+  const doc = new PDFDocument({ title, author: controllersText, subject: `Audit terrain de prestation de prélèvement — ${stations.length ? stations.map(x => x.name).join(', ') : site?.name || ''}`, keywords: `audit;prélèvement;${audit.number}` });
   const brand = await branding(doc);
   const generatedAt = nowISO();
   if (brand) {
@@ -150,7 +153,10 @@ export async function buildAuditReport(auditId) {
   doc.keyValues([
     ['Numéro d’audit', audit.number], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné (non planifié)' : 'Audit planifié'],
     ['Date', fmtDate(date)], ['Heure de début', `${fmtTime(audit.startedAt)}${entryDay && entryDay !== date ? ` (saisie démarrée le ${fmtDate(entryDay)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
-    ['Auditeur', `${audit.auditorName} (${audit.auditorRole || ''})`], ['Appareil utilisé', `${audit.device?.name || ''} — ${audit.device?.id || ''}`],
+    [controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG (auditeur)', controllersText],
+    ['Tournée créée par', `${audit.auditorName} (${audit.auditorRole || ''})`],
+    ...(controllers.length > 1 || (audit.controllerLog || []).length ? [['Saisies par agent', entriesByAgent(audit).map(r => `${r.name} : ${r.responses} réponse(s)`).join(' ; ')]] : []),
+    ['Appareil utilisé', `${audit.device?.name || ''} — ${audit.device?.id || ''}`],
     ['Version de l’application', audit.appVersion], ['Grille d’audit', `${audit.gridSnapshot?.name} — ${audit.gridCode} v${audit.gridVersion}`],
     ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
     ['Statut', audit.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(audit.lock.lockedAt)}` : (audit.status === 'termine' ? 'Terminé, en attente de signature' : 'En cours')],
@@ -313,7 +319,7 @@ export async function buildAuditReport(auditId) {
   doc.heading('15. Signatures');
   for (const role of ['auditor', 'provider']) {
     const sg = audit.signatures?.[role];
-    doc.paragraph(role === 'auditor' ? 'Auditeur' : 'Représentant du prestataire', { font: 'bold', size: 10, color: '#003d7a', gap: 1 });
+    doc.paragraph(role === 'auditor' ? (controllers.length > 1 ? `Contrôleur OEG (pour les contrôleurs de la tournée : ${controllersText})` : 'Auditeur') : 'Représentant du prestataire', { font: 'bold', size: 10, color: '#003d7a', gap: 1 });
     if (!sg) { doc.paragraph('Non signé.', { color: '#b3261e' }); continue; }
     if (sg.refused) doc.paragraph(`${sg.name || 'Représentant'} — refus ou impossibilité de signer, consigné le ${fmtDateTime(sg.at)}. Motif : ${sg.comment || 'non précisé'}`);
     else {
@@ -336,7 +342,7 @@ export async function buildAuditReport(auditId) {
     });
   }
   const trail = store.filter('trail', t => t.entityId === audit.id || (t.entityType === 'deviation' && devs.some(d => d.id === t.entityId))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Abandon' };
+  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Abandon', 'controller-add': 'Contrôleur ajouté', 'controller-remove': 'Contrôleur retiré' };
   doc.table({
     columns: [{ label: 'Date et heure', width: 78 }, { label: 'Utilisateur', width: 85 }, { label: 'Appareil', width: 70 }, { label: 'Action', width: 90 }, { label: 'Détail', width: 188 }],
     rows: trail.slice(-250).map(t => [fmtDateTime(t.at), t.userName || '', t.deviceName || '', `${ACTIONS[t.action] || t.action}${t.entityType === 'deviation' ? ' (écart ' + t.entityLabel + ')' : ''}`, `${t.reason ? 'Motif : ' + t.reason + '\n' : ''}${t.changeCount ? t.changeCount + ' champ(s) : ' + (t.changes || []).slice(0, 4).map(c => c.path).join(', ') : ''}`]), fontSize: 7.2

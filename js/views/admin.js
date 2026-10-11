@@ -1,13 +1,16 @@
-/* Administration : utilisateurs et rôles, appareils (désactivation d'un appareil perdu), paramètres de
- * l'organisation, données (dont la mise à niveau du référentiel) ; écran « Mon compte ».
+/* Administration : agents de la tablette et profils, appareils (désactivation d'un appareil perdu), paramètres
+ * de l'organisation, données (dont la mise à niveau du référentiel) ; écran « Mon compte ».
+ * Tablette partagée (deux tablettes pour quatre agents) : « Agents de cette tablette » (comptes du trousseau :
+ * connexion possible ici ; nouvel agent, modifier, « Retirer de cette tablette » — entrée locale seulement) et
+ * « Agents de l'équipe pas encore sur cette tablette » (profils reçus d'une autre tablette : « Ajouter sur cette
+ * tablette », mot de passe choisi et saisi par l'agent, MÊME profil).
  * Mode équipe : les membres (login GitHub → profil) et les appareils sont tenus dans les fichiers
- * config/utilisateurs.json et config/appareils.json du dépôt de données (commit à chaque modification) ;
- * les comptes locaux de l'appareil restent gérés sur l'appareil. */
+ * config/utilisateurs.json et config/appareils.json du dépôt de données (commit à chaque modification). */
 import { html, raw, fmtDateTime, fmtBytes, sortBy, uuid } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { meta, destroyDB, storageEstimate } from '../core/db.js';
-import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, getKeyring, updateDevice, isTeamMode, teamLabel, linkGithubLogin } from '../core/auth.js';
+import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, updateDevice, isTeamMode, teamLabel, linkGithubLogin, enrollAgent, removeAgentFromDevice } from '../core/auth.js';
 import { toast, openModal, formValues, promptDialog, confirmDialog } from '../ui/dom.js';
 import { pageTitle, kv, badge, empty, options, field } from '../ui/components.js';
 import { orgSettings, saveOrgSettings, pref, setPref, applyDisplayPrefs } from '../app/settings.js';
@@ -23,23 +26,75 @@ const SETTINGS = [
 const ROLE_OPTIONS = () => Object.entries(ROLES).map(([id, label]) => ({ id, label }));
 const errText = e => e?.message === 'Failed to fetch' ? 'GitHub injoignable : vérifiez la connexion réseau.' : (e?.message || String(e));
 
-/** Compte local de l'appareil (les deux modes ; en mode équipe, rattachement facultatif à un login GitHub). */
-function userForm(u = null, { team = false } = {}) {
+/** Agent de la tablette (les deux modes ; en mode équipe, rattachement facultatif à un login GitHub). */
+function userForm(u = null, { team = false, enrolled = true } = {}) {
   const isNew = !u;
   u = u || { username: '', name: '', role: 'auditeur', active: true };
   const m = openModal({
-    title: isNew ? 'Nouveau compte local' : 'Compte ' + u.name,
+    title: isNew ? 'Nouvel agent sur cette tablette' : 'Agent ' + u.name,
     body: html`<form id="uf">${field('Nom et prénom', html`<input name="name" value="${u.name}" required>`, { required: true })}
       ${field('Identifiant', html`<input name="username" value="${u.username}" required autocapitalize="none" ${isNew ? '' : raw('readonly')}>`, { required: true })}
       ${field('Profil local', html`<select name="role">${options(ROLE_OPTIONS(), u.role, { placeholder: null })}</select>`, { hint: team ? 'Remplacé par le profil d’équipe si le compte est rattaché à un login GitHub déclaré dans l’équipe.' : '' })}
-      ${team ? field('Login GitHub (facultatif)', html`<input name="githubLogin" value="${u.githubLogin || ''}" autocapitalize="none" spellcheck="false" placeholder="ex. jdupont-oeg">`, { hint: 'Le profil de ce compte suivra alors config/utilisateurs.json.' }) : ''}
-      ${field(isNew ? 'Mot de passe initial' : 'Nouveau mot de passe (laisser vide pour ne pas changer)', html`<input name="password" type="password" ${isNew ? raw('required minlength="8"') : ''} autocomplete="new-password">`)}
-      <label class="check"><input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Compte actif</label>
-      <p class="note">Le compte est créé sur cet appareil uniquement ; ses données sont chiffrées avec la clé de l’appareil${team ? ' ; les synchronisations utilisent le jeton GitHub de l’appareil' : ''}.</p></form>`,
+      ${team ? field('Login GitHub (facultatif)', html`<input name="githubLogin" value="${u.githubLogin || ''}" autocapitalize="none" spellcheck="false" placeholder="ex. jdupont-oeg">`, { hint: 'À laisser vide pour un agent sans compte GitHub (cas normal : un jeton par tablette). Renseigné, le profil de l’agent suit config/utilisateurs.json — n’y mettez jamais le login du propriétaire du jeton de la tablette pour un autre agent.' }) : ''}
+      ${enrolled ? html`${field(isNew ? 'Mot de passe (choisi et saisi par l’agent, 8 caractères min.)' : 'Nouveau mot de passe sur cette tablette (laisser vide pour ne pas changer)', html`<input name="password" type="password" ${isNew ? raw('required minlength="8"') : ''} autocomplete="new-password">`)}
+      ${field(isNew ? 'Confirmation du mot de passe' : 'Confirmation du nouveau mot de passe', html`<input name="password2" type="password" ${isNew ? raw('required') : ''} autocomplete="new-password">`)}` : html`<p class="note">Agent pas encore sur cette tablette : pour qu’il puisse s’y connecter, utilisez « Ajouter sur cette tablette » (il choisira son mot de passe).</p>`}
+      <label class="check"><input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Compte actif${team ? ' (désactivé : sur toutes les tablettes, après synchronisation)' : ''}</label>
+      <p class="note">${isNew ? 'L’agent pourra ouvrir une session sur cette tablette. Pour l’autre tablette : Administration › « Agents de l’équipe pas encore sur cette tablette » › Ajouter sur cette tablette (même profil). ' : ''}Ses données sont chiffrées avec la clé de la tablette${team ? ' ; les synchronisations utilisent le jeton GitHub de la tablette (aucun compte GitHub n’est nécessaire pour l’agent)' : ''}.</p>
+      <p class="hint" id="ufErr" style="color:var(--nc)"></p></form>`,
     actions: [{ label: 'Annuler' }, { label: 'Enregistrer', act: 'ok', cls: 'primary' }],
-    handlers: { ok() { const f = this.root.querySelector('#uf'); if (!f.reportValidity()) return; this.close(formValues(f)); } }
+    handlers: { ok() {
+      const f = this.root.querySelector('#uf'); if (!f.reportValidity()) return;
+      const v = formValues(f);
+      if ((v.password || v.password2) && v.password !== v.password2) { this.root.querySelector('#ufErr').textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+      this.close(v);
+    } }
   });
   return m.result;
+}
+
+/**
+ * « Ajouter sur cette tablette » : l'agent (profil reçu d'une autre tablette) choisit et saisit lui-même son mot de
+ * passe pour cette tablette, deux fois ; entrée du trousseau créée avec le MÊME identifiant de profil.
+ */
+function enrollForm(u) {
+  const m = openModal({
+    title: `Ajouter ${u.name} sur cette tablette`,
+    body: html`<form id="ef">
+      <div class="banner info">À faire avec <b>${u.name}</b> : c’est l’agent qui choisit et saisit son mot de passe pour cette tablette (8 caractères minimum ; il peut être le même que sur l’autre tablette).</div>
+      ${kv([['Agent', u.name], ['Identifiant', u.username], ['Profil', ROLES[u.role] || u.role]])}
+      ${field('Mot de passe de l’agent', html`<input name="p1" type="password" required minlength="8" autocomplete="new-password">`, { required: true })}
+      ${field('Confirmation du mot de passe', html`<input name="p2" type="password" required autocomplete="new-password">`, { required: true })}
+      <p class="note">Même profil que sur les autres tablettes : ses tournées et ses saisies restent les siennes. Aucun compte GitHub n’est nécessaire.</p>
+      <p class="hint" id="efErr" style="color:var(--nc)"></p></form>`,
+    actions: [{ label: 'Annuler' }, { label: 'Ajouter sur cette tablette', act: 'ok', cls: 'primary' }],
+    handlers: { async ok() {
+      const f = this.root.querySelector('#ef'); if (!f.reportValidity()) return;
+      const v = formValues(f), err = this.root.querySelector('#efErr');
+      if (v.p1 !== v.p2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+      try { await enrollAgent(u.id, v.p1); this.close(true); } catch (e) { err.textContent = e.message; }
+    } }
+  });
+  return m.result;
+}
+
+/** « Agents de cette tablette » (trousseau : connexion possible ici) et « pas encore sur cette tablette ». */
+async function agentsCards(team) {
+  const local = await knownUsers();
+  const here = new Set(local.map(e => e.userId));
+  const agents = sortBy(local.map(e => ({ entry: e, u: store.get('user', e.userId) })), x => x.u?.name || x.entry.name);
+  const others = sortBy(store.all('user').filter(u => !here.has(u.id)), u => u.active === false ? 1 : 0, 'name');
+  const roleOf = x => x.u?.role || x.entry.role;
+  return html`<div class="card" id="tabletAgents"><h2>Agents de cette tablette (${agents.length}) <button class="btn primary sm" data-act="user-new">＋ Nouvel agent</button></h2>
+      <p class="note">Ils peuvent ouvrir une session ici (écran « Qui utilise la tablette ? »), chacun avec son mot de passe ; les tournées en cours restent sur la tablette d’un agent à l’autre (« Changer d’agent »).</p>
+      <div class="list">${agents.map(x => { const u = x.u, e = x.entry, off = u?.active === false || e.disabled; return html`<div class="li ${off ? '' : 'stripe-info'}" data-agent="${e.userId}"><span class="avatar">${initials(u?.name || e.name)}</span><div class="li-main"><div class="li-title">${u?.name || e.name} ${e.userId === session.user.id ? badge('vous', 'info') : ''}</div><div class="li-sub">${e.username} · ${ROLES[roleOf(x)] || roleOf(x)}${u?.githubLogin ? ' · @' + u.githubLogin : ''} · ${e.lastLogin ? 'dernière session ici le ' + fmtDateTime(e.lastLogin) : 'jamais connecté ici'}</div></div>
+        ${off ? badge('Désactivé', 'na') : ''}
+        <div class="btn-row">${u ? html`<button class="btn ghost sm" data-act="user-edit" data-id="${u.id}">Modifier</button>` : ''}${e.userId === session.user.id ? '' : html`<button class="btn danger-ghost sm" data-act="agent-remove" data-id="${e.userId}">Retirer de cette tablette</button>`}</div></div>`; })}</div>
+      <details style="margin-top:10px"><summary>Droits par profil</summary><div class="table-wrap"><table class="tbl"><thead><tr><th>Droit</th>${Object.values(ROLES).map(r => html`<th>${r}</th>`)}</tr></thead><tbody>${Object.entries(PERMISSIONS).map(([p, roles]) => html`<tr><td>${PERM_LABELS[p] || p}</td>${Object.keys(ROLES).map(r => html`<td>${roles.includes(r) ? '✓' : ''}</td>`)}</tr>`)}</tbody></table></div></details></div>
+    ${team || others.length ? html`<div class="card" id="teamAgents"><h2>Agents de l’équipe pas encore sur cette tablette (${others.filter(u => u.active !== false).length})</h2>
+      <p class="note">${team ? 'Profils reçus des autres tablettes par la synchronisation de l’équipe' : 'Profils reçus d’un autre appareil (paquet de données)'}. « Ajouter sur cette tablette » permet à l’agent d’ouvrir une session ici avec le MÊME profil (ses tournées et saisies restent les siennes) ; il choisit et saisit lui-même son mot de passe.</p>
+      ${others.length ? html`<div class="list">${others.map(u => html`<div class="li ${u.active === false ? '' : 'stripe-warn'}" data-agent="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="li-main"><div class="li-title">${u.name}</div><div class="li-sub">${u.username || '—'} · ${ROLES[u.role] || u.role}${u.githubLogin ? ' · @' + u.githubLogin : ''}</div></div>
+          <div class="btn-row"><button class="btn ghost sm" data-act="user-edit" data-id="${u.id}">Modifier</button>${u.active === false ? badge('Désactivé', 'na') : html`<button class="btn primary sm" data-act="agent-enroll" data-id="${u.id}">Ajouter sur cette tablette</button>`}</div></div>`)}</div>`
+        : html`<p class="note">Tous les agents connus sont sur cette tablette.${team ? ' Un agent créé sur une autre tablette apparaît ici après synchronisation.' : ''}</p>`}</div>` : ''}`;
 }
 
 /** Membre de l'équipe (config/utilisateurs.json) : login GitHub, nom, profil, actif. */
@@ -71,13 +126,13 @@ async function teamCards() {
   const users = cfg?.utilisateurs?.users || [], devices = cfg?.appareils?.devices || [];
   const readAt = cfg?.readAt ? `lu le ${fmtDateTime(cfg.readAt)}` : 'jamais lu';
   return html`${can('users.manage') ? html`<div class="card"><h2>Membres de l’équipe <button class="btn primary sm" data-act="team-user-new">＋ Membre</button></h2>
-      <p class="note">Logins GitHub et profils de l’équipe (<span class="mono">config/utilisateurs.json</span> du dépôt ${teamLabel()}, ${readAt}). Le profil d’un compte local rattaché à un login s’aligne sur cette liste à chaque synchronisation.</p>
+      <p class="note">Logins GitHub et profils de l’équipe (<span class="mono">config/utilisateurs.json</span> du dépôt ${teamLabel()}, ${readAt}). Le profil d’un agent rattaché à un login s’aligne sur cette liste à chaque synchronisation. Avec un jeton par tablette, seul l’administrateur (propriétaire des jetons) y figure en général : les agents sans compte GitHub n’y sont pas, leur profil se règle dans « Agents de cette tablette ».</p>
       ${error ? html`<div class="banner warn">${error} — affichage de la dernière lecture.</div>` : ''}
-      ${users.length ? html`<div class="list">${users.map(u => html`<button class="li ${u.active === false ? '' : 'stripe-info'}" data-act="team-user-edit" data-login="${u.login}"><span class="avatar">${initials(u.name || u.login)}</span><div class="li-main"><div class="li-title">${u.name || u.login}</div><div class="li-sub">@${u.login} · ${ROLES[u.role] || u.role}${String(u.login).toLowerCase() === String(session.githubLogin || '').toLowerCase() ? ' · cet appareil' : ''}</div></div>${u.active === false ? badge('Désactivé', 'na') : badge('Actif', 'ok')}</button>`)}</div>` : html`<p class="note">Aucun membre déclaré.</p>`}</div>` : ''}
+      ${users.length ? html`<div class="list">${users.map(u => html`<button class="li ${u.active === false ? '' : 'stripe-info'}" data-act="team-user-edit" data-login="${u.login}"><span class="avatar">${initials(u.name || u.login)}</span><div class="li-main"><div class="li-title">${u.name || u.login}</div><div class="li-sub">@${u.login} · ${ROLES[u.role] || u.role}${String(u.login).toLowerCase() === String(session.githubLogin || '').toLowerCase() ? ' · propriétaire du jeton de cette tablette' : ''}</div></div>${u.active === false ? badge('Désactivé', 'na') : badge('Actif', 'ok')}</button>`)}</div>` : html`<p class="note">Aucun membre déclaré.</p>`}</div>` : ''}
     ${can('devices.manage') ? html`<div class="card"><h2>Appareils de l’équipe</h2>
       <p class="note">Appareils enregistrés dans <span class="mono">config/appareils.json</span> (${readAt}). Un appareil révoqué voit ses données locales effacées à sa synchronisation suivante.</p>
       ${devices.length ? html`<div class="list">${devices.map(d => html`<div class="li ${d.revoked ? 'stripe-nc' : ''}"><div class="li-main"><div class="li-title">${d.name} ${d.id === session.device.id ? badge('cet appareil', 'info') : ''}</div><div class="li-sub">n° ${d.no} · enregistré le ${fmtDateTime(d.registeredAt)}${d.registeredBy ? ' par ' + d.registeredBy : ''}</div>${d.revoked ? badge('Révoqué le ' + fmtDateTime(d.revokedAt) + (d.revokedBy ? ' par ' + d.revokedBy : ''), 'nc') : ''}</div>${d.revoked ? html`<button class="btn ghost sm" data-act="dev-restore" data-id="${d.id}">Réactiver</button>` : d.id === session.device.id ? '' : html`<button class="btn danger-ghost sm" data-act="dev-revoke" data-id="${d.id}">Désactiver (perdu)</button>`}</div>`)}</div>` : html`<p class="note">Aucun appareil enregistré.</p>`}
-      <div class="banner warn" style="margin-top:10px">La révocation efface les données de l’appareil à sa prochaine synchronisation, mais ne désactive PAS son jeton GitHub : pour un appareil perdu ou volé, révoquez aussi le jeton sur GitHub (Settings › Developer settings › Personal access tokens) ou retirez l’accès du compte au dépôt.</div></div>` : ''}
+      <div class="banner warn" style="margin-top:10px">La révocation efface les données de l’appareil à sa prochaine synchronisation, mais ne désactive PAS son jeton GitHub : pour une tablette perdue ou volée, révoquez aussi <b>le jeton de cette tablette</b> sur GitHub (Settings › Developer settings › Personal access tokens › Fine-grained tokens › « Tablette … » › Revoke).</div></div>` : ''}
     <div class="card"><h2>Sécurité du mode équipe</h2><ul class="note" style="padding-left:20px;margin:0">
       <li>Les profils et les droits sont appliqués par l’application. La véritable frontière de sécurité est l’<b>accès au dépôt privé</b> : toute personne disposant d’un jeton valide sur ce dépôt peut lire et modifier tous ses fichiers, y compris la liste des membres et des appareils.</li>
       <li>N’inviter sur le dépôt que les membres de l’équipe ; jetons « fine-grained » limités à ce dépôt (Contents : Read and write), à expiration courte ; ne jamais rendre le dépôt public.</li>
@@ -93,19 +148,13 @@ export default {
     const est = await storageEstimate();
     const persisted = await navigator.storage?.persisted?.().catch(() => null);
     const local = await knownUsers();
-    const k = await getKeyring();
-    const onDevice = new Set(Object.values(k.users).map(e => e.userId));
-    // Comptes locaux : en mode équipe, seuls ceux de cet appareil (les profils des autres appareils sont aussi reçus).
-    const users = can('users.manage') ? sortBy(store.all('user').filter(u => !team || onDevice.has(u.id)), 'name') : [];
     return html`${pageTitle('Administration', team ? `Mode équipe — dépôt ${teamLabel()}` : 'Mode autonome')}
+      ${can('users.manage') ? await agentsCards(team) : ''}
       ${team ? await teamCards() : ''}
-      ${can('users.manage') ? html`<div class="card"><h2>${team ? 'Comptes locaux de cet appareil' : 'Utilisateurs et profils'} <button class="btn primary sm" data-act="user-new">＋ ${team ? 'Compte local' : 'Utilisateur'}</button></h2>
-        <div class="list">${users.map(u => html`<button class="li ${u.active === false ? '' : 'stripe-info'}" data-act="user-edit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="li-main"><div class="li-title">${u.name}</div><div class="li-sub">${u.username} · ${ROLES[u.role] || u.role}${u.githubLogin ? ' · @' + u.githubLogin : ''}${onDevice.has(u.id) ? '' : ' · autre appareil'}</div></div>${u.active === false ? badge('Désactivé', 'na') : badge('Actif', 'ok')}</button>`)}</div>
-        <details style="margin-top:10px"><summary>Droits par profil</summary><div class="table-wrap"><table class="tbl"><thead><tr><th>Droit</th>${Object.values(ROLES).map(r => html`<th>${r}</th>`)}</tr></thead><tbody>${Object.entries(PERMISSIONS).map(([p, roles]) => html`<tr><td>${PERM_LABELS[p] || p}</td>${Object.keys(ROLES).map(r => html`<td>${roles.includes(r) ? '✓' : ''}</td>`)}</tr>`)}</tbody></table></div></details></div>` : ''}
       ${can('devices.manage') && !team ? html`<div class="card"><h2>Appareils</h2>${kv([['Cet appareil', `${session.device.name} — n° ${session.device.number}`], ['Identifiant', session.device.id]])}<p class="note">En mode autonome, la désactivation à distance d’un appareil perdu nécessite le mode équipe (dépôt GitHub). Les données restent protégées par le chiffrement et les mots de passe.</p></div>` : ''}
       ${can('settings.manage') ? html`<div class="card"><h2>Paramètres de l’organisation</h2><form id="setf"><div class="grid2">${SETTINGS.map(([key, l, t]) => field(l, html`<input name="${key}" type="${t === 'number' ? 'number' : 'text'}" value="${org[key] ?? ''}">`))}</div>
         <button class="btn primary" type="button" data-act="save-settings">Enregistrer les paramètres</button></form></div>` : ''}
-      <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Comptes sur l’appareil', local.map(u => u.name).join(', ')]])}
+      <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
         ${can('ref.manage') ? html`<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="upgrade">Mettre à niveau le référentiel</button><button class="btn ghost" data-act="seed">Compléter le référentiel de base</button><button class="btn ghost" data-act="seed-oeg">Reprendre le référentiel des fiches terrain</button><button class="btn ghost" data-act="seed-demo">Ajouter les données de démonstration</button><button class="btn ghost" data-act="purge-demo">Retirer les données de démonstration</button></div>
           <p class="note">« Mettre à niveau » ajoute ce qui manque (grille CT-2026, stations dont eaux souterraines, programmes 2026) sans jamais remplacer une saisie ; sans effet si tout est à jour.${team ? ' En mode équipe, synchronisez d’abord pour ne compléter que ce que le dépôt ne contient pas encore.' : ''}</p>` : ''}</div>
       ${can('settings.manage') ? html`<div class="card" style="border-color:var(--nc)"><h2>Zone sensible</h2><p class="note">Efface toutes les données de cet appareil (base chiffrée, comptes locaux, cartes). Les données non synchronisées ou non exportées seront perdues.</p><button class="btn danger" data-act="wipe">Effacer les données de cet appareil</button></div>` : ''}`;
@@ -117,19 +166,40 @@ export default {
       try {
         const id = await addLocalAccount({ username: v.username, name: v.name, role: v.role, password: v.password, extra: team ? { githubLogin: String(v.githubLogin || '').trim().replace(/^@/, '') || null } : {} });
         if (team && v.githubLogin) await linkGithubLogin(id, String(v.githubLogin).trim().replace(/^@/, ''));
-        toast('Compte créé', 'ok'); this.refresh();
+        // Agent créé désactivé (case décochée) : profil et entrée de la tablette bloqués.
+        if (v.active === false) { await store.put('user', { ...store.get('user', id), active: false }, { reason: 'Compte créé désactivé' }); await setLocalAccountDisabled(v.username, true); }
+        toast(`${v.name} peut ouvrir une session sur cette tablette`, 'ok'); this.refresh();
       } catch (e) { toast(e.message, 'err'); }
+    },
+    /** « Ajouter sur cette tablette » : profil existant (autre tablette), mot de passe saisi par l'agent. */
+    async 'agent-enroll'(el) {
+      const u = store.get('user', el.dataset.id);
+      if (!u) return;
+      if (!(await enrollForm(u))) return;
+      toast(`${u.name} est ajouté(e) sur cette tablette : il ou elle peut ouvrir une session ici`, 'ok', 5000);
+      this.refresh();
+    },
+    /** « Retirer de cette tablette » : entrée locale seulement (profil, tournées et saisies conservés). */
+    async 'agent-remove'(el) {
+      const id = el.dataset.id;
+      const name = store.get('user', id)?.name || (await knownUsers()).find(e => e.userId === id)?.name || 'cet agent';
+      if (!(await confirmDialog({ title: 'Retirer de cette tablette', message: `${name} ne pourra plus ouvrir de session sur cette tablette. Son profil, ses tournées et ses saisies sont conservés, ainsi que son accès aux autres tablettes. (Pour bloquer l’agent partout : Modifier › décocher « Compte actif ».)`, okLabel: 'Retirer de cette tablette', danger: true }))) return;
+      try { await removeAgentFromDevice(id); toast(`${name} retiré(e) de cette tablette`, 'ok'); }
+      catch (e) { toast(e.message, 'err', 6000); }
+      this.refresh();
     },
     async 'user-edit'(el) {
       const team = isTeamMode();
       const u = store.get('user', el.dataset.id);
       if (!u) return;
-      const v = await userForm(u, { team }); if (!v) return;
+      const enrolled = (await knownUsers()).some(e => e.userId === u.id);
+      const v = await userForm(u, { team, enrolled }); if (!v) return;
       try {
-        if (u.id === session.user.id && v.role !== 'admin' && !store.filter('user', x => x.role === 'admin' && x.active !== false && x.id !== u.id).length) { toast('Il doit rester au moins un administrateur actif.', 'err'); return; }
+        const otherAdmins = store.filter('user', x => x.role === 'admin' && x.active !== false && x.id !== u.id).length;
+        if (u.role === 'admin' && (v.role !== 'admin' || v.active === false) && !otherAdmins) { toast('Il doit rester au moins un administrateur actif.', 'err'); return; }
         const githubLogin = team ? (String(v.githubLogin || '').trim().replace(/^@/, '') || null) : u.githubLogin;
         await store.put('user', { ...u, name: v.name, role: v.role, active: v.active, ...(team ? { githubLogin } : {}) }, { reason: 'Modification du compte' });
-        if (v.password) await addLocalAccount({ id: u.id, username: u.username, name: v.name, role: v.role, password: v.password, source: 'kept', extra: team ? { githubLogin } : {} });
+        if (v.password && enrolled) await addLocalAccount({ id: u.id, username: u.username, name: v.name, role: v.role, password: v.password, source: 'kept', extra: team ? { githubLogin } : {} });
         await syncKeyringProfile({ username: u.username, name: v.name, role: v.role, active: v.active, ...(team ? { githubLogin } : {}) });
         await setLocalAccountDisabled(u.username, v.active === false);
         if (u.id === session.user.id) Object.assign(session.user, { name: v.name, role: v.role });

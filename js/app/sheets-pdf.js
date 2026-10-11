@@ -43,7 +43,7 @@ import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditD
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { ROLES } from '../domain/permissions.js';
-import { auditState, auditContentHash, auditMedia, stationLabel, deviationPlace } from './audits.js';
+import { auditState, auditContentHash, auditMedia, stationLabel, deviationPlace, tourControllers } from './audits.js';
 import { staticMap, scaleBar } from './static-map.js';
 import { stationMapPoints, SLOTS } from '../views/station-sheet.js';
 
@@ -331,6 +331,7 @@ export async function sheetsModelFromAudit(audit) {
   // Empreinte du contenu IMPRIMÉ (contenu actuel). Audit verrouillé puis modifié avec motif : c'est celle du dernier
   // amendement (expected) ; l'empreinte scellée à la signature est rappelée dans la synthèse (sealedFingerprint).
   const fingerprint = await auditContentHash(audit);
+  const controllers = tourControllers(audit);
   const amendments = locked ? (audit.amendments || []) : [];
   const expected = amendments.length ? amendments[amendments.length - 1].hashAfter : audit.lock?.contentHash || '';
   return {
@@ -340,7 +341,8 @@ export async function sheetsModelFromAudit(audit) {
     compartments: st.ctx.compartments || audit.compartments || [], chosenCompartments: null,
     deviations: st.deviations.filter(d => d.status !== 'annule'), mediaCounts: st.counts,
     sheetMedia: key => media.filter(m => m.link?.type === 'sheet' && String(m.link.itemId) === String(key) && String(m.mime || '').startsWith('image/')),
-    number: audit.number, fingerprint, provisional: !locked, auditDate, auditorName: audit.auditorName || '',
+    // Contrôleurs OEG de la tournée (binôme) : « A. Dupont, B. Martin » partout où figure le contrôleur OEG.
+    number: audit.number, fingerprint, provisional: !locked, auditDate, auditorName: controllers.map(c => c.name).filter(Boolean).join(', ') || audit.auditorName || '', controllerCount: controllers.length,
     sealedFingerprint: locked ? audit.lock.contentHash : '', amendments, sealOk: !locked || fingerprint === expected,
     summary: st.summary, generatedAt: nowISO()
   };
@@ -1159,10 +1161,12 @@ class SheetsRenderer {
     let cx = x;
     const tw = (w - sigs.length * (sigW + 6)) / Math.max(1, parts.length);
     for (const f of parts) {
-      const lab = f === 'controller' ? 'Contrôleur OEG :' : 'Date :';
+      const lab = f === 'controller' ? ((this.m.controllerCount || 1) > 1 ? 'Contrôleurs OEG :' : 'Contrôleur OEG :') : 'Date :';
       const val = f === 'controller' ? (this.blank ? '' : this.m.auditorName) : (this.blank ? '' : fmtDate(this.m.auditDate));
       d.text(lab, cx, y + 2, { font: F.semi, size: 7.6, color: NAVY });
-      if (val) d.text(val, cx, y + 13, { font: F.bold, size: 8.4, color: INK });
+      // Plusieurs contrôleurs (binôme) : corps réduit pour tenir dans la colonne.
+      const size = val ? Math.max(6, Math.min(8.4, 8.4 * (tw - 10) / Math.max(1, d.width(val, F.bold, 8.4)))) : 8.4;
+      if (val) d.text(val, cx, y + 13, { font: F.bold, size, color: INK });
       else this.dots(cx, y + 21, cx + tw - 8);
       cx += tw;
     }
@@ -1656,7 +1660,7 @@ class SheetsRenderer {
     const ident = [
       ['N° d’audit', m.number], ['Type de tournée', m.typeDef?.label || AUDIT_TYPES[m.auditType] || ''],
       ['Prestataire', provider ? `${providerHeaderName(provider)}${provider.kind && PROVIDER_KINDS[provider.kind] ? ' — ' + PROVIDER_KINDS[provider.kind] : ''}` : '—'],
-      ['Date', fmtDate(m.auditDate)], ['Contrôleur OEG', m.auditorName], ['Type d’audit', a.kind === 'inopine' ? 'Inopiné' : 'Avec rendez-vous / planifié'],
+      ['Date', fmtDate(m.auditDate)], [(m.controllerCount || 1) > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', m.auditorName], ['Type d’audit', a.kind === 'inopine' ? 'Inopiné' : 'Avec rendez-vous / planifié'],
       ['Stations', this.stationList.map(s => `${s.index + 1}. ${upper(s.name)} (${s.code})`).join(' · ')],
       ['Statut', a.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}${amended ? ` — MODIFIÉ APRÈS SIGNATURE : ${amendedText}` : ''}` : 'PROVISOIRE — tournée non signée ou non verrouillée'],
       // Empreinte du contenu IMPRIMÉ (celle du pied de page) ; tournée modifiée après signature : empreinte scellée à
@@ -1750,7 +1754,9 @@ class SheetsRenderer {
       const x = M + i * (w + 10), s = a.signatures?.[role];
       d.roundRect(x, this.y, w, h, 7, { fill: '#ffffff', stroke: t.line, lineWidth: 0.9 });
       d.roundRect(x, this.y, w, 19, [7, 7, 0, 0], { fill: t.bar });
-      d.text(role === 'auditor' ? 'Contrôleur OEG (auditeur)' : 'Représentant du prestataire', x + 10, this.y + 5, { font: F.bold, size: 9, color: t.title });
+      // Tournée en binôme : la signature d'un des contrôleurs vaut pour la tournée (contrôleurs rappelés).
+      const title = role === 'auditor' ? ((this.m.controllerCount || 1) > 1 ? `Contrôleur OEG — contrôleurs de la tournée : ${this.m.auditorName}` : 'Contrôleur OEG (auditeur)') : 'Représentant du prestataire';
+      d.text(title, x + 10, this.y + 5, { font: F.bold, size: Math.max(6.5, Math.min(9, 9 * (w - 20) / Math.max(1, d.width(title, F.bold, 9)))), color: t.title });
       if (!s) { d.text('Non signé.', x + 10, this.y + 28, { font: F.italic, size: 8, color: OEG.nc }); continue; }
       d.text(`${s.name || ''}${s.function ? ' — ' + s.function : ''}`, x + 10, this.y + 25, { font: F.semi, size: 8.4, color: INK });
       d.text(s.refused ? `Refus ou impossibilité de signer, consigné le ${fmtDateTime(s.at)}. Motif : ${s.comment || 'non précisé'}` : `Signé le ${fmtDateTime(s.at)}${s.offline ? ' (hors connexion)' : ''}`, x + 10, this.y + 36, { font: F.text, size: 7.4, color: MUTED });

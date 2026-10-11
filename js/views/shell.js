@@ -1,5 +1,6 @@
 /* Structure de l'application : en-tête aux couleurs OEG (logo rond, réseau, synchronisation,
- * utilisateur), navigation latérale (tablette paysage / ordinateur), barre de navigation basse
+ * utilisateur, « Changer d'agent » — tablette partagée : saisie enregistrée puis écran « Qui utilise la
+ * tablette ? », la tournée en cours restant sur la tablette pour l'agent suivant), navigation latérale (tablette paysage / ordinateur), barre de navigation basse
  * (téléphone : Stations, Planning, Audits, Écarts, Menu), boutons Urgence et Observation toujours
  * accessibles. Pictogrammes : js/ui/icons.js. */
 import { html, localDate } from '../core/util.js';
@@ -50,7 +51,7 @@ export function renderShell(root, { lock }) {
       <div class="titles"><h1>Fiches de contrôle terrain</h1><small>${org.orgName || 'Office de l’Eau de Guyane'}</small></div>
       <button class="top-pill" data-act="shell-sync" id="netPill" title="État de la connexion et de la synchronisation"><span class="dot"></span><span class="lbl" id="netLbl">…</span></button>
       <button class="top-pill pill-account" data-act="shell-account" title="Mon compte">${icon('user', { size: 20 })}<span class="lbl">${session.user.name.split(' ')[0]}</span></button>
-      <button class="top-pill" data-act="shell-lock" title="Verrouiller la session" aria-label="Verrouiller la session">${icon('lock', { size: 20 })}</button>
+      <button class="top-pill pill-switch" data-act="shell-lock" title="Changer d’agent : enregistre la saisie en cours et revient à l’écran « Qui utilise la tablette ? » (la tournée reste sur la tablette)" aria-label="Changer d’agent">${icon('people', { size: 20 })}<span class="lbl">Changer d’agent</span></button>
     </header>
     <div class="app-shell">
       <nav class="rail" id="rail" aria-label="Navigation principale">

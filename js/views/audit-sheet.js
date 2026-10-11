@@ -4,7 +4,9 @@
  *   retrait motivé), barre d'onglets colorée par thème : la feuille de tournée (F2) puis les feuilles de la station
  *   courante, puis Écarts, Synthèse, Signatures et Infos ;
  * - étapes : feuille-<no> (feuille de tournée), feuille-<no>@<clé> (feuille d'une station), ecarts, synthese,
- *   signatures, infos (identification de l'audit, stations, documents figés, alertes, continuer plus tard) ;
+ *   signatures, infos (identification de l'audit, contrôleurs OEG de la tournée et saisies par agent, stations,
+ *   documents figés, alertes, continuer plus tard) ;
+ * - tournée en binôme : bandeau « Tournée de … — Rejoindre la tournée » pour un agent qui n'en est pas contrôleur ;
  * - chaque feuille : en-tête OEG (complet ≥ 900 px, compact en dessous), bandeau d'information, modules (appareils
  *   de mesure de F4), tableaux .st-table ≥ 1100 px (N° | Point de contrôle | Réf. | Valeur / réponse | C | P | NC |
  *   N/A | Observations) ou lignes en cartes < 1100 px (quatre gros boutons C / P / NC / N/A), encadrés
@@ -33,7 +35,10 @@ import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
 } from '../domain/grids.js';
 import { calibrationStatus } from '../domain/rules.js';
-import { addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel } from '../app/audits.js';
+import {
+  addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel, tourControllers, tourAgents, entriesByAgent, canJoinAudit,
+  isAuditController, joinTour, addController, removeController
+} from '../app/audits.js';
 import { alertBox, documentsCard, signaturesStep, deviationChips, findItem, allowClear } from './audit-modules.js';
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -301,7 +306,7 @@ function conclusionBody(c, sh, b) {
   return html`<div class="bc-options" role="group" aria-label="${b.title}">${opts.map(([k, l]) => html`<button type="button" class="bc-option${concl.status === k ? ' sel' : ''}" aria-pressed="${concl.status === k}" data-act="sheet-concl" data-sheet="${key}" data-value="${k}" ${dis}>${checkSquare({ checked: concl.status === k, cls: OPT_CLS[k] || '' })}${l}</button>`)}</div>
     ${summary?.hint ? html`<p class="as-hint">${icon('info', { size: 15 })}Constat de la feuille : ${summary.hint}. <span>La conclusion reste le choix du contrôleur.</span></p>` : ''}
     ${fields.includes('comments') ? html`<div class="bc-field"><label class="bc-k" for="concl-${key}">Commentaires</label><textarea ${autosave(c)} id="concl-${key}" class="as-lined" rows="2" data-change="sheet-concl-text" data-sheet="${key}" ${dis}>${concl.comments || ''}</textarea></div>` : ''}
-    <div class="bc-fields">${fields.filter(f => f === 'controller' || f === 'date').map(f => html`<div class="bc-field"><span class="bc-k">${f === 'date' ? 'Date' : 'Nom du contrôleur OEG'}</span><span class="bc-v">${f === 'date' ? fmtDate(date) : c.audit.auditorName}</span></div>`)}</div>
+    <div class="bc-fields">${fields.filter(f => f === 'controller' || f === 'date').map(f => html`<div class="bc-field"><span class="bc-k">${f === 'date' ? 'Date' : 'Nom du contrôleur OEG'}</span><span class="bc-v">${f === 'date' ? fmtDate(date) : c.controllersText}</span></div>`)}</div>
     ${fields.some(f => f === 'signature' || f === 'providerSignature') ? html`<div class="bc-fields">${fields.includes('signature') ? html`<div class="bc-field"><span class="bc-k">Signature du contrôleur</span>${signatureView(sig.auditor)}</div>` : ''}${fields.includes('providerSignature') ? html`<div class="bc-field"><span class="bc-k">Nom et signature du prestataire${sig.provider?.name ? ` : ${sig.provider.name}` : ''}</span>${signatureView(sig.provider)}</div>` : ''}</div>
       ${!sig.auditor ? html`<p class="note as-sign-note">Signature électronique unique de la tournée : onglet « Signatures ».</p>` : ''}` : ''}`;
 }
@@ -455,11 +460,12 @@ function infosView(c) {
     <div class="card"><h2>Identification de la tournée</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit avec rendez-vous'],
       ['Date', fmtDate(c.date)], ['Heure de début', `${fmtTime(audit.startedAt)}${audit.startedAt && localDate(new Date(audit.startedAt)) !== c.date ? ` (saisie démarrée le ${fmtDate(audit.startedAt)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
-      ['Auditeur', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
+      [c.controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', c.controllersText], ['Tournée créée par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
       ['Compartiments contrôlés', comps.map(x => x.label).join(' · ')]
     ])}</div>
+    ${controllersCard(c)}
     <div class="card"><h2>Stations de la tournée (${c.stations.length})</h2>
       <div class="list">${c.stations.map(s => { const p = st.stationProgress?.stations?.[s.key]; return html`<div class="li"><span class="li-ic as-li-no">${s.index + 1}</span><div class="li-main"><div class="li-title">${s.name} <span class="badge outline">${CODE_TYPES[s.codeType] || 'Code'} ${s.code}</span></div>
         <div class="li-sub">${s.prestation ? html`Prestation <a href="#/prestation/${s.prestation.id}">${s.prestation.ref}</a>${s.prestation.plannedDate ? ' · ' + fmtDate(s.prestation.plannedDate) : ' · à planifier'}` : 'Hors programme (aucune prestation rattachée)'}${p ? ` · ${p.answered} / ${p.total} points renseignés` : ''}</div>
@@ -471,8 +477,44 @@ function infosView(c) {
     ${st.alerts.length ? html`<div class="card"><h2>Alertes en cours (${st.alerts.length})</h2>${st.alerts.map(a => alertBox(a, c.editable))}</div>` : ''}
     ${c.editable && !c.locked ? html`<div class="card"><h2>Actions</h2><div class="btn-row">
       <button class="btn ghost" data-act="later"><span class="ic">${icon('clock')}</span>Continuer plus tard</button>
-      ${audit.auditorId === session.user.id || can('audit.delete') ? html`<button class="btn danger-ghost" data-act="abandon">Abandonner l’audit</button>` : ''}</div>
-      <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. La tournée peut être reprise à tout moment depuis l’accueil ou le planning.</p></div>` : ''}`;
+      ${isAuditController(audit, session.user.id) || can('audit.delete') ? html`<button class="btn danger-ghost" data-act="abandon">Abandonner l’audit</button>` : ''}</div>
+      <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. La tournée peut être reprise à tout moment depuis l’accueil ou le planning ; sur une tablette partagée, « Changer d’agent » (en-tête) laisse la tournée sur la tablette pour le collègue qui se connecte ensuite.</p></div>` : ''}`;
+}
+
+const initialsOf = n => String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join('').toUpperCase();
+/** « A. Dupont », « A. Dupont et B. Martin », « A, B et C ». */
+export function namesList(names) {
+  const l = names.filter(Boolean);
+  return l.length > 1 ? `${l.slice(0, -1).join(', ')} et ${l[l.length - 1]}` : l[0] || '';
+}
+/** « de » ou « d’ » devant un nom (élision devant une voyelle : « tournée d’Alice Dupont »). */
+export const deName = n => /^[aeiouyàâäéèêëîïôöûüœ]/i.test(String(n || '').trim()) ? 'd’' : 'de ';
+/**
+ * Contrôleurs OEG de la tournée (binôme) : liste, réponses saisies par chacun, ajout / retrait (motif) par un
+ * contrôleur avant la signature, « Rejoindre la tournée », saisies par agent et historique des contrôleurs.
+ */
+function controllersCard(c) {
+  const { audit } = c;
+  const ctrls = c.controllers;
+  const byAgent = entriesByAgent(audit);
+  const canManage = c.editable && !c.locked && !audit.signatures?.auditor && audit.status !== 'abandonne';
+  const others = canManage ? tourAgents().filter(u => !ctrls.some(x => x.id === u.id)) : [];
+  const log = audit.controllerLog || [];
+  return html`<div class="card" id="tourControllers"><h2>Contrôleurs OEG de la tournée (${ctrls.length})</h2>
+    <div class="list">${ctrls.map(x => {
+      const n = byAgent.find(r => r.id === x.id)?.responses || 0;
+      return html`<div class="li as-ctrl" data-ctrl="${x.id}"><span class="avatar">${initialsOf(x.name)}</span><div class="li-main"><div class="li-title">${x.name || 'Agent'} ${x.id === session.user?.id ? badge('vous', 'info') : ''} ${x.id === audit.auditorId ? badge('a créé la tournée', 'outline') : ''}</div>
+        <div class="li-sub">${n} réponse${n > 1 ? 's' : ''} saisie${n > 1 ? 's' : ''}</div></div>
+        ${canManage && ctrls.length > 1 ? html`<button type="button" class="btn danger-ghost sm" data-act="ctrl-remove" data-id="${x.id}">Retirer</button>` : ''}</div>`;
+    })}</div>
+    ${canManage && others.length ? html`<div class="field" style="margin-top:10px"><label for="ctrlAdd">Ajouter un contrôleur</label><select id="ctrlAdd" data-change="ctrl-add"><option value="">— agent de l’équipe —</option>${others.map(u => html`<option value="${u.id}">${u.name}</option>`)}</select></div>` : ''}
+    ${c.joinable ? html`<button type="button" class="btn primary" style="margin-top:10px" data-act="tour-join"><span class="ic">${icon('people')}</span>Rejoindre la tournée</button>` : ''}
+    <h3>Qui a saisi quoi</h3>
+    <div class="table-wrap"><table class="tbl as-by-agent"><thead><tr><th scope="col">Agent</th><th scope="col">Réponses saisies</th></tr></thead>
+      <tbody>${byAgent.map(r => html`<tr data-agent="${r.id}"><th scope="row">${r.name}${r.controller ? '' : html` <small class="muted">(hors contrôleurs)</small>`}</th><td>${r.responses}</td></tr>`)}</tbody></table></div>
+    <p class="note">Chaque réponse est attribuée à l’agent connecté qui l’a saisie ou modifiée en dernier (« Saisi le … par … » sous chaque critère) ; le journal d’audit conserve l’historique complet. La signature « contrôleur » peut être faite par n’importe quel contrôleur de la tournée.</p>
+    ${log.length ? html`<details><summary>Historique des contrôleurs (${log.length})</summary><ul>${log.map(l => html`<li>${fmtDateTime(l.at)} — ${l.action === 'ajout' ? (l.userId === l.by ? `${l.name} a rejoint la tournée` : `${l.name} ajouté(e) par ${l.byName || ''}`) : `${l.name} retiré(e) par ${l.byName || ''}`}${l.reason ? html` — motif : « ${l.reason} »` : ''}</li>`)}</ul></details>` : ''}
+  </div>`;
 }
 
 /* ---------- Navigation : stations, onglets, pied ---------- */
@@ -554,8 +596,11 @@ export async function renderSheetAudit({ audit, st, step, q = {}, editable, lock
     baseGrid: st.baseGrid, mediaByItem, mediaBySheet, devsByItem, SS: null,
     // Date de la tournée (auditDate : « Date mission », date choisie à la création ou date de création).
     date: auditDate(audit),
-    providerLabel: prov ? (prov.kind === 'regie' && prov.code ? `${prov.code} en régie` : prov.name) : ''
+    providerLabel: prov ? (prov.kind === 'regie' && prov.code ? `${prov.code} en régie` : prov.name) : '',
+    // Contrôleurs OEG de la tournée (binôme) ; agent connecté hors contrôleurs : « Rejoindre la tournée ».
+    controllers: tourControllers(audit), controllersText: '', joinable: !locked && canJoinAudit(audit, session.user)
   };
+  c.controllersText = c.controllers.map(x => x.name).filter(Boolean).join(', ');
   let body, siteId = null;
   if (curSheet) {
     const stn = curSheet.station ? c.stations.find(s => s.key === curSheet.station.key) : c.stations.length === 1 ? c.stations[0] : null;
@@ -580,7 +625,8 @@ export async function renderSheetAudit({ audit, st, step, q = {}, editable, lock
     ${tabsNav(c, cur)}
     ${locked ? html`<div class="banner ${amendReason ? 'warn' : 'ok'} locked-banner"><span class="grow">${amendReason ? html`Modification tracée en cours — motif : « ${amendReason} ». Chaque changement est historisé (valeur précédente conservée).` : html`${icon('lock', { size: 18 })} Audit signé et verrouillé : lecture seule.`}</span>
       ${can('audit.amend') ? (amendReason ? html`<button class="btn sm ghost" data-act="amend-stop">Terminer les modifications</button>` : html`<button class="btn sm ghost" data-act="amend-start">Modifier (avec motif)</button>`) : ''}</div>` : ''}
-    ${!editable && !locked && audit.status !== 'abandonne' ? html`<div class="banner info">Lecture seule : audit réalisé par ${audit.auditorName}.</div>` : ''}
+    ${c.joinable ? html`<div class="banner info as-join" id="tourJoin"><span class="grow">${icon('people', { size: 18 })} Tournée ${deName(c.controllersText)}<b>${namesList(c.controllers.map(x => x.name))}</b>${editable ? ' — en tant qu’encadrement, vous pouvez la modifier ; rejoignez-la pour en être contrôleur.' : ' — rejoignez la tournée pour saisir avec vos collègues (vos saisies vous seront attribuées).'}</span><button type="button" class="btn primary sm" data-act="tour-join">Rejoindre la tournée</button></div>` : ''}
+    ${!editable && !locked && audit.status !== 'abandonne' && !c.joinable ? html`<div class="banner info">Lecture seule : tournée ${deName(c.controllersText)}${namesList(c.controllers.map(x => x.name))}.</div>` : ''}
     ${audit.status === 'abandonne' ? html`<div class="banner na">Audit abandonné — ${audit.abandonReason || ''}</div>` : ''}
     <div class="as-body as-step-${cur.startsWith('feuille-') ? 'sheet' : cur}">${body}</div>
     ${footerNav(c, cur)}`;
@@ -796,6 +842,34 @@ export const sheetHandlers = {
     toast(`Station ${name} retirée de la tournée`, 'ok');
     const step = String(this.params.step || '');
     navigate(step.endsWith('@' + key) || !step ? `/audit/${audit.id}/infos` : `/audit/${audit.id}/${step}`);
+  },
+  /** « Rejoindre la tournée » : l'agent connecté devient contrôleur (journal + historique ; rien n'est effacé). */
+  async 'tour-join'() {
+    try { await joinTour(store.get('audit', this.params.id)); }
+    catch (e) { toast(e.message, 'err', 5000); return; }
+    toast('Vous avez rejoint la tournée : vos saisies vous seront attribuées.', 'ok');
+    this.refresh();
+  },
+  /** Ajout d'un collègue aux contrôleurs (par un contrôleur de la tournée). */
+  async 'ctrl-add'(el) {
+    const id = el.value;
+    if (!id) return;
+    try { await addController(store.get('audit', this.params.id), id); }
+    catch (e) { toast(e.message, 'err', 5000); el.value = ''; return; }
+    toast(`${store.get('user', id)?.name || 'Agent'} ajouté(e) aux contrôleurs de la tournée`, 'ok');
+    this.refresh();
+  },
+  /** Retrait d'un contrôleur (jamais le dernier), motif obligatoire ; ses saisies restent dans la tournée. */
+  async 'ctrl-remove'(el) {
+    const audit = store.get('audit', this.params.id);
+    const who = tourControllers(audit).find(x => x.id === el.dataset.id);
+    if (!who) return;
+    const reason = await promptDialog({ title: `Retirer ${who.name} de la tournée`, label: 'Motif (obligatoire)', hint: 'Ses saisies restent dans la tournée et lui restent attribuées.', multiline: false });
+    if (!reason) return;
+    try { await removeController(audit, who.id, { reason }); }
+    catch (e) { toast(e.message, 'err', 5000); return; }
+    toast(`${who.name} retiré(e) des contrôleurs de la tournée`, 'ok');
+    this.refresh();
   },
   /** Fiches de contrôle remplies (PDF) : module js/app/sheets-pdf.js (chargé à la demande). */
   async 'sheets-pdf'() {

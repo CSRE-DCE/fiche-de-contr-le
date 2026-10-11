@@ -473,7 +473,12 @@ export async function removeStation(audit, key, { reason = null, cancelDeviation
   const site = store.get('site', st.siteId);
   const suffix = '@' + key;
   const countIds = new Set(allItems(cur.gridSnapshot).filter(i => i.prefill === 'tournee.stationCount').map(i => i.id));
-  await updateAudit(cur, a => {
+  // Écarts ouverts annulés AVANT le retrait (contrôles faits) : jamais de station retirée avec un écart encore ouvert.
+  for (const dv of openDevs) {
+    await updateDeviation(dv, { status: 'annule', closedAt: nowISO(), closedBy: session.user.name, closureNote: `Station ${site?.name || key} retirée de la tournée — ${reason}` },
+      { reason, event: 'Annulation : station retirée de la tournée' });
+  }
+  await updateAudit(store.get('audit', cur.id), a => {
     const removed = { station: st, ...sessionStamp(now), reason: reason || null, responses: {}, sheets: {} };
     for (const id of Object.keys(a.responses || {})) if (id.endsWith(suffix)) { removed.responses[id] = a.responses[id]; delete a.responses[id]; }
     for (const k of Object.keys(a.sheets || {})) if (String(k).endsWith(suffix)) { removed.sheets[k] = a.sheets[k]; delete a.sheets[k]; }
@@ -485,10 +490,6 @@ export async function removeStation(audit, key, { reason = null, cancelDeviation
     a.prestationIds = [...new Set(a.stations.map(s => s.prestationId).filter(Boolean))];
     for (const id of countIds) { const r = a.responses?.[id]; if (r?.prefilled && !r.status) a.responses[id] = { ...r, value: a.stations.length }; }
   }, { reason: reason || `Retrait de la station ${site?.name || key} de la tournée (aucune saisie)` });
-  for (const dv of openDevs) {
-    await updateDeviation(dv, { status: 'annule', closedAt: nowISO(), closedBy: session.user.name, closureNote: `Station ${site?.name || key} retirée de la tournée — ${reason}` },
-      { reason, event: 'Annulation : station retirée de la tournée' });
-  }
   const p = st.prestationId ? store.get('prestation', st.prestationId) : null;
   if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : station retirée de la tournée${openDevs.length ? ` (${openDevs.length} écart(s) annulé(s))` : ''}`, reason: reason || null });
   return store.get('audit', cur.id);

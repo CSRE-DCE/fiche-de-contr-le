@@ -374,3 +374,6 @@
 .se-inline{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-weight:600;color:var(--nc)}
 .se-inline input{width:20px;height:20px}
 .se-reason{border-color:#9cc8ea}
+/* Tournées en binôme : contrôleurs de la tournée, tournées de l'agent connecté en premier */
+.hm-tour-ctrl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--brand)}
+.hm-tour.is-mine{border-left-color:var(--brand)}

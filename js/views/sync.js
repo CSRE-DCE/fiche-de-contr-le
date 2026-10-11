@@ -1,5 +1,6 @@
-/* Synchronisation : mode équipe (dépôt GitHub privé de données) ou autonome, configuration et test de la
- * connexion, aide pas à pas, état, file d'envoi, conflits et résolution, journal, échanges par paquets. */
+/* Synchronisation : mode équipe (dépôt GitHub privé de données, un jeton par tablette) ou autonome, configuration
+ * et test de la connexion, aide pas à pas, état, file d'envoi, conflits et résolution, journal, échanges par
+ * paquets. */
 import { html, raw, fmtDateTime, sortBy, compactValue, clone, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -62,11 +63,11 @@ function helpCard(open) {
   return html`<div class="card"><details ${open ? raw('open') : ''}><summary>Mettre en place le dépôt de l’équipe — pas à pas</summary>
     <ol class="note" style="padding-left:20px">
       <li><b>Administrateur</b> : créer sur GitHub un dépôt <b>privé</b> de données (ex. <span class="mono">CSRE-DCE/fiche-de-controle-donnees</span>), distinct du dépôt public de l’application ; l’ajouter vide ou avec un README.</li>
-      <li>Inviter chaque membre de l’équipe sur ce dépôt (Settings › Collaborators and teams), avec un compte GitHub personnel.</li>
-      <li>Chaque membre crée son jeton d’accès « fine-grained » (voir ci-dessous) — un jeton par personne, jamais partagé.</li>
-      <li><b>Premier appareil</b> (administrateur) : « Rejoindre une équipe » (ou, sur un appareil autonome déjà utilisé, « Rattacher cet appareil ») : le dépôt vide est initialisé (config/equipe.json, utilisateurs.json, appareils.json, sequences.json) puis le référentiel est envoyé.</li>
-      <li>Dans Administration, l’administrateur déclare les logins GitHub de l’équipe et leur profil (config/utilisateurs.json).</li>
-      <li><b>Autres appareils</b> : « Rejoindre une équipe » avec le même dépôt et le jeton de l’utilisateur de l’appareil : les données de l’équipe sont reçues, puis synchronisées automatiquement (à chaque modification et toutes les 5 minutes en ligne).</li>
+      <li><b>Un jeton par tablette</b> : l’administrateur crée, depuis son compte GitHub, un jeton « fine-grained » par tablette (voir ci-dessous), nommé d’après la tablette (« Tablette 1 », « Tablette 2 »…). Les agents n’ont pas besoin de compte GitHub. Un jeton n’est jamais copié sur une autre tablette.</li>
+      <li><b>Première tablette</b> (administrateur) : « Rejoindre une équipe » (ou, sur un appareil autonome déjà utilisé, « Rattacher cet appareil ») avec le jeton « Tablette 1 » : le dépôt vide est initialisé (config/equipe.json, utilisateurs.json, appareils.json, sequences.json) puis le référentiel est envoyé.</li>
+      <li><b>Agents</b> : Administration › Agents de cette tablette › « Nouvel agent » ; chaque agent choisit et saisit son mot de passe.</li>
+      <li><b>Deuxième tablette</b> : « Rejoindre une équipe » avec le même dépôt et le jeton « Tablette 2 » (l’administrateur y retrouve son profil), puis Administration › « Agents de l’équipe pas encore sur cette tablette » › <b>Ajouter sur cette tablette</b> pour chaque agent (même profil, mot de passe choisi par l’agent). Les données sont ensuite synchronisées automatiquement (à chaque modification et toutes les 5 minutes en ligne).</li>
+      <li>Tablette perdue ou volée : Administration › Appareils de l’équipe › « Désactiver (perdu) » ET révoquer le jeton de cette tablette sur GitHub.</li>
     </ol>
     <h3>Créer le jeton</h3>${tokenHelp()}
     <h3>Sécurité : ce qu’il faut savoir</h3>
@@ -74,7 +75,7 @@ function helpCard(open) {
       <li>La vraie protection des données partagées est l’<b>accès au dépôt privé</b> : toute personne disposant d’un jeton valide sur ce dépôt peut en lire et modifier tous les fichiers, quel que soit son profil dans l’application. Les profils (auditeur, superviseur…) et les verrouillages d’audits signés sont appliqués par l’application, pas par GitHub.</li>
       <li>L’historique Git du dépôt conserve toutes les versions (qui a écrit quoi et quand) ; les audits signés restent scellés par leur empreinte et le journal d’audit chaîné permet de détecter une altération.</li>
       <li>Sur l’appareil, les données et le jeton sont chiffrés avec la clé de l’appareil (déverrouillée par le mot de passe local). Dans le dépôt, les fichiers sont en clair pour les personnes ayant accès au dépôt.</li>
-      <li>Révoquer un appareil (Administration) efface ses données à sa prochaine synchronisation, mais ne désactive PAS le jeton : pour un appareil perdu, révoquez aussi le jeton sur GitHub (Settings › Developer settings) ou retirez l’accès de la personne au dépôt.</li>
+      <li>Révoquer un appareil (Administration) efface ses données à sa prochaine synchronisation, mais ne désactive PAS le jeton : pour une tablette perdue, révoquez aussi <b>le jeton de cette tablette</b> sur GitHub (Settings › Developer settings › Fine-grained tokens).</li>
       <li>Ne jamais rendre le dépôt de données public ; limiter le jeton à ce seul dépôt et à la permission « Contents » ; préférer une expiration courte.</li>
     </ul></details></div>`;
 }
@@ -93,13 +94,16 @@ export default {
     const cfg = team ? await readTeamConfig().catch(() => null) : null;
     const blocks = team ? await reservedBlocks() : [];
     const member = (cfg?.utilisateurs?.users || []).find(u => String(u.login).toLowerCase() === String(session.githubLogin || '').toLowerCase());
+    // Agent connecté : profil d'équipe s'il est rattaché à un login GitHub, sinon profil défini par l'administrateur.
+    const myLogin = store.get('user', session.user.id)?.githubLogin || '';
     const admin = can('settings.manage');
     return html`${pageTitle('Synchronisation', team ? `Équipe — dépôt GitHub ${teamLabel()}` : 'Mode autonome (aucun dépôt d’équipe)')}
       <div class="card"><h2>État</h2>${team ? html`${kv([
         ['Mode', 'Équipe — dépôt GitHub privé, synchronisation différentielle'],
         ['Dépôt de données', html`<span class="mono">${teamLabel()}</span> · branche <span class="mono">${session.team.branch}</span> · dossier <span class="mono">${session.team.prefix || '(racine)'}</span>${session.team.apiUrl !== TEAM_DEFAULTS.apiUrl ? html` · API <span class="mono">${session.team.apiUrl}</span>` : ''}`],
         ['Équipe', cfg?.equipe?.orgName || ''],
-        ['Compte GitHub', session.githubLogin ? html`@${session.githubLogin}${member ? ` — profil d’équipe : ${ROLES[member.role] || member.role}${member.active === false ? ' (désactivé)' : ''}` : ' — absent de config/utilisateurs.json (profil local)'}` : ''],
+        ['Jeton de la tablette', session.githubLogin ? html`compte GitHub @${session.githubLogin} (propriétaire du jeton)${member ? ` — profil d’équipe : ${ROLES[member.role] || member.role}${member.active === false ? ' (désactivé)' : ''}` : ' — absent de config/utilisateurs.json'}` : ''],
+        ['Agent connecté', `${session.user.name} — ${ROLES[session.user.role] || session.user.role}${myLogin ? ` (profil d’équipe de @${myLogin})` : ' (profil défini par l’administrateur ; aucun compte GitHub nécessaire)'}`],
         ['Jeton d’accès', tok ? html`${syncState.needsLogin ? badge('refusé ou expiré — à renouveler', 'nc') : badge('enregistré (chiffré)', 'ok')} <span class="tiny muted">le ${fmtDateTime(tok.savedAt)}</span>` : badge('absent — à renseigner', 'nc')],
         ['Connexion', navigator.onLine ? 'En ligne' : 'Hors connexion'],
         ['Appareil', `${session.device.name} (n° ${session.device.number}) — ${session.device.id}`],
@@ -146,7 +150,7 @@ export default {
       this.refresh();
     },
     async token() {
-      const m = openModal({ title: 'Jeton d’accès GitHub', body: html`<form id="tf">${field('Nouveau jeton « fine-grained »', html`<input name="token" type="password" required placeholder="github_pat_…" autocomplete="off" spellcheck="false">`, { hint: 'Limité au dépôt ' + teamLabel() + ', permission « Contents : Read and write ». Il remplace le jeton de cet appareil.' })}<details><summary>Comment créer le jeton ?</summary>${tokenHelp()}</details><p class="hint" id="tfErr" style="color:var(--nc)"></p></form>`,
+      const m = openModal({ title: 'Jeton d’accès GitHub', body: html`<form id="tf">${field('Nouveau jeton « fine-grained »', html`<input name="token" type="password" required placeholder="github_pat_…" autocomplete="off" spellcheck="false">`, { hint: 'Jeton de cette tablette (créé par l’administrateur, nommé d’après la tablette), limité au dépôt ' + teamLabel() + ', permission « Contents : Read and write ». Il remplace le jeton de cette tablette.' })}<details><summary>Comment créer le jeton ?</summary>${tokenHelp()}</details><p class="hint" id="tfErr" style="color:var(--nc)"></p></form>`,
         actions: [{ label: 'Annuler' }, { label: 'Vérifier et enregistrer', act: 'ok', cls: 'primary' }],
         handlers: { async ok() {
           const f = this.root.querySelector('#tf'); if (!f.reportValidity()) return;

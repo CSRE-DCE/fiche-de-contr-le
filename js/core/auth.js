@@ -8,6 +8,11 @@
  *    conservé CHIFFRÉ avec la clé de l'appareil (entité locale jamais synchronisée). Le rôle d'un compte
  *    rattaché à un login GitHub est celui de config/utilisateurs.json (appliqué par js/app/sync.js) ; à
  *    défaut, son rôle local.
+ * TABLETTE PARTAGÉE (deux tablettes pour quatre agents) : chaque agent a son entrée dans le trousseau de
+ * chaque tablette où il travaille (« Agents de cette tablette » : clé de l'appareil chiffrée par SON mot de
+ * passe) et le MÊME profil « user » partout (« Ajouter sur cette tablette » : enrollAgent avec l'identifiant du
+ * profil reçu de l'équipe) ; le jeton GitHub est celui de la TABLETTE (créé par l'administrateur) : seuls les
+ * comptes explicitement rattachés à un login GitHub suivent config/utilisateurs.json, jamais les autres agents.
  */
 import { meta } from './db.js';
 import { session, clearSession } from './session.js';
@@ -37,9 +42,10 @@ export function canEditAudit(audit, user = session.user) {
 export async function getKeyring() { return meta.get('keyring', { users: {} }); }
 async function saveKeyring(k) { await meta.set('keyring', k); }
 export async function isSetUp() { const k = await getKeyring(); return Object.keys(k.users).length > 0; }
+/** Agents de cette tablette (entrées du trousseau), derniers connectés en premier. */
 export async function knownUsers() {
   const k = await getKeyring();
-  return Object.entries(k.users).map(([username, e]) => ({ username, name: e.name, role: e.role, lastLogin: e.lastLogin }))
+  return Object.entries(k.users).map(([username, e]) => ({ username, userId: e.userId, name: e.name, role: e.role, lastLogin: e.lastLogin, disabled: !!e.disabled, githubLogin: e.githubLogin || null }))
     .sort((a, b) => String(b.lastLogin || '').localeCompare(String(a.lastLogin || '')));
 }
 
@@ -146,6 +152,50 @@ export async function addLocalAccount({ id, username, name, role, password, sour
 export async function removeLocalAccount(username) {
   const k = await getKeyring(); delete k.users[normUsername(username)]; await saveKeyring(k);
 }
+
+/* ---------- Agents de la tablette (tablette partagée) ---------- */
+/**
+ * « Ajouter sur cette tablette » : crée l'entrée du trousseau d'un agent dont le profil existe déjà (reçu d'une
+ * autre tablette par la synchronisation ou par un paquet), avec le MÊME identifiant de profil : même identité sur
+ * toutes les tablettes (tournées, saisies, journal). `password` : mot de passe choisi et saisi par l'agent pour
+ * cette tablette. Le profil n'est pas modifié (rôle, rattachement GitHub : ceux de l'équipe).
+ */
+export async function enrollAgent(userId, password) {
+  if (!session.dekRaw) throw new Error('Session fermée');
+  if (!can('users.manage')) throw new Error('Seul un administrateur peut ajouter un agent sur cette tablette.');
+  const u = store.get('user', userId);
+  if (!u) throw new Error('Profil inconnu sur cette tablette : synchronisez d’abord.');
+  if (u.active === false) throw new Error(`Le compte de ${u.name} est désactivé.`);
+  const k = await getKeyring();
+  if (Object.values(k.users).some(e => e.userId === userId)) throw new Error(`${u.name} est déjà sur cette tablette.`);
+  const username = normUsername(u.username);
+  if (!username) throw new Error(`Le profil de ${u.name} n’a pas d’identifiant.`);
+  if (k.users[username]) throw new Error(`L’identifiant « ${username} » est déjà utilisé sur cette tablette par ${k.users[username].name}.`);
+  await addLocalAccount({ id: u.id, username, name: u.name, role: u.role, password, source: 'kept' });
+  await store.log('account-enroll', { entityType: 'user', entityId: u.id, entityLabel: u.name, details: { identifiant: username, appareil: session.device?.name || '' } });
+  return u;
+}
+/**
+ * « Retirer de cette tablette » : supprime SEULEMENT l'entrée du trousseau (l'agent ne peut plus ouvrir de session
+ * ici) ; son profil, ses tournées et ses saisies restent, ainsi que ses accès sur les autres tablettes. Jamais
+ * l'agent connecté ni le dernier administrateur de la tablette.
+ */
+export async function removeAgentFromDevice(userId) {
+  if (!session.dekRaw) throw new Error('Session fermée');
+  if (!can('users.manage')) throw new Error('Seul un administrateur peut retirer un agent de cette tablette.');
+  if (userId === session.user?.id) throw new Error('Vous êtes connecté : un autre administrateur doit vous retirer de cette tablette.');
+  const k = await getKeyring();
+  const names = Object.keys(k.users).filter(n => k.users[n].userId === userId);
+  if (!names.length) throw new Error('Cet agent n’est pas sur cette tablette.');
+  const isAdmin = e => { const prof = store.get('user', e.userId); return (prof?.role || e.role) === 'admin' && !e.disabled && prof?.active !== false; };
+  if (names.some(n => isAdmin(k.users[n])) && !Object.values(k.users).some(e => e.userId !== userId && isAdmin(e))) {
+    throw new Error('Dernier administrateur de cette tablette : il ne peut pas en être retiré.');
+  }
+  const name = k.users[names[0]].name;
+  for (const n of names) delete k.users[n];
+  await saveKeyring(k);
+  await store.log('account-remove', { entityType: 'user', entityId: userId, entityLabel: name, details: { identifiant: names.join(', '), appareil: session.device?.name || '' } });
+}
 export async function setLocalAccountDisabled(username, disabled) {
   const k = await getKeyring(); const e = k.users[normUsername(username)];
   if (e) { e.disabled = !!disabled; await saveKeyring(k); }
@@ -223,6 +273,10 @@ export async function linkGithubLogin(userId, login) {
  * local, enregistre la configuration du dépôt et le jeton (chiffré). Le rôle initial est celui de
  * config/utilisateurs.json pour ce login, « admin » pour celui qui initialise un dépôt vide, sinon « auditeur ».
  * Les données de l'équipe sont ensuite reçues par la première synchronisation.
+ * Tablette partagée : le compte créé est celui de l'administrateur qui configure la tablette (propriétaire du
+ * jeton de la tablette) ; account.id = identifiant de SON profil existant dans l'équipe (deuxième tablette) :
+ * même identité sur les deux tablettes (le profil est reçu à la première synchronisation). Les agents sont
+ * ensuite ajoutés depuis Administration › Agents de cette tablette.
  */
 export async function setupTeam({ deviceName, account, team, token, login, role = 'auditeur' }) {
   if (await isSetUp()) throw new Error('Cet appareil est déjà configuré.');
@@ -232,15 +286,16 @@ export async function setupTeam({ deviceName, account, team, token, login, role 
   await updateDevice({ name: deviceName || defaultDeviceName() });
   const t = await setTeamMode(team);
   const dekRaw = newDEKRaw();
-  const user = { id: uuid(), username: normUsername(account.username), name: String(account.name || '').trim(), role: ROLES[role] ? role : 'auditeur', active: true, githubLogin: login || null };
+  const user = { id: account.id || uuid(), username: normUsername(account.username), name: String(account.name || '').trim(), role: ROLES[role] ? role : 'auditeur', active: true, githubLogin: login || null };
   if (!user.username || !user.name) throw new Error('Nom et identifiant du compte local requis.');
   const k = await getKeyring();
   k.users[user.username] = { userId: user.id, name: user.name, role: user.role, githubLogin: user.githubLogin, wrap: await wrapDEK(dekRaw, account.password), lastLogin: nowISO() };
   await saveKeyring(k);
   await openWithDEK(dekRaw, { id: user.id, username: user.username, name: user.name, role: user.role });
-  await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Configuration initiale de l’appareil (équipe)' });
+  // Profil existant de l'équipe (account.id) : reçu à la première synchronisation, il n'est pas recréé ici.
+  if (!account.id) await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Configuration initiale de l’appareil (équipe)' });
   await saveTeamToken(token, login);
-  await store.log('setup', { entityLabel: session.device.name, details: { mode: 'équipe GitHub', depot: teamLabel(t), branche: t.branch, prefixe: t.prefix, compteGitHub: login, device: session.device } });
+  await store.log('setup', { entityLabel: session.device.name, details: { mode: 'équipe GitHub', depot: teamLabel(t), branche: t.branch, prefixe: t.prefix, compteGitHub: login, device: session.device, ...(account.id ? { profilExistant: account.id } : {}) } });
   return user;
 }
 

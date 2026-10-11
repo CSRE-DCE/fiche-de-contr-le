@@ -84,13 +84,16 @@ export function lockApp(reason = 'manuel') {
   return locking;
 }
 async function doLock(reason) {
+  const who = session.user?.name || '';
   // Saisie en cours (observation commencée, champ non quitté) enregistrée AVANT la fermeture de la session.
   await saveInput();
   stopSync(); stopRouter(); revokeAllURLs();
   await auth.lock(reason);
   document.body.classList.remove('in-audit');
   showLogin(reason === 'inactivité' ? 'Session verrouillée après inactivité. Vos saisies sont enregistrées sur l’appareil.'
-    : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).' : '');
+    : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).'
+    : reason === 'changement d’agent' ? `${who} : session fermée. Les saisies sont enregistrées sur la tablette et la tournée en cours y reste pour l’agent suivant.` : '',
+  { pick: reason === 'changement d’agent' ? 'none' : 'last' });
 }
 
 /** Appareil révoqué par l'administrateur : effacement complet des données locales. */
@@ -113,7 +116,8 @@ async function enterApp() {
   document.body.classList.remove('auth-mode');
   teardownAuth();
   auth.restoreToken();
-  renderShell(app, { lock: () => lockApp('manuel') });
+  // « Changer d'agent » (tablette partagée) : saisie enregistrée, retour à « Qui utilise la tablette ? ».
+  renderShell(app, { lock: () => lockApp('changement d’agent') });
   watchActivity();
   watchBackground();
   initSync({ revoked: onRevoked, disabled: () => lockApp('compte désactivé') });
@@ -134,9 +138,9 @@ async function enterApp() {
   }).catch(() => {});
 }
 
-function showLogin(message = '') {
+function showLogin(message = '', { pick = 'last' } = {}) {
   document.body.classList.add('auth-mode');
-  renderLogin(app, { message, onUnlocked: () => enterApp() });
+  renderLogin(app, { message, pick, onUnlocked: () => enterApp() });
 }
 
 async function boot() {

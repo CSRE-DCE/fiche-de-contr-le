@@ -14,7 +14,7 @@ import { getPosition } from '../ui/gps.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { EQUIPMENT_STATUS, QUALIFICATION_TYPES, DOC_TYPES, auditDate } from '../domain/model.js';
 import { allItems } from '../domain/grids.js';
-import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid } from '../app/audits.js';
+import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid, tourControllers } from '../app/audits.js';
 import { refLabel } from '../app/documents.js';
 import { orgSettings } from '../app/settings.js';
 
@@ -72,6 +72,7 @@ export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/
   const errors = st.validation.filter(v => v.level === 'error'), warnings = st.validation.filter(v => v.level === 'warning');
   const sig = audit.signatures || {};
   const locked = !!audit.lock?.lockedAt;
+  const ctrls = tourControllers(audit);
   const sigBlock = role => {
     const sg = sig[role];
     if (!sg) return html`<p class="note">Non signé.</p>`;
@@ -88,8 +89,9 @@ export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/
       ${st.alerts.filter(a => a.level !== 'info').length ? html`<p class="note">${st.alerts.filter(a => a.level !== 'info').length} alerte(s) active(s) — voir ${sheets ? 'l’onglet « Infos »' : 'Identification'} ou les ${sheets ? 'feuilles' : 'sections'} concernées.</p>` : ''}
       ${editable && !locked ? html`<div class="btn-row" style="margin-top:10px">${audit.status === 'en_cours' ? html`<button class="btn primary" data-act="finish" ${errors.length ? raw('disabled') : ''}>⏹ Terminer l’audit (heure de fin)</button>` : html`<span class="badge warn">Terminé à ${fmtTime(audit.endedAt)}</span><button class="btn ghost sm" data-act="reopen">Rouvrir</button>`}</div>` : ''}
     </div>
-    <div class="card"><h2>Signature de l’auditeur</h2>${sigBlock('auditor')}
-      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px"><span class="ic">${icon('signature')}</span>Signer en tant qu’auditeur (${session.user.name})</button>` : ''}</div>
+    <div class="card"><h2>${sheets ? 'Signature du contrôleur OEG' : 'Signature de l’auditeur'}</h2>${sigBlock('auditor')}
+      ${sheets && !sig.auditor ? html`<p class="note">Contrôleur${ctrls.length > 1 ? 's' : ''} de la tournée : <b>${ctrls.map(x => x.name).join(', ')}</b>${ctrls.length > 1 ? ' — un seul d’entre eux signe, pour la tournée.' : '.'}</p>` : ''}
+      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px"><span class="ic">${icon('signature')}</span>${sheets ? 'Signer en tant que contrôleur' : 'Signer en tant qu’auditeur'} (${session.user.name})</button>` : ''}</div>
     <div class="card"><h2>Signature du représentant du prestataire</h2>${sigBlock('provider')}
       ${editable && !locked && audit.status === 'termine' && sig.auditor ? html`<div class="grid2" style="margin-top:8px"><div class="field"><label for="repName">Nom du représentant</label><input id="repName" value="${sig.provider?.name || operatorName(st.operators[0]) || ''}"></div><div class="field"><label for="repFn">Fonction</label><input id="repFn" value="${sig.provider?.function || st.operators[0]?.function || ''}"></div></div>
         <div class="btn-row"><button class="btn primary lg" data-act="sign-provider"><span class="ic">${icon('signature')}</span>Faire signer le représentant</button><button class="btn ghost" data-act="refuse-provider">Refus / absence de signature</button></div>` : ''}

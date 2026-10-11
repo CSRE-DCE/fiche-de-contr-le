@@ -15,6 +15,7 @@ import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESP
 import { allItems, sheetOf, gridType } from '../domain/grids.js';
 import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
+import { controllerNamesText } from '../domain/permissions.js';
 import { auditState, effectiveGrid, auditContext, auditTypeOf, deviationPlace } from './audits.js';
 
 const name = (type, id, f = x => x.name || x.label) => { const e = store.get(type, id); return e ? f(e) : ''; };
@@ -39,7 +40,7 @@ export const COLUMNS = {
     { label: 'Site', get: a => name('site', a.siteId) }, { label: 'Code site', get: a => name('site', a.siteId, s => s.code) }, { label: 'Point', get: a => name('point', a.pointId, p => p.code) },
     { label: 'Prestation', get: a => name('prestation', a.prestationId, p => p.ref) }, { label: 'Campagne', get: a => name('campaign', a.campaignId, c => c.label) },
     { label: 'Grille', get: a => `${a.gridCode} v${a.gridVersion}` }, { label: 'Version protocole', get: a => a.protocolVersion || '' }, { label: 'Version CCTP', get: a => a.cctpVersion || '' },
-    { label: 'Auditeur', get: a => a.auditorName }, { label: 'Appareil', get: a => a.device?.name || '' }, { label: 'Version application', get: a => a.appVersion },
+    { label: 'Auditeur', get: a => a.auditorName }, { label: 'Contrôleurs OEG', get: a => controllerNamesText(a) }, { label: 'Appareil', get: a => a.device?.name || '' }, { label: 'Version application', get: a => a.appVersion },
     { label: 'Critères contrôlés', get: a => a._s.counts.controlled }, { label: 'Conformes', get: a => a._s.counts.C }, { label: 'Perfectibles', get: a => a._s.counts.P || 0 }, { label: 'Non conformes', get: a => a._s.counts.NC },
     { label: 'Non applicables', get: a => a._s.counts.NA }, { label: 'Non observés', get: a => a._s.counts.NO }, { label: 'Non vérifiables', get: a => a._s.counts.NV },
     { label: 'Écarts', get: a => a._s.deviationsCount }, ...['OBS', 'MIN', 'MAJ', 'CRIT'].map(c => ({ label: `Écarts ${crit(c)}`, get: a => a._s.byCriticality.find(x => x.code === c)?.count || 0 })),

@@ -40,7 +40,11 @@ export function stopRouter() { if (current?.unbind) current.unbind(); current?.v
 
 export function currentView() { return current; }
 
+// Rendus concurrents (navigation pendant le rendu d'un écran lent, rafraîchissement après synchronisation) : seul
+// le plus récent affiche et branche ses gestionnaires — jamais deux jeux de gestionnaires sur l'écran.
+let renderSeq = 0;
 async function render({ keepScroll = false } = {}) {
+  const seq = ++renderSeq;
   const { path, query } = parseHash();
   let match = null, params = {};
   for (const r of routes) {
@@ -49,14 +53,17 @@ async function render({ keepScroll = false } = {}) {
   }
   if (!match) match = routes.find(r => r.pattern === '/');
   const scroll = keepScroll ? window.scrollY : 0;
-  if (current) { current.unbind?.(); try { current.view?.unmount?.(); } catch (e) { console.error(e); } }
+  if (current) { const prev = current; current = null; prev.unbind?.(); try { prev.view?.unmount?.(); } catch (e) { console.error(e); } }
   let mod;
   try { mod = (await match.loader()).default; }
-  catch (e) { console.error(e); container.innerHTML = String(html`<div class="card"><h2>Erreur</h2><p>Impossible de charger cet écran : ${e.message}</p></div>`); return; }
+  catch (e) { console.error(e); if (seq === renderSeq) container.innerHTML = String(html`<div class="card"><h2>Erreur</h2><p>Impossible de charger cet écran : ${e.message}</p></div>`); return; }
+  if (seq !== renderSeq) return;
   const ctx = { params, query, refresh, navigate };
   let body;
   try { body = await mod.render(params, query, ctx); }
   catch (e) { console.error(e); body = html`<div class="card"><h2>Erreur d’affichage</h2><p>${e.message}</p><a class="btn ghost" href="#/">Retour à l’accueil</a></div>`; }
+  if (seq !== renderSeq) return;      // un rendu plus récent a commencé : il affichera l'écran
+  if (current) { const prev = current; current = null; prev.unbind?.(); try { prev.view?.unmount?.(); } catch (e) { console.error(e); } }
   container.innerHTML = String(body);
   const unbind = bindActions(container, mod.handlers || {}, ctx);
   current = { pattern: match.pattern, params, query, view: mod, unbind, ctx };

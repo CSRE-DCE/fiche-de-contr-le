@@ -18,6 +18,7 @@ import { TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { pref, setPref } from '../app/settings.js';
 import { providerHeaderName } from '../domain/grids.js';
 import { ctGrid, siteTypes, primaryType, stationStatus, plannedLabel, typeBadges } from './station-sheet.js';
+import { tourControllers, isAuditController } from '../app/audits.js';
 
 const YEAR = () => new Date().getFullYear();
 const STATUS_ORDER = { en_cours: 0, a_controler: 1, controlee: 2 };
@@ -75,9 +76,14 @@ function stationCard(x, grid) {
   </a>`;
 }
 
+/**
+ * Tournées en cours sur la tablette : d'abord celles dont l'agent connecté est contrôleur, puis celles commencées
+ * sur cette tablette (binôme : la tournée du collègue), puis les autres ; les plus récentes d'abord.
+ */
 function openTours() {
   const list = store.filter('audit', a => !a.lock?.lockedAt && ['en_cours', 'termine'].includes(a.status));
-  return [...list].sort(byAuditDateDesc).sort((a, b) => (a.auditorId === session.user?.id ? 0 : 1) - (b.auditorId === session.user?.id ? 0 : 1));
+  const rank = a => isAuditController(a, session.user?.id) ? 0 : a.device?.id === session.device?.id ? 1 : 2;
+  return [...list].sort(byAuditDateDesc).sort((a, b) => rank(a) - rank(b));
 }
 
 export default {
@@ -104,13 +110,16 @@ export default {
           <a class="btn ghost" href="#/carte${type ? '?type=' + type : ''}"><span class="ic">${icon('map')}</span>Carte<span class="hm-opt"> des stations</span></a>
         </div>
       </section>
-      ${tours.length ? html`<section class="hm-tours" aria-label="Tournées en cours"><h2>${icon('route', { size: 20 })}Tournées en cours</h2><div class="hm-tour-list">${tours.slice(0, 6).map(a => {
+      ${tours.length ? html`<section class="hm-tours" aria-label="Tournées en cours sur cette tablette"><h2>${icon('route', { size: 20 })}Tournées en cours sur cette tablette</h2><div class="hm-tour-list">${tours.slice(0, 6).map(a => {
         const tt = TYPE_STYLES[a.auditType];
         const names = (a.stations || []).map(s => store.get('site', s.siteId)?.name || s.key);
-        return html`<a class="hm-tour" href="#/audit/${a.id}"><span class="hm-tour-top"><b>${a.number}</b>${tt ? html`<span class="type-badge t-${a.auditType}">${icon(tt.icon, { size: 14 })}${tt.label}</span>` : ''}</span>
+        const mine = isAuditController(a, session.user?.id);
+        const ctrls = tourControllers(a);
+        return html`<a class="hm-tour${mine ? ' is-mine' : ''}" href="#/audit/${a.id}" data-tour="${a.id}"><span class="hm-tour-top"><b>${a.number}</b>${tt ? html`<span class="type-badge t-${a.auditType}">${icon(tt.icon, { size: 14 })}${tt.label}</span>` : ''}</span>
           <span class="hm-tour-st">${names.length ? names.map((n, i) => html`<span><i>${i + 1}</i>${n}</span>`) : '—'}</span>
-          <span class="hm-tour-meta">${providerHeaderName(store.get('provider', a.providerId)) || '—'} · ${fmtDate(auditDate(a))} · ${a.auditorName || ''}</span>
-          <span class="btn primary sm">Reprendre</span></a>`;
+          <span class="hm-tour-meta">${providerHeaderName(store.get('provider', a.providerId)) || '—'} · ${fmtDate(auditDate(a))}${a.device?.id && a.device.id !== session.device?.id ? ` · commencée sur ${a.device.name || 'une autre tablette'}` : ''}</span>
+          <span class="hm-tour-ctrl" title="Contrôleurs OEG de la tournée">${icon('people', { size: 15 })}${ctrls.map(c => c.name).filter(Boolean).join(', ') || '—'}</span>
+          <span class="btn ${mine ? 'primary' : 'ghost'} sm">${mine ? 'Reprendre' : can('audit.edit') ? 'Voir ou rejoindre' : 'Voir'}</span></a>`;
       })}</div></section>` : ''}
       <section class="hm-filters" aria-label="Filtres">
         <div class="chips hm-types" role="group" aria-label="Type de tournée">

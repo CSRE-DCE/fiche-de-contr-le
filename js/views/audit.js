@@ -15,10 +15,10 @@ import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
 import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate } from '../domain/model.js';
 import { allowedResponses, isAnswered, isAnswerable, needsJustification } from '../domain/grids.js';
-import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations } from '../app/audits.js';
+import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations, controllersLabel, isAuditController, canJoinAudit } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
 import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem, allowClear } from './audit-modules.js';
-import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor } from './audit-sheet.js';
+import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor, deName } from './audit-sheet.js';
 
 const amendState = new Map();   // « utilisateur:audit » → motif de la modification en cours (audit signé)
 const amendBaseline = new Map(); // même clé → points bloquants déjà présents au début de la modification
@@ -97,7 +97,7 @@ function identificationStep(audit, st, editable) {
     <div class="card"><h2>Identification de l’audit</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit planifié'],
       ['Date', fmtDate(auditDate(audit))], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
-      ['Auditeur', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
+      ['Contrôleur(s) OEG', controllersLabel(audit)], ['Créé par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
       ['Site', siteName(audit.siteId)], ['Point', store.get('point', audit.pointId)?.code], ['Prestation', p ? html`<a href="#/prestation/${p.id}">${p.ref} — ${fmtDate(p.plannedDate)}</a>` : 'non programmée']
@@ -106,7 +106,7 @@ function identificationStep(audit, st, editable) {
     ${st.alerts.length ? html`<div class="card"><h2>Alertes en cours (${st.alerts.length})</h2>${st.alerts.map(a => alertBox(a, editable))}</div>` : ''}
     ${editable && !audit.lock?.lockedAt ? html`<div class="card"><h2>Actions</h2><div class="btn-row">
       <button class="btn ghost" data-act="later">⏸ Continuer plus tard</button>
-      ${audit.auditorId === session.user.id || can('audit.delete') ? html`<button class="btn danger-ghost" data-act="abandon">Abandonner l’audit</button>` : ''}</div>
+      ${isAuditController(audit, session.user.id) || can('audit.delete') ? html`<button class="btn danger-ghost" data-act="abandon">Abandonner l’audit</button>` : ''}</div>
       <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. L’audit peut être repris à tout moment depuis le planning.</p></div>` : ''}`;
 }
 
@@ -202,7 +202,8 @@ export default {
       </div>
       ${locked ? html`<div class="banner ${amendReason ? 'warn' : 'ok'} locked-banner"><span class="grow">${amendReason ? html`✏️ Modification tracée en cours — motif : « ${amendReason} ». Chaque changement est historisé (valeur précédente conservée).` : '🔒 Audit signé et verrouillé : lecture seule.'}</span>
         ${can('audit.amend') ? (amendReason ? html`<button class="btn sm ghost" data-act="amend-stop">Terminer les modifications</button>` : html`<button class="btn sm ghost" data-act="amend-start">Modifier (avec motif)</button>`) : ''}</div>` : ''}
-      ${!editable && !locked && audit.status !== 'abandonne' ? html`<div class="banner info">Lecture seule : audit réalisé par ${audit.auditorName}.</div>` : ''}
+      ${!locked && canJoinAudit(audit, session.user) ? html`<div class="banner info as-join" id="tourJoin"><span class="grow">Audit ${deName(controllersLabel(audit))}<b>${controllersLabel(audit)}</b>${editable ? ' — en tant qu’encadrement, vous pouvez le modifier.' : ' — rejoignez-le pour saisir avec vos collègues.'}</span><button type="button" class="btn primary sm" data-act="tour-join">Rejoindre la tournée</button></div>`
+        : !editable && !locked && audit.status !== 'abandonne' ? html`<div class="banner info">Lecture seule : audit réalisé par ${controllersLabel(audit)}.</div>` : ''}
       ${audit.status === 'abandonne' ? html`<div class="banner na">Audit abandonné — ${audit.abandonReason || ''}</div>` : ''}
       ${body}
       <div class="audit-footer">
@@ -343,10 +344,13 @@ export default {
     async reopen() { await reopenAudit(store.get('audit', this.params.id)); this.refresh(); },
     async 'sign-auditor'() {
       const { signaturePad } = await import('../ui/signature.js');
-      const s = await signaturePad({ title: 'Signature de l’auditeur', signer: session.user.name, statement: 'Je certifie l’exactitude des constats consignés dans le présent audit.' });
+      const audit = store.get('audit', this.params.id);
+      const sheets = isSheetAudit(audit);
+      const s = await signaturePad({ title: sheets ? 'Signature du contrôleur OEG' : 'Signature de l’auditeur', signer: session.user.name, statement: sheets ? `Je certifie l’exactitude des constats consignés dans la présente tournée (contrôleurs : ${controllersLabel(audit)}).` : 'Je certifie l’exactitude des constats consignés dans le présent audit.' });
       if (!s) return;
-      await signAudit(store.get('audit', this.params.id), 'auditor', { ...s, name: session.user.name, fn: 'Auditeur' });
-      toast('Signature de l’auditeur enregistrée', 'ok'); this.refresh();
+      try { await signAudit(store.get('audit', this.params.id), 'auditor', { ...s, name: session.user.name, fn: sheets ? 'Contrôleur OEG' : 'Auditeur' }); }
+      catch (e) { toast(e.message, 'err', 5000); return; }
+      toast(sheets ? 'Signature du contrôleur enregistrée' : 'Signature de l’auditeur enregistrée', 'ok'); this.refresh();
     },
     async 'sign-provider'() {
       const name = document.getElementById('repName')?.value.trim(), fn = document.getElementById('repFn')?.value.trim();
