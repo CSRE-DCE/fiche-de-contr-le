@@ -75,6 +75,14 @@ export async function hydrateMedia(root) {
 export function userName(id) { return store.get('user', id)?.name || ''; }
 export function providerName(id) { return store.get('provider', id)?.name || '—'; }
 export function siteName(id) { const s = store.get('site', id); return s ? `${s.name}${s.code ? ' (' + s.code + ')' : ''}` : '—'; }
+/** Stations d'une tournée : « 2 stations : Crique à l’Est, Amont Voltaire » (une seule : « Nom (code) »). */
+export function tourStationsLabel(audit) {
+  const list = audit?.stations || [];
+  if (list.length <= 1) return siteName(list[0]?.siteId || audit?.siteId);
+  return `${list.length} stations : ${list.map(st => store.get('site', st.siteId)?.name || st.key).join(', ')}`;
+}
+/** Sites d'un audit (toutes les stations de la tournée ; grille historique : le site de l'audit). */
+export const auditSiteIds = audit => [...new Set([...(audit?.stations || []).map(st => st.siteId), audit?.siteId].filter(Boolean))];
 export function operatorName(o) { if (typeof o === 'string') o = store.get('operator', o); return o ? ([o.firstName, o.lastName].filter(Boolean).join(' ') || o.code) + (o.code && o.firstName ? ` (${o.code})` : '') : '—'; }
 export function docLabel(d) { return d ? `${d.reference || d.name} — v${d.version}` : '—'; }
 export { fmtDate, fmtDateTime, fmtTime };

@@ -11,6 +11,7 @@ import { navigate } from '../ui/router.js';
 import { toast, downloadBlob } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { empty, auditBadge, badge } from '../ui/components.js';
+import { auditDate } from '../domain/model.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { gridType, inferAuditType, providerHeaderName } from '../domain/grids.js';
 import { stationSheet, mountStationSheet, unmountStationSheet, stationHandlers, siteTypes, primaryType, stationAudits, stationStatus, openPrestations, plannedLabel, prestationType, ctGrid, typeBadges } from './station-sheet.js';
@@ -58,7 +59,7 @@ function auditRow(a) {
   return html`<a class="li ${a.lock?.lockedAt ? 'stripe-ok' : 'stripe-perf'}" href="#/audit/${a.id}">
     <span class="li-ic">${icon('route')}</span>
     <div class="li-main"><div class="li-title">${a.number}${n > 1 ? html` <span class="tiny muted">· tournée de ${n} stations</span>` : ''}</div>
-      <div class="li-sub">${fmtDate(a.startedAt)} · ${providerHeaderName(prov) || '—'}${t ? ` · ${t.label}` : ''} · ${a.auditorName || ''}</div></div>
+      <div class="li-sub">${fmtDate(auditDate(a))} · ${providerHeaderName(prov) || '—'}${t ? ` · ${t.label}` : ''} · ${a.auditorName || ''}</div></div>
     <span class="li-side">${auditBadge(a)}</span></a>`;
 }
 

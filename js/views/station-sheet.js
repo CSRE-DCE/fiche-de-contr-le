@@ -23,7 +23,7 @@ import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquar
 import { createMap, tilesUsable, watchTiles, kindIcon, kindSVG, SAMPLING_KINDS, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
 import { headerOf, resolveSheet, sheetOf, gridType, gridTypes, defaultAuditType, typeCompartments, normalizeCompartments, allItems, itemIndex, evalCondition, parseItemId, stationKeyOf, providerHeaderName } from '../domain/grids.js';
-import { itemInput } from '../domain/model.js';
+import { itemInput, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { effectiveGrid, auditTypeOf } from '../app/audits.js';
 import { utmToLatLon, latLonToUtm } from '../lib/geo.js';
 
@@ -52,9 +52,9 @@ export const primaryType = site => siteTypes(site)[0] || (site?.codeType === 'BS
 
 /** Tournées (audits non abandonnés) dont la station fait partie, la plus récente d'abord. */
 export function stationAudits(siteId) {
-  return sortBy(store.filter('audit', a => a.status !== 'abandonne' && ((a.stations || []).some(s => s.siteId === siteId) || (!(a.stations || []).length && a.siteId === siteId))), '-startedAt');
+  return store.filter('audit', a => a.status !== 'abandonne' && ((a.stations || []).some(s => s.siteId === siteId) || (!(a.stations || []).length && a.siteId === siteId))).sort(byAuditDateDesc);
 }
-const auditYear = a => Number(String(a.lock?.lockedAt || a.endedAt || a.startedAt || '').slice(0, 4)) || null;
+const auditYear = a => Number(auditDate(a).slice(0, 4)) || null;
 /**
  * Statut de contrôle d'une station (déduit des tournées qui la contiennent) :
  * {key: 'en_cours' | 'controlee' | 'a_controler', label, audit, cls}. « Contrôlée » = tournée signée l'année donnée.
@@ -316,28 +316,32 @@ export function stationSheet({ site, grid = null, audit = null, editable = false
 }
 
 /* ---------- Montage : carte et photographies chiffrées ---------- */
-const live = new Set();   // {map, box} : cartes créées par mountStationSheet
+const live = new Set();   // {map, box, timer} : cartes créées par mountStationSheet
+let generation = 0;       // incrémenté au démontage : une carte en cours de création pour une vue quittée est abandonnée
+/** Libère les cartes (toutes, ou celles dont la fiche a quitté le document) et annule leurs minuteurs. */
 function prune(all = false) {
   for (const x of [...live]) {
-    if (all || !x.box.isConnected) { try { x.map.remove(); } catch (e) { /* déjà libérée */ } live.delete(x); }
+    if (all || !x.box.isConnected) { clearTimeout(x.timer); live.delete(x); try { x.map.remove(); } catch (e) { /* déjà libérée */ } }
   }
 }
 
 async function initMap(box, site) {
   if (box.dataset.ready) return;
   box.dataset.ready = '1';
+  const gen = generation;
   const L = globalThis.L;
   const ll = siteLatLon(site);
   let pts = [];
   try { pts = JSON.parse(box.dataset.points || '[]'); } catch (e) { pts = []; }
   if (!L || !ll) { box.classList.add('is-offline'); return; }
   const tiles = await tilesUsable();
-  if (!box.isConnected) return;
+  if (!box.isConnected || gen !== generation) return;
   if (!tiles) { box.classList.add('is-offline'); return; }
   let map;
   try { map = createMap(box.querySelector('.ss-map-canvas'), { center: ll, zoom: 13, interactive: false }); }
   catch (e) { box.classList.add('is-offline'); return; }
-  live.add({ map, box });
+  const entry = { map, box, timer: null };
+  live.add(entry);
   L.control.scale({ metric: true, imperial: false, position: 'bottomleft', maxWidth: 150 }).addTo(map);
   const name = String(site.name || '').toLocaleUpperCase('fr-FR');
   L.marker(ll, { icon: kindIcon('station', { size: 30, title: `Station ${name}` }), keyboard: false, zIndexOffset: 1000 }).addTo(map)
@@ -349,7 +353,9 @@ async function initMap(box, site) {
   }
   if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false });
   watchTiles(map, { onFail: () => box.classList.add('is-offline'), onLoad: () => box.classList.remove('is-offline') });
-  setTimeout(() => { if (box.isConnected) map.invalidateSize(); }, 200);
+  // Recalage de la taille après la mise en page ; jamais sur une carte libérée entre-temps (démontage de la vue : le
+  // routeur libère les cartes avant de remplacer le HTML, la fiche est encore dans le document).
+  entry.timer = setTimeout(() => { entry.timer = null; if (live.has(entry) && box.isConnected) { try { map.invalidateSize(); } catch (e) { /* carte libérée */ } } }, 200);
 }
 
 async function hydratePhotos(root) {
@@ -392,7 +398,7 @@ export async function mountStationSheet(root, { site = null, audit = null } = {}
   await hydratePhotos(root).catch(e => console.warn(e));
 }
 /** Libère les cartes créées par mountStationSheet (démontage de la vue). */
-export function unmountStationSheet() { prune(true); }
+export function unmountStationSheet() { generation++; prune(true); }
 
 /* ---------- Actions (à fusionner dans les handlers de la vue) ---------- */
 export const stationHandlers = {

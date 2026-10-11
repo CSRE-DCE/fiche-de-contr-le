@@ -4,8 +4,8 @@ import { html, fmtDate, localDate, addDays, sortBy, groupBy } from '../core/util
 import { store } from '../core/store.js';
 import { navigate } from '../ui/router.js';
 import { openModal } from '../ui/dom.js';
-import { pageTitle, siteName, providerName, auditBadge, critBadge, deviationBadge, prestationBadge, options } from '../ui/components.js';
-import { OPEN_DEVIATION } from '../domain/model.js';
+import { pageTitle, siteName, providerName, auditBadge, critBadge, deviationBadge, prestationBadge, options, tourStationsLabel, auditSiteIds } from '../ui/components.js';
+import { OPEN_DEVIATION, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { isOverdue, recurringDeviations } from '../domain/summary.js';
 import { auditsOf, isLate } from './planning.js';
 
@@ -22,7 +22,7 @@ function compute(q) {
   const today = localDate(), P = period(q);
   const inP = d => d && d >= P.from && d <= P.to;
   const prest = store.all('prestation').filter(p => inP(p.plannedDate) && (!P.campaignId || p.campaignId === P.campaignId));
-  const audits = store.all('audit').filter(a => a.status !== 'abandonne' && inP((a.startedAt || '').slice(0, 10)) && (!P.campaignId || a.campaignId === P.campaignId));
+  const audits = store.all('audit').filter(a => a.status !== 'abandonne' && inP(auditDate(a)) && (!P.campaignId || a.campaignId === P.campaignId));
   const signed = audits.filter(a => a.lock?.lockedAt);
   const devs = store.all('deviation').filter(d => inP(d.date) && (!P.campaignId || audits.some(a => a.id === d.auditId)));
   const allDevs = store.all('deviation');
@@ -37,7 +37,7 @@ function compute(q) {
     retard: allDevs.filter(d => isOverdue(d, today)),
     recurrents: recurringDeviations(allDevs),
     prestataires: [...new Set(signed.map(a => a.providerId))],
-    sites: [...new Set(signed.map(a => a.siteId))],
+    sites: [...new Set(signed.flatMap(auditSiteIds))],
     campagnes: [...new Set(signed.map(a => a.campaignId).filter(Boolean))]
   };
 }
@@ -69,7 +69,7 @@ export default {
         ${kpi('programmes', 'Audits programmés (à venir)', d.programmes.length)}
         ${kpi('realises', 'Audits réalisés (signés)', d.realises.length)}
         ${kpi('enCours', 'Audits en cours / à signer', d.enCours.length)}
-        ${kpi('enRetard', 'Audits en retard', d.enRetard.length, d.enRetard.length ? 'alert-kpi' : '', 'date passée, non audité')}
+        ${kpi('enRetard', 'Audits en retard', d.enRetard.length, d.enRetard.length ? 'alert-kpi' : '', 'échéance passée, non audité')}
         ${kpi('nonAuditees', 'Prestations non auditées', d.nonAuditees.length, d.nonAuditees.length ? 'warn-kpi' : '')}
       </div>
       <h3>Écarts</h3>
@@ -102,8 +102,8 @@ export default {
       const d = compute(this.query), k = el.dataset.k;
       const TITLES = { programmes: 'Audits programmés', realises: 'Audits réalisés (signés)', enCours: 'Audits en cours', enRetard: 'Audits en retard', nonAuditees: 'Prestations non auditées', ouverts: 'Écarts ouverts', retard: 'Écarts en retard', recurrents: 'Écarts récurrents', devs: 'Écarts de la période', prestataires: 'Prestataires contrôlés', sites: 'Sites contrôlés', campagnes: 'Campagnes contrôlées' };
       let rows;
-      if (['programmes', 'enRetard', 'nonAuditees'].includes(k)) rows = sortBy(d[k], 'plannedDate').map(p => html`<a class="li" href="#/prestation/${p.id}"><div class="li-main"><div class="li-title">${siteName(p.siteId)}</div><div class="li-sub">${fmtDate(p.plannedDate)} · ${providerName(p.providerId)} · ${p.ref}</div></div>${prestationBadge(p.status)}</a>`);
-      else if (['realises', 'enCours'].includes(k)) rows = sortBy(d[k], '-startedAt').map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(a.startedAt)} · ${siteName(a.siteId)} · ${providerName(a.providerId)}</div></div>${auditBadge(a)}</a>`);
+      if (['programmes', 'enRetard', 'nonAuditees'].includes(k)) rows = sortBy(d[k], 'plannedDate').map(p => html`<a class="li" href="#/prestation/${p.id}"><div class="li-main"><div class="li-title">${siteName(p.siteId)}</div><div class="li-sub">${fmtDate(p.plannedDate)}${p.dateIndicative ? ' (indicative)' : ''} · ${providerName(p.providerId)} · ${p.ref}</div></div>${prestationBadge(p.status)}</a>`);
+      else if (['realises', 'enCours'].includes(k)) rows = [...d[k]].sort(byAuditDateDesc).map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${tourStationsLabel(a)} · ${providerName(a.providerId)}</div></div>${auditBadge(a)}</a>`);
       else if (['ouverts', 'retard', 'devs'].includes(k)) rows = d[k].map(x => html`<a class="li" href="#/ecart/${x.id}"><div class="li-main"><div class="li-title">${x.number}</div><div class="li-sub">${x.requirement} · ${providerName(x.providerId)}</div></div>${critBadge(x.criticalityCode)}${deviationBadge(x.status)}</a>`);
       else if (k === 'recurrents') rows = d.recurrents.map(r => html`<a class="li" href="#/ecarts?prestataire=${r.providerId}&filtre=tous"><div class="li-main"><div class="li-title">${r.requirement}</div><div class="li-sub">${providerName(r.providerId)} · ${r.audits.length} audits · ${r.count} écarts</div></div></a>`);
       else if (k === 'prestataires') rows = d.prestataires.map(id => html`<a class="li" href="#/prestataire/${id}"><div class="li-main"><div class="li-title">${providerName(id)}</div></div></a>`);

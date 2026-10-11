@@ -22,6 +22,29 @@ export function defaultCriticality(status) { return DEFAULT_CRITICALITY[status] 
 export const AUDIT_TYPES = { bio: 'Hydrobiologie', ce: 'Cours d’eau', eso: 'Eaux souterraines' };
 export const CODE_TYPES = { SANDRE: 'Code SANDRE', BSS: 'Code BSS' };
 
+/** Critère « Date mission » de la feuille de tournée (grille CT-2026, F2 1.4 : pré-rempli avec la date de la tournée). */
+export const TOUR_DATE_ITEM = 'it-F2-1.4';
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const pad2 = n => String(n).padStart(2, '0');
+/**
+ * Date d'un audit (AAAA-MM-JJ) — SEULE source de la date d'un audit (écrans, listes, tris, filtres, alertes,
+ * exports, rapports, PDF) : « Date mission » de la feuille de tournée (F2 1.4) si elle est renseignée (valeur
+ * imprimée sur les fiches, corrigeable par l'auditeur), sinon date de la tournée choisie à la création
+ * (audit.date), sinon date locale de création (startedAt). '' si aucune n'est connue.
+ */
+export function auditDate(audit) {
+  if (!audit) return '';
+  const v = audit.responses?.[TOUR_DATE_ITEM]?.value;
+  if (typeof v === 'string' && ISO_DAY.test(v)) return v;
+  if (typeof audit.date === 'string' && ISO_DAY.test(audit.date)) return audit.date;
+  const d = audit.startedAt ? new Date(audit.startedAt) : null;
+  return d && !isNaN(d) ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
+}
+/** Comparateur d'audits : date de l'audit (auditDate) la plus récente d'abord, puis création la plus récente. */
+export function byAuditDateDesc(a, b) {
+  return auditDate(b).localeCompare(auditDate(a)) || String(b?.startedAt || '').localeCompare(String(a?.startedAt || ''));
+}
+
 export const ITEM_KINDS = {
   conformity: 'Conformité (C / P / NC / NA / NO / NV)',
   boolean: 'Oui / Non',

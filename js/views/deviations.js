@@ -10,8 +10,11 @@ import { pageTitle, kv, badge, critBadge, deviationBadge, empty, options, thumbs
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
 import { DEVIATION_STATUS, OPEN_DEVIATION, ACTION_STATUS } from '../domain/model.js';
 import { isOverdue, recurringDeviations } from '../domain/summary.js';
-import { updateDeviation } from '../app/audits.js';
+import { updateDeviation, deviationPlace } from '../app/audits.js';
 import { refLabel } from '../app/documents.js';
+
+/** Sites d'un écart (écart commun à une tournée : ceux de toutes ses stations). */
+const devSites = d => [...new Set([d.siteId, ...(d.siteIds || [])].filter(Boolean))];
 
 function filtered(q) {
   const today = localDate();
@@ -22,7 +25,7 @@ function filtered(q) {
   else if (f !== 'tous') list = list.filter(d => d.status === f);
   if (q.criticite) list = list.filter(d => d.criticalityCode === q.criticite);
   if (q.prestataire) list = list.filter(d => d.providerId === q.prestataire);
-  if (q.site) list = list.filter(d => d.siteId === q.site);
+  if (q.site) list = list.filter(d => devSites(d).includes(q.site));
   if (q.q) { const t = normalize(q.q); list = list.filter(d => normalize(`${d.number} ${d.requirement} ${d.description}`).includes(t)); }
   const rank = c => store.all('criticality').find(x => x.code === c)?.rank ?? 0;
   return sortBy(list, d => -rank(d.criticalityCode), 'dueDate', '-number');
@@ -43,10 +46,10 @@ export default {
       <details class="card" ${q.criticite || q.prestataire || q.site || q.q ? 'open' : ''}><summary>Filtres</summary><div class="grid2" style="margin-top:10px">
         <div class="field"><label>Criticité</label><select data-change="qsel" data-k="criticite">${options(sortBy(store.all('criticality'), 'rank'), q.criticite, { value: c => c.code, placeholder: 'Toutes' })}</select></div>
         <div class="field"><label>Prestataire</label><select data-change="qsel" data-k="prestataire">${options(sortBy(store.all('provider'), 'name'), q.prestataire, { placeholder: 'Tous' })}</select></div>
-        <div class="field"><label>Site</label><select data-change="qsel" data-k="site">${options(sortBy(store.all('site').filter(s => all.some(d => d.siteId === s.id)), 'name'), q.site, { placeholder: 'Tous' })}</select></div>
+        <div class="field"><label>Site</label><select data-change="qsel" data-k="site">${options(sortBy(store.all('site').filter(s => all.some(d => devSites(d).includes(s.id))), 'name'), q.site, { placeholder: 'Tous' })}</select></div>
         <div class="field"><label>Recherche</label><input type="search" value="${q.q || ''}" data-change="qsel" data-k="q"></div></div></details>
       ${list.length ? html`<div class="list">${list.map(d => html`<a class="li ${isOverdue(d, today) ? 'stripe-nc' : d.status === 'clos' ? 'stripe-ok' : 'stripe-warn'}" href="#/ecart/${d.id}">
-          <div class="li-main"><div class="li-title">${d.number}</div><div class="li-sub">${d.requirement}</div><div class="li-sub">${providerName(d.providerId)} · ${siteName(d.siteId)} · ${fmtDate(d.date)}</div>
+          <div class="li-main"><div class="li-title">${d.number}</div><div class="li-sub">${d.requirement}</div><div class="li-sub">${providerName(d.providerId)} · ${deviationPlace(d) || '—'} · ${fmtDate(d.date)}</div>
           <div class="row" style="gap:6px;margin-top:6px">${critBadge(d.criticalityCode)}${deviationBadge(d.status)}${d.dueDate ? badge((isOverdue(d, today) ? '⏰ En retard — ' : 'Délai ') + fmtDate(d.dueDate), isOverdue(d, today) ? 'nc' : 'outline') : ''}${(d.correctiveActions || []).length ? badge(`${d.correctiveActions.length} action(s)`, 'info') : ''}</div></div><span class="chev">›</span></a>`)}</div>`
         : html`<div class="card">${empty('✅', 'Aucun écart pour cette sélection.')}</div>`}
       <div class="card" style="margin-top:12px"><h2>Écarts récurrents (même exigence, ≥ 2 audits, même prestataire)</h2>
@@ -95,11 +98,11 @@ export const detailView = {
     const today = localDate();
     const actions = d.correctiveActions || [];
     return html`
-      ${pageTitle(`Écart ${d.number}`, `${providerName(d.providerId)} · ${siteName(d.siteId)} · constaté le ${fmtDate(d.date)} à ${d.time || ''}`, html`${critBadge(d.criticalityCode)}${deviationBadge(d.status)}`, '#/ecarts')}
+      ${pageTitle(`Écart ${d.number}`, `${providerName(d.providerId)} · ${deviationPlace(d) || '—'} · constaté le ${fmtDate(d.date)} à ${d.time || ''}`, html`${critBadge(d.criticalityCode)}${deviationBadge(d.status)}`, '#/ecarts')}
       ${isOverdue(d, today) ? html`<div class="banner nc">⏰ Échéance dépassée (${fmtDate(d.dueDate)}).</div>` : ''}
       <div class="card"><h2>Constat</h2>${kv([
         ['Numéro', d.number], ['Date et heure', `${fmtDate(d.date)} ${d.time || ''}`], ['Audit', audit ? html`<a href="#/audit/${audit.id}${d.itemId ? '/' + (audit.gridSnapshot.sections.find(s => (s.items || []).some(i => i.id === d.itemId))?.id || '') + '?item=' + d.itemId : ''}">${audit.number}</a>` : d.auditNumber],
-        ['Critère', d.itemCode], ['Exigence concernée', d.requirement], ['Référence documentaire', (d.docRefs || []).map(r => refLabel(r, audit?.documentsSnapshot || [])).join(' ; ')],
+        ['Station', deviationPlace(d)], ['Critère', d.itemCode], ['Exigence concernée', d.requirement], ['Référence documentaire', (d.docRefs || []).map(r => refLabel(r, audit?.documentsSnapshot || [])).join(' ; ')],
         ['Description factuelle', d.description], ['Observation de l’auditeur', d.auditorObservation], ['Type', store.get('deviationType', 'dtype-' + d.typeCode)?.label || d.typeCode],
         ['Localisation', d.location ? `${d.location.lat.toFixed(6)}, ${d.location.lon.toFixed(6)}` : ''], ['Origine', d.source === 'alerte' ? `Alerte ${d.alertCode} (décision de l’auditeur)` : d.source === 'critere' ? 'Critère non conforme' : 'Saisie manuelle'],
         ['Action immédiate', d.immediateAction], ['Action corrective demandée', d.correctiveActionRequested]

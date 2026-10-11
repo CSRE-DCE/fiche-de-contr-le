@@ -65,13 +65,15 @@ const STATUS = [
 ];
 const STATUS_OF = Object.fromEntries(STATUS.map(s => [s.code, s]));
 const conclColor = (code, t) => STATUS_OF[code]?.color || t.main;
-const theme = name => { const t = THEMES[name] || THEMES.ocean; return { ...t, title: t.title || t.dark, num: t.num || t.main, name: THEMES[name] ? name : 'ocean' }; };
+const theme = name => { const t = THEMES[name] || THEMES.ocean; return { ...t, title: t.title || t.dark, num: t.num || t.main, ink: t.ink || OEG.navy, name: THEMES[name] ? name : 'ocean' }; };
 const present = v => v !== undefined && v !== null && String(v).trim() !== '';
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const upper = s => String(s || '').toLocaleUpperCase('fr-FR');
 const fmtXY = v => (present(v) && isFinite(Number(v)) ? String(Math.round(Number(v))) : '—');
 const fmtLL = (v, pos, neg) => `${Math.abs(v).toFixed(5).replace('.', ',')}° ${v >= 0 ? pos : neg}`;
 const SUBSCRIPT = /[₀-₉]/;
+/** Feuilles paysage ouvertes par le grand bandeau « Station NOM » (maquettes F3 et F9, comme l'écran). */
+const BANNER_SHEETS = ['caracterisation', 'phyto'];
 /** Nom de fichier : capitales sans accents ni caractères spéciaux (« ATHANASE », « AEP-MARIPASOULA »). */
 export const fileToken = s => upper(String(s || '').normalize('NFD').replace(/[\u0300-\u036F]/g, '')).replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'STATION';
 
@@ -183,6 +185,29 @@ class Assets {
       return this.doc.addRGBA(ctx.getImageData(0, 0, c.width, c.height));
     });
   }
+  /**
+   * Bandeau de l'en-tête de la feuille de tournée (maquette feuille 2, variante « band » de l'écran) : dégradé bleu
+   * marine → bleu ciel (mêmes couleurs que .oeg-header.band de css/sheet.css) et reflet clair en vague à droite.
+   */
+  band(w = 1200, h = 100) {
+    return this.once(`band:${w}x${h}`, async () => {
+      const c = newCanvas(w, h), g = c.getContext('2d');
+      const lg = g.createLinearGradient(0, 0, w, h * 0.18);
+      [[0, '#0d3577'], [0.34, '#0b4f9c'], [0.68, '#0b6cb4'], [1, '#1a9fd9']].forEach(([o, col]) => lg.addColorStop(o, col));
+      g.fillStyle = lg;
+      g.fillRect(0, 0, w, h);
+      g.globalAlpha = 0.16;
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.moveTo(w * 0.5, h);
+      g.bezierCurveTo(w * 0.66, h * 0.62, w * 0.84, h * 0.5, w, h * 0.34);
+      g.lineTo(w, h * 0.56);
+      g.bezierCurveTo(w * 0.86, h * 0.72, w * 0.72, h * 0.84, w * 0.62, h);
+      g.closePath();
+      g.fill();
+      return this.doc.addImage(await canvasJPEG(c, 0.9));
+    });
+  }
   /** Carte de localisation (tuiles OSM) au format JPEG, ou null (schéma). */
   map(site, points, wPx, hPx) {
     return this.once(`map:${site?.id}:${wPx}x${hPx}`, async () => {
@@ -210,9 +235,11 @@ function swoosh(doc, x, y, w, h, color, opacity = 1) {
 }
 /**
  * Pied de page OEG : vagues aux couleurs du thème, silhouette de forêt, slogan, site web et ligne
- * d'identification (n° d'audit, station / feuille, empreinte, page). opts : {theme, left, center, right, slogan, website, provisional}.
+ * d'identification (n° d'audit, station / feuille, empreinte, page). opts : {theme, left, center, right, slogan, website,
+ * provisional, flag} ; flag : mention en gras et en couleur en tête de la ligne ({ text, color }, « PROVISOIRE » en
+ * rouge si provisional).
  */
-export function drawOegFooter(doc, { theme: th = 'ocean', center = '', right = '', slogan = DEFAULT_HEADER.slogan, website = DEFAULT_HEADER.website, provisional = false, height = null } = {}) {
+export function drawOegFooter(doc, { theme: th = 'ocean', center = '', right = '', slogan = DEFAULT_HEADER.slogan, website = DEFAULT_HEADER.website, provisional = false, flag = null, height = null } = {}) {
   const t = theme(th);
   const W = doc.W, H = doc.H, fh = height || (W > H ? FOOT.land : FOOT.port);
   const y0 = H - fh;
@@ -233,17 +260,20 @@ export function drawOegFooter(doc, { theme: th = 'ocean', center = '', right = '
   lines.forEach((l, k) => doc.text(l, M, H - 21 + k * 8.4, { font: F.semi, size: 7.2, color: NAVY }));
   doc.text(website || '', W - M - 120, H - 12.5, { font: F.semi, size: 8.6, color: '#ffffff', align: 'right', width: 120 });
   if (center || right) {
-    const txt = [provisional ? 'PROVISOIRE' : '', center, right].filter(Boolean).join('  ·  ');
+    const mark = flag?.text ? flag : provisional ? { text: 'PROVISOIRE', color: OEG.nc } : null;
+    const rest = [mark ? '' : null, center, right].filter(v => v !== null && v !== '').join('  ·  ');
+    const tail = mark ? (rest ? '  ·  ' + rest : '') : rest;
     const cx0 = 150, cw = W - 300;
-    const size = doc.fitSize(txt, F.text, 6.4, cw, 4.6);
-    const w = doc.width(txt, F.text, size);
+    const widthAt = s => (mark ? doc.width(mark.text, F.bold, s) : 0) + doc.width(tail, F.text, s);
+    let size = 6.4;
+    while (size > 4.6 && widthAt(size) > cw) size -= 0.2;
+    const w = widthAt(size);
     const x = cx0 + (cw - w) / 2;
     doc.roundRect(x - 6, y0 - 1.5, w + 12, size + 4.5, 4, { fill: '#ffffff', opacity: 0.86 });
-    if (provisional) {
-      const pw = doc.width('PROVISOIRE', F.text, size);
-      doc.text('PROVISOIRE', x, y0 + 0.8, { font: F.bold, size, color: OEG.nc });
-      doc.text(txt.slice('PROVISOIRE'.length), x + pw, y0 + 0.8, { font: F.text, size, color: INK });
-    } else doc.text(txt, x, y0 + 0.8, { font: F.text, size, color: INK });
+    if (mark) {
+      doc.text(mark.text, x, y0 + 0.8, { font: F.bold, size, color: mark.color || OEG.nc });
+      doc.text(tail, x + doc.width(mark.text, F.bold, size), y0 + 0.8, { font: F.text, size, color: INK });
+    } else doc.text(tail, x, y0 + 0.8, { font: F.text, size, color: INK });
   }
 }
 
@@ -280,7 +310,7 @@ export function blankSheetsModel({ grid = GRID_CT_2026, sites = [], auditType = 
     header: headerOf(grid, { provider, auditType: type, campaign }),
     instances: sheetsOf(eff, responses, ctx), sites: siteMap, responses, sheetsData: {}, audit: null, provider,
     compartments: comps, chosenCompartments: Array.isArray(compartments) && compartments.length ? comps : null,
-    deviations: [], mediaCounts: {}, sheetMedia: () => [], number: '', fingerprint: '', provisional: false,
+    deviations: [], mediaCounts: {}, sheetMedia: () => [], number: '', fingerprint: '', provisional: false, amendments: [], sealOk: true,
     auditDate: '', auditorName: '', generatedAt: nowISO()
   };
 }
@@ -296,7 +326,11 @@ export async function sheetsModelFromAudit(audit) {
   const dateItem = Object.keys(audit.responses || {}).find(id => /^it-F2-1\.4$/.test(id));
   const auditDate = String(audit.responses?.[dateItem]?.value || audit.startedAt || '').slice(0, 10);
   const locked = !!audit.lock?.lockedAt;
-  const fingerprint = locked ? audit.lock.contentHash : await auditContentHash(audit);
+  // Empreinte du contenu IMPRIMÉ (contenu actuel). Audit verrouillé puis modifié avec motif : c'est celle du dernier
+  // amendement (expected) ; l'empreinte scellée à la signature est rappelée dans la synthèse (sealedFingerprint).
+  const fingerprint = await auditContentHash(audit);
+  const amendments = locked ? (audit.amendments || []) : [];
+  const expected = amendments.length ? amendments[amendments.length - 1].hashAfter : audit.lock?.contentHash || '';
   return {
     mode: 'filled', grid: st.grid, baseGrid: st.baseGrid, auditType: st.auditType, typeDef: st.type, ctx: st.ctx,
     header: st.header || headerOf(st.baseGrid, { provider, auditType: st.auditType }),
@@ -305,6 +339,7 @@ export async function sheetsModelFromAudit(audit) {
     deviations: st.deviations.filter(d => d.status !== 'annule'), mediaCounts: st.counts,
     sheetMedia: key => media.filter(m => m.link?.type === 'sheet' && String(m.link.itemId) === String(key) && String(m.mime || '').startsWith('image/')),
     number: audit.number, fingerprint, provisional: !locked, auditDate, auditorName: audit.auditorName || '',
+    sealedFingerprint: locked ? audit.lock.contentHash : '', amendments, sealOk: !locked || fingerprint === expected,
     summary: st.summary, generatedAt: nowISO()
   };
 }
@@ -401,51 +436,118 @@ class SheetsRenderer {
   }
   /**
    * En-tête OEG complet : logo, organisme, titre résolu, sous-titre, slogan à droite et (paysage) pavé
-   * « Station NOM — Feuille X / N ». Retourne la hauteur occupée.
+   * « Station NOM — Feuille X / N ». band : bandeau bleu pleine largeur à textes blancs (feuille de tournée, comme
+   * la maquette de la feuille 2 et la variante « band » de l'écran). Retourne la hauteur occupée.
    */
-  async fullHeader({ landscape, theme: th, stationBlock = null }) {
+  async fullHeader({ landscape, theme: th, stationBlock = null, band = false }) {
     const d = this.doc, t = theme(th), W = this.W, h = this.m.header || {};
+    const BAND_H = 70;
+    if (band) {
+      const img = await this.A.band();
+      if (img) d.drawImage(img, 0, 0, W, BAND_H);
+      else d.rect(0, 0, W, BAND_H, { fill: NAVY });
+    }
+    const ink = band ? '#ffffff' : NAVY;
     const logo = await this.A.logo();
     const ls = landscape ? 56 : 60;
+    if (logo && band) d.circle(M + ls / 2, 7 + ls / 2, ls / 2 + 1.8, { fill: '#ffffff', opacity: 0.85 });
     if (logo) d.drawImageContain(logo, M, 7, ls, ls);
-    const right = landscape ? 160 : 0;
+    const right = landscape && stationBlock ? 160 : 0;
     const tagW = 108;
     const x0 = M + ls + 12, x1 = W - M - right - tagW - 14;
     const cw = x1 - x0;
     const org = upper(h.org || DEFAULT_HEADER.org);
-    d.text(org, x0, 9, { font: F.cond, size: d.fitSize(org, F.cond, landscape ? 21 : 22, cw, 12), color: NAVY, align: 'center', width: cw });
-    if (h.title) d.text(h.title, x0, 35, { font: F.text, size: d.fitSize(h.title, F.text, 10.5, cw, 6), color: NAVY, align: 'center', width: cw });
-    if (h.subtitle) {
-      d.text(h.subtitle, x0, 50, { font: F.text, size: 10, color: OEG.sky, align: 'center', width: cw });
-      d.roundRect(x0 + cw / 2 - 22, 63.5, 44, 1.8, 0.9, { fill: OEG.sky });
+    if (band) {
+      // Bandeau : titres alignés à gauche, filet blanc au-dessus du sous-titre (maquette feuille 2).
+      d.text(org, x0, 9, { font: F.cond, size: d.fitSize(org, F.cond, 21, cw, 12), color: ink });
+      if (h.title) d.text(h.title, x0, 33, { font: F.text, size: d.fitSize(h.title, F.text, 10.5, cw, 6), color: ink });
+      if (h.subtitle) {
+        d.roundRect(x0, 48.5, 44, 1.6, 0.8, { fill: '#ffffff', opacity: 0.7 });
+        d.text(h.subtitle, x0, 53, { font: F.text, size: d.fitSize(h.subtitle, F.text, 10, cw, 6), color: '#e6f6fd' });
+      }
+    } else {
+      d.text(org, x0, 9, { font: F.cond, size: d.fitSize(org, F.cond, landscape ? 21 : 22, cw, 12), color: ink, align: 'center', width: cw });
+      if (h.title) d.text(h.title, x0, 35, { font: F.text, size: d.fitSize(h.title, F.text, 10.5, cw, 6), color: ink, align: 'center', width: cw });
+      if (h.subtitle) {
+        d.text(h.subtitle, x0, 50, { font: F.text, size: 10, color: OEG.sky, align: 'center', width: cw });
+        d.roundRect(x0 + cw / 2 - 22, 63.5, 44, 1.8, 0.9, { fill: OEG.sky });
+      }
     }
     // Slogan « L’eau au service des milieux naturels de Guyane » + vague.
     const tx = W - M - right - tagW;
     const tag = upper(h.tagline || DEFAULT_HEADER.tagline);
     const parts = tag.match(/^(.*?SERVICE)\s+(.*?NATURELS)\s+(.*)$/) ? tag.match(/^(.*?SERVICE)\s+(.*?NATURELS)\s+(.*)$/).slice(1) : d.wrap(tag, F.cond, 6.8, tagW);
-    parts.forEach((p, i) => d.text(p, tx, 12 + i * 8.2, { font: F.cond, size: 6.8, color: NAVY, charSpace: 0.55 }));
-    swoosh(d, tx - 4, 12 + parts.length * 8.2 + 1, tagW, 14, OEG.sky);
-    if (landscape && stationBlock) await this.stationPad(W - M - right + 8, 6, right - 8, 58, t, stationBlock);
-    return landscape ? 72 : 76;
+    parts.forEach((p, i) => d.text(p, tx, 12 + i * 8.2, { font: F.cond, size: 6.8, color: ink, charSpace: 0.55 }));
+    swoosh(d, tx - 4, 12 + parts.length * 8.2 + 1, tagW, 14, band ? '#7fd3f5' : OEG.sky);
+    if (landscape && stationBlock) {
+      if (band) d.line(W - M - right + 2, 10, W - M - right + 2, BAND_H - 10, { color: '#ffffff', width: 0.9, opacity: 0.35 });
+      await this.stationPad(W - M - right + 8, 6, right - 8, 58, t, stationBlock, { band });
+    }
+    return band ? BAND_H + 6 : landscape ? 72 : 76;
   }
-  /** Pavé « Station / NOM / Feuille X / N » (ou « Tournée / n stations »). */
-  async stationPad(x, y, w, h, t, { k = 'Station', name = '', sheetNo = '', tour = '' }) {
+  /** Pavé « Station / NOM / Feuille X / N » (ou « Tournée / n stations ») ; band : sans fond, textes blancs. */
+  async stationPad(x, y, w, h, t, { k = 'Station', name = '', sheetNo = '', tour = '' }, { band = false } = {}) {
     const d = this.doc;
-    d.roundRect(x, y, w, h, 8, { fill: t.light });
-    d.text(k, x + 9, y + 6, { font: F.text, size: 9.5, color: NAVY });
+    const ink = band ? '#ffffff' : NAVY;
+    if (!band) d.roundRect(x, y, w, h, 8, { fill: t.light });
+    d.text(k, x + 9, y + 6, { font: F.text, size: 9.5, color: ink });
     if (tour) {
       const tw = d.width(tour, F.semi, 6.6) + 10;
-      d.roundRect(x + w - tw - 7, y + 6, tw, 10, 5, { fill: t.main });
-      d.text(tour, x + w - tw - 7, y + 7.6, { font: F.semi, size: 6.6, color: '#ffffff', align: 'center', width: tw });
+      d.roundRect(x + w - tw - 7, y + 6, tw, 10, 5, { fill: band ? '#ffffff' : t.main });
+      d.text(tour, x + w - tw - 7, y + 7.6, { font: F.semi, size: 6.6, color: band ? NAVY : '#ffffff', align: 'center', width: tw });
     }
     const nm = upper(name);
     const size = d.fitSize(nm, F.black, 20, w - 18, 8);
-    d.text(nm, x + 9, y + 19 + (20 - size) * 0.45, { font: F.black, size, color: NAVY });
-    swoosh(d, x + 9, y + 42, 38, 7, t.main);
+    d.text(nm, x + 9, y + 19 + (20 - size) * 0.45, { font: F.black, size, color: ink });
+    swoosh(d, x + 9, y + 42, 38, 7, band ? '#7fd3f5' : t.main);
     if (sheetNo) {
       const lab = 'Feuille ', lw = d.width(lab, F.text, 9), nw = d.width(sheetNo, F.bold, 9.5);
-      d.text(lab, x + w - 9 - nw - lw, y + 44, { font: F.text, size: 9, color: NAVY });
-      d.text(sheetNo, x + w - 9 - nw, y + 43.6, { font: F.bold, size: 9.5, color: NAVY });
+      d.text(lab, x + w - 9 - nw - lw, y + 44, { font: F.text, size: 9, color: ink });
+      d.text(sheetNo, x + w - 9 - nw, y + 43.6, { font: F.bold, size: 9.5, color: ink });
+    }
+  }
+  /**
+   * Grand bandeau « Station / NOM » (maquettes F1 portrait, F3 et F9 paysage) dans la boîte (x, y, w, h) : rang
+   * dans la tournée, nom, vague, surtitre, silhouette de la Guyane avec le point de la station, photo fondue à
+   * droite (et slogan « Des rivières vivantes pour demain » si tag), pastille « Feuille X / N » (sheetNo).
+   * Proportions de la fiche station (hauteur 96) réduites à la hauteur demandée.
+   */
+  async stationBanner(sh, site, x, y, w, h, t, { photo = null, kicker = '', sheetNo = '', tag = true, tagWithoutPhoto = true } = {}) {
+    const d = this.doc, n = this.stationList.length, k = h / 96;
+    d.roundRect(x, y, w, h, 10, { fill: t.light });
+    const has = !!(photo && (photo.mediaId || photo.src));
+    if (has) {
+      const pw = w * 0.64;
+      const img = await this.A.photo(photo, { aspect: pw / h, maxW: 900, fade: 0.55, key: 'banner:' + (photo.mediaId || photo.src) });
+      if (img) { d.save(); d.clipRect(x, y, w, h, 10); d.drawImage(img, x + w - pw, y, pw, h); d.restore(); }
+    }
+    const ks = 14 * k;
+    d.text('Station', x + 16, y + 9 * k, { font: F.text, size: ks, color: NAVY });
+    if (sh.station && n > 1) {
+      const tour = `Station ${sh.station.index + 1} / ${n}`;
+      const ps = 7.4 * Math.max(k, 0.85), tw = d.width(tour, F.semi, ps) + 12, px = x + 24 + d.width('Station', F.text, ks);
+      d.roundRect(px, y + 10 * k, tw, ps + 4.6, (ps + 4.6) / 2, { fill: t.main });
+      d.text(tour, px, y + 10 * k + 2.2, { font: F.semi, size: ps, color: '#ffffff', align: 'center', width: tw });
+    }
+    const nm = upper(site.name || '');
+    const nmax = 40 * k, ns = d.fitSize(nm, F.black, nmax, w * 0.5, 14 * k);
+    d.text(nm, x + 14, y + 26 * k + (nmax - ns) * 0.5, { font: F.black, size: ns, color: NAVY });
+    swoosh(d, x + 16, y + 70 * k, 48 * k, 8 * k, t.accent);
+    const kick = upper(kicker);
+    if (kick) d.text(kick, x + 16, y + 82 * k - (1 - k) * 4, { font: F.cond, size: d.fitSize(kick, F.cond, 7.4, w * 0.55, 5, 1.3), color: t.main, charSpace: 1.3 });
+    this.guyane(x + w * 0.535, y + 6 * k, h - 12 * k, site, { fill: '#ffffff', stroke: t.main, opacity: 0.92 });
+    const pill = sheetNo ? 58 : 0;
+    if (tag && (has || tagWithoutPhoto)) {
+      const tx = x + w - 128 - (pill ? pill + 4 : 0), kt = Math.max(0.8, k), ty = y + h - 40 * k;
+      ['DES RIVIÈRES VIVANTES', 'POUR DEMAIN'].forEach((l, i) => d.text(l, tx, ty + i * 9 * kt, { font: F.cond, size: 7.6 * Math.max(0.85, k), color: has ? '#ffffff' : NAVY, charSpace: 1.1 }));
+      swoosh(d, tx, ty + 18 * kt + 2, 52 * kt, 6 * kt, has ? '#ffffff' : t.accent, 0.9);
+    }
+    if (sheetNo) {
+      // Pastille « Feuille X / N » en haut à droite (maquette F9, .sb-sheet de l'écran).
+      const px = x + w - pill - 8, py = y + 7, ph = Math.min(36, h - 14);
+      d.roundRect(px, py, pill, ph, 7, { fill: '#ffffff', opacity: 0.92, stroke: t.line, lineWidth: 0.9 });
+      d.text('Feuille', px, py + 4, { font: F.cond, size: 9, color: t.dark, align: 'center', width: pill });
+      d.text(sheetNo, px, py + 15, { font: F.cond, size: d.fitSize(sheetNo, F.cond, 15, pill - 8, 9), color: t.dark, align: 'center', width: pill });
     }
   }
   /** Bandeau d'information (Code SANDRE / BSS, Bassin versant ou Commune, Coordonnées RGFG95). */
@@ -521,6 +623,8 @@ class SheetsRenderer {
   }
   /**
    * Début d'une feuille paysage : page, en-tête complet, bandeau d'information (ou des stations), titre.
+   * Mêmes compositions que l'écran (js/views/audit-sheet.js) : feuille de tournée (F2) sous le bandeau bleu
+   * (variante « band ») ; F3 et F9 avec le grand bandeau « Station NOM » portant le titre de la feuille.
    * Retourne la position de départ du contenu.
    */
   async startLandscape(sh) {
@@ -531,12 +635,19 @@ class SheetsRenderer {
     this.ctx = { landscape: true, theme: sh.theme, label, title: sh.title, right: sh.station ? `${upper(sh.station.name)} · Feuille ${sh.index} / ${sh.total}` : `Tournée · Feuille ${sh.index} / ${sh.total}` };
     this.newPage({ landscape: true, theme: sh.theme, label });
     const tour = sh.station && n > 1 ? `Station ${sh.station.index + 1} / ${n}` : '';
-    const pad = !sh.station && n > 1 ? { k: 'Tournée', name: `${n} stations`, sheetNo: `${sh.index} / ${sh.total}` } : { k: 'Station', name: site?.name || '', sheetNo: `${sh.index} / ${sh.total}`, tour };
-    let y = await this.fullHeader({ landscape: true, theme: sh.theme, stationBlock: pad });
+    const sheetNo = `${sh.index} / ${sh.total}`;
+    const pad = !sh.station && n > 1 ? { k: 'Tournée', name: `${n} stations`, sheetNo } : { k: 'Station', name: site?.name || '', sheetNo, tour };
+    const banner = !!sh.station && BANNER_SHEETS.includes(sh.key);
+    let y = await this.fullHeader({ landscape: true, theme: sh.theme, stationBlock: banner ? null : pad, band: !sh.station });
+    if (banner) {
+      const photo = sh.key === 'phyto' ? site?.photos?.AM : null;
+      await this.stationBanner(sh, site || {}, M, y, this.W - 2 * M, 60, t, { photo, kicker: sh.kicker || sh.title, sheetNo, tag: this.m.auditType !== 'eso', tagWithoutPhoto: false });
+      y += 66;
+    }
     if (!sh.station && n > 1) await this.tourStrip(M, y, this.W - 2 * M, 34, t);
     else await this.infoStrip(site, M, y, this.W - 2 * M, 34, t);
     y += 40;
-    y += this.sheetTitle(sh.title, sh.kicker && sh.kicker !== sh.title ? sh.kicker : '', M, y, this.W - 2 * M, t);
+    if (!banner) y += this.sheetTitle(sh.title, sh.kicker && sh.kicker !== sh.title ? sh.kicker : '', M, y, this.W - 2 * M, t);
     this.y = y;
   }
 
@@ -546,7 +657,9 @@ class SheetsRenderer {
     const input = itemInput(item);
     const val = r?.value;
     const filled = r && present(formatValue(item, val));
-    const words = (s, font = F.semi, color = NAVY) => String(s).split(/(\s+)/).filter(x => x && !/^\s+$/.test(x)).map(x => ({ t: 'text', s: x, font, color }));
+    // Mots d'une valeur ou d'un libellé : une ponctuation haute précédée d'une espace (« : », « ; », « ! », « ? »,
+    // « » ») reste collée au mot qui la précède, « « » au mot qui le suit (jamais seuls en début de ligne).
+    const words = (s, font = F.semi, color = NAVY) => String(s).replace(/\s+/g, ' ').trim().split(/(?<!«) (?![:;!?»])/).filter(Boolean).map(x => ({ t: 'text', s: x, font, color }));
     if (!input) return r?.status === 'NA' || !this.blank ? [] : [{ t: 'dots' }];
     if (filled && (!this.blank || r.prefilled || !isObj(val))) {
       if (!this.blank || !isObj(val)) return words(formatValue(item, val));
@@ -567,44 +680,58 @@ class SheetsRenderer {
           if (f.label) out.push(...words(f.label + ' :', F.text, INK));
           for (const o of f.options || []) {
             const ov = o?.value ?? o, ol = String(o?.label ?? o);
-            out.push({ t: 'box', label: ol, checked: !!val && val[f.key] === ov });
-            // Précision d'une option (« Autre : ……… ») : pointillés juste après la case, sans répéter le libellé.
+            // Précision d'une option (« Autre : ……… ») : « : » collé au libellé de la case et pointillés liés à
+            // celle-ci (jamais seuls en début de ligne), sans répéter le libellé.
             const det = fields.find(x => x !== f && !Array.isArray(x.showIf) && x.showIf?.key === f.key && x.showIf.value === ov && (x.label === ol || x.label === ov));
-            if (det) { details.add(det.key); out.push({ t: 'text', s: ':', font: F.text, color: INK }, { t: 'dots', w: 46 }); }
+            out.push({ t: 'box', label: det ? ol + ' :' : ol, checked: !!val && val[f.key] === ov });
+            if (det) { details.add(det.key); out.push({ t: 'dots', w: 46, glue: true }); }
           }
         } else {
           const lab = f.label || f.key.toUpperCase();
           if (f.showIf && !this.blank) continue;
           out.push(...words(lab + ' :', F.text, INK));
-          out.push({ t: 'dots', w: f.type === 'text' && !f.showIf ? 62 : 34 });
-          if (f.unit) out.push({ t: 'text', s: f.unit, font: F.text, color: INK });
+          // Pointillés liés au dernier mot du libellé, unité liée aux pointillés : renvoyés ensemble à la ligne.
+          out.push({ t: 'dots', w: f.type === 'text' && !f.showIf ? 62 : 34, glue: true });
+          if (f.unit) out.push({ t: 'text', s: f.unit, font: F.text, color: INK, glue: true });
         }
       }
       return out;
     }
-    if (input.type === 'number' && input.unit) return [{ t: 'dots', w: Math.min(70, w - 30) }, { t: 'text', s: input.unit, font: F.text, color: INK }];
+    if (input.type === 'number' && input.unit) return [{ t: 'dots', w: Math.min(70, w - 30) }, { t: 'text', s: input.unit, font: F.text, color: INK, glue: true }];
     return [{ t: 'dots' }];
   }
-  /** Mise en lignes des jetons dans la largeur w : [{tokens:[{…, x, w}]}]. */
+  /**
+   * Mise en lignes des jetons dans la largeur w : [{tokens:[{…, x, w}]}]. Un jeton « lié » (glue : pointillés après
+   * « Libellé : », unité après les pointillés) qui ne tient plus sur la ligne y passe avec le jeton qui le précède.
+   */
   flow(tokens, w, size = FS) {
     const d = this.doc;
     const lines = [[]];
     let x = 0;
     const tw = tok => tok.t === 'text' ? d.width(tok.s, tok.font, size) : tok.t === 'box' ? BOX + 2.6 + d.width(tok.label, F.text, size) : tok.t === 'gap' ? tok.w : tok.w || 0;
+    const spaceOf = tok => (tok.t === 'text' ? d.width(' ', tok.font, size) : 6);
+    /** Nouvelle ligne ; retourne le jeton précédent emmené par un jeton lié (ou null). */
+    const newLine = tok => {
+      const cur = lines[lines.length - 1];
+      const carry = tok.glue && cur.length > 1 && cur[cur.length - 1].t !== 'gap' ? cur.pop() : null;
+      lines.push(carry ? [{ ...carry, x: 0 }] : []);
+      x = carry ? carry.w : 0;
+      return carry;
+    };
     for (const tok of tokens) {
       if (tok.t === 'dots' && !tok.w) {
-        if (w - x < 26 && lines[lines.length - 1].length) { lines.push([]); x = 0; }
+        if (w - x < 26 && lines[lines.length - 1].length) newLine(tok);
         lines[lines.length - 1].push({ ...tok, x, w: w - x });
         x = w; continue;
       }
       const tokW = Math.min(tw(tok), w);
-      const space = tok.t === 'text' ? d.width(' ', tok.font, size) : 6;
       const cur = lines[lines.length - 1];
-      const gapBefore = cur.length && tok.t !== 'gap' && cur[cur.length - 1].t !== 'gap' ? space : 0;
+      const gapBefore = cur.length && tok.t !== 'gap' && cur[cur.length - 1].t !== 'gap' ? spaceOf(tok) : 0;
       if (cur.length && x + gapBefore + tokW > w) {
         if (tok.t === 'gap') continue;
-        lines.push([]); x = 0;
-        lines[lines.length - 1].push({ ...tok, x: 0, w: tokW }); x = tokW;
+        const gap = newLine(tok) ? spaceOf(tok) : 0;
+        const ww = tok.t === 'dots' ? Math.max(12, Math.min(tokW, w - x - gap)) : tokW;
+        lines[lines.length - 1].push({ ...tok, x: x + gap, w: ww }); x += gap + ww;
       } else { cur.push({ ...tok, x: x + gapBefore, w: tokW }); x += gapBefore + tokW; }
     }
     return lines.filter((l, i) => l.length || i === 0);
@@ -743,7 +870,7 @@ class SheetsRenderer {
         if (icoW) await this.iconAt(item.icon, cx + 4, y + row.h / 2 - 6, 12, t.main === '#ffffff' ? t.dark : t.main);
         const lx = cx + 3 + icoW;
         const ly = y + (row.h - lines.length * LH) / 2 + 0.6;
-        lines.forEach((l, k) => { if (l) this.chemText(l, lx, ly + k * LH, { font: F.text, size: FS, color: t.dark }); });
+        lines.forEach((l, k) => { if (l) this.chemText(l, lx, ly + k * LH, { font: F.text, size: FS, color: t.ink }); });
         if (row.badge) {
           const bx = row.badge.line < lines.length && lines[row.badge.line] ? lx + d.width(lines[row.badge.line], F.text, FS) + 4 : lx;
           const by = ly + row.badge.line * LH - 0.6;
@@ -753,7 +880,7 @@ class SheetsRenderer {
       } else if (c.key === 'short') {
         const ls = row.cells.short || [];
         const ly = y + (row.h - ls.length * LH) / 2 + 0.6;
-        ls.forEach((l, k) => d.text(l, cx + 2, ly + k * LH, { font: F.text, size: row.cells.shortSize || FS - 0.4, color: t.dark, align: 'center', width: c.w - 4 }));
+        ls.forEach((l, k) => d.text(l, cx + 2, ly + k * LH, { font: F.text, size: row.cells.shortSize || FS - 0.4, color: t.ink, align: 'center', width: c.w - 4 }));
       } else if (c.key === 'value') {
         const lines = row.cells.value;
         const ly = lines.length > 1 ? ty : y + (row.h - LH) / 2 + 0.6;
@@ -1121,7 +1248,6 @@ class SheetsRenderer {
     const d = this.doc;
     const site = this.siteOf(sh) || {};
     const t = theme(sh.theme || 'ocean');
-    const n = this.stationList.length;
     const eso = this.m.auditType === 'eso' || String(site.codeType || '').toUpperCase() === 'BSS';
     const label = this.sheetLabel(sh);
     this.ctx = { landscape: false, theme: sh.theme, label, title: sh.title, right: `${upper(site.name)} · Feuille ${sh.index} / ${sh.total}` };
@@ -1130,33 +1256,7 @@ class SheetsRenderer {
     let y = await this.fullHeader({ landscape: false, theme: sh.theme });
     // Bandeau « Station / NOM » avec photo fondue à droite et silhouette de la Guyane.
     const bh = 96;
-    d.roundRect(M, y, cw, bh, 10, { fill: t.light });
-    const rd = site.photos?.RD;
-    if (rd?.mediaId || rd?.src) {
-      const pw = cw * 0.64;
-      const img = await this.A.photo(rd, { aspect: pw / bh, maxW: 900, fade: 0.55, key: 'banner:' + (rd.mediaId || rd.src) });
-      if (img) { d.save(); d.clipRect(M, y, cw, bh, 10); d.drawImage(img, M + cw - pw, y, pw, bh); d.restore(); }
-    }
-    d.text('Station', M + 16, y + 9, { font: F.text, size: 14, color: NAVY });
-    if (sh.station && n > 1) {
-      const tour = `Station ${sh.station.index + 1} / ${n}`;
-      const tw = d.width(tour, F.semi, 7.4) + 12;
-      d.roundRect(M + 70, y + 10, tw, 12, 6, { fill: t.main });
-      d.text(tour, M + 70, y + 12.2, { font: F.semi, size: 7.4, color: '#ffffff', align: 'center', width: tw });
-    }
-    const nm = upper(site.name || '');
-    const ns = d.fitSize(nm, F.black, 40, cw * 0.5, 14);
-    d.text(nm, M + 14, y + 26 + (40 - ns) * 0.5, { font: F.black, size: ns, color: NAVY });
-    swoosh(d, M + 16, y + 70, 48, 8, t.accent);
-    const kick = upper(sh.kicker || this.m.header?.program || '');
-    if (kick) d.text(kick, M + 16, y + 82, { font: F.cond, size: d.fitSize(kick, F.cond, 7.4, cw * 0.55, 5, 1.3), color: t.main, charSpace: 1.3 });
-    this.guyane(M + cw * 0.535, y + 6, bh - 12, site, { fill: '#ffffff', stroke: t.main, opacity: 0.92 });
-    const tag = eso ? '' : 'DES RIVIÈRES VIVANTES POUR DEMAIN';
-    if (tag) {
-      const has = !!(rd?.mediaId || rd?.src);
-      ['DES RIVIÈRES VIVANTES', 'POUR DEMAIN'].forEach((l, i) => d.text(l, M + cw - 128, y + 56 + i * 9, { font: F.cond, size: 7.6, color: has ? '#ffffff' : NAVY, charSpace: 1.1 }));
-      swoosh(d, M + cw - 128, y + 76, 52, 6, has ? '#ffffff' : t.accent, 0.9);
-    }
+    await this.stationBanner(sh, site, M, y, cw, bh, t, { photo: site.photos?.RD, kicker: sh.kicker || this.m.header?.program || '', tag: !eso });
     y += bh + 7;
     await this.infoStrip(site, M, y, cw, 44, t);
     y += 52;
@@ -1622,11 +1722,14 @@ export async function buildSheetsPdf(model, { only = null, compress = true, titl
   const assets = new Assets(doc, { mapNetwork });
   const r = new SheetsRenderer(doc, assets, model);
   if (model.provisional) doc.watermark = { text: 'PROVISOIRE', mode: 'fill', color: '#c62828', opacity: 0.09, font: F.black, size: 96 };
-  const short = model.fingerprint ? `Empreinte ${model.fingerprint.slice(0, 12)}…` : '';
+  // Empreinte du contenu imprimé ; tournée modifiée après signature : mention en tête de la ligne d'identification.
+  const amended = (model.amendments || []).length > 0;
+  const short = model.fingerprint ? `Empreinte ${model.fingerprint.slice(0, 12)}…${model.sealOk === false ? ' (non conforme à l’empreinte enregistrée)' : ''}` : '';
+  const flag = amended ? { text: 'MODIFIÉ APRÈS SIGNATURE', color: OEG.warn } : null;
   doc.footerFn = (d, page, total) => {
     const meta = d.page.meta || {};
     const center = [model.number || (model.mode === 'filled' ? '' : model.mode === 'station' ? 'Fiche station' : 'Fiche vierge'), meta.label, short].filter(Boolean).join('  ·  ');
-    drawOegFooter(d, { theme: meta.theme || 'ocean', center, right: `Page ${page} / ${total}`, slogan: model.header?.slogan || DEFAULT_HEADER.slogan, website: model.header?.website || DEFAULT_HEADER.website, provisional: model.provisional });
+    drawOegFooter(d, { theme: meta.theme || 'ocean', center, right: `Page ${page} / ${total}`, slogan: model.header?.slogan || DEFAULT_HEADER.slogan, website: model.header?.website || DEFAULT_HEADER.website, provisional: model.provisional, flag });
   };
   await r.render({ only });
   if (!doc.pages.length) throw new Error('Aucune feuille à imprimer.');

@@ -5,7 +5,7 @@ import { store } from './core/store.js';
 import * as auth from './core/auth.js';
 import { revokeAllURLs } from './core/media.js';
 import { route, startRouter, stopRouter, refresh } from './ui/router.js';
-import { toast } from './ui/dom.js';
+import { toast, settleInput } from './ui/dom.js';
 import { initSync, stopSync, runSync } from './app/sync.js';
 import { applyDisplayPrefs, orgSettings } from './app/settings.js';
 import { renderSetup, renderLogin, renderMessage, teardownAuth } from './views/auth.js';
@@ -43,11 +43,32 @@ route('administration', () => import('./views/admin.js'));
 route('compte', () => import('./views/admin.js').then(m => ({ default: m.accountView })));
 route('menu', () => import('./views/menu.js'));
 
+/* ---------- Saisie en cours : jamais perdue ---------- */
+/**
+ * Valide le champ en cours de saisie (perte du focus ⇒ enregistrement habituel), exécute les enregistrements différés,
+ * attend la fin des gestionnaires puis l'écriture sur l'appareil. Avant le verrouillage et à la mise en arrière-plan
+ * (changement d'application, écran éteint, onglet fermé ou tué par le système).
+ */
+async function saveInput() {
+  if (!session.unlocked) return;
+  try { await settleInput(); } catch (e) { console.warn(e); }
+  try { await store.flush(); } catch (e) { /* erreur déjà signalée par le magasin */ }
+}
+let backgroundSave = false;
+function watchBackground() {
+  if (backgroundSave) return;
+  backgroundSave = true;
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveInput(); });
+  window.addEventListener('pagehide', () => { saveInput(); });
+}
+
 /* ---------- Verrouillage automatique par inactivité ---------- */
 let idleTimer = null;
+let activityWatched = false;
 function watchActivity() {
   const touch = () => { session.lastActivity = Date.now(); };
-  ['pointerdown', 'keydown', 'touchstart'].forEach(e => window.addEventListener(e, touch, { passive: true }));
+  // 'input' : saisie au clavier virtuel ou par la dictée vocale (js/ui/voice.js n'émet que des événements input / change).
+  if (!activityWatched) { activityWatched = true; ['pointerdown', 'keydown', 'touchstart', 'input'].forEach(e => window.addEventListener(e, touch, { passive: true, capture: true })); }
   clearInterval(idleTimer);
   idleTimer = setInterval(() => {
     if (!session.unlocked) return;
@@ -56,7 +77,15 @@ function watchActivity() {
   }, 20000);
 }
 
-export async function lockApp(reason = 'manuel') {
+let locking = null;
+export function lockApp(reason = 'manuel') {
+  // Un seul verrouillage à la fois (minuteur d'inactivité et cadenas peuvent se croiser pendant l'enregistrement).
+  if (!locking) locking = doLock(reason).finally(() => { locking = null; });
+  return locking;
+}
+async function doLock(reason) {
+  // Saisie en cours (observation commencée, champ non quitté) enregistrée AVANT la fermeture de la session.
+  await saveInput();
   stopSync(); stopRouter(); revokeAllURLs();
   await auth.lock(reason);
   document.body.classList.remove('in-audit');
@@ -86,6 +115,7 @@ async function enterApp() {
   auth.restoreToken();
   renderShell(app, { lock: () => lockApp('manuel') });
   watchActivity();
+  watchBackground();
   initSync({ revoked: onRevoked, disabled: () => lockApp('compte désactivé') });
   await startRouter(document.getElementById('view'), { onRoute: updateShell });
   if (!auth.isTeamMode()) { upgradeReferentiel(); return; }

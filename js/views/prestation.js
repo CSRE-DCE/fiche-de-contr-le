@@ -9,8 +9,8 @@ import { can } from '../core/auth.js';
 import { hasLocalBytes } from '../core/media.js';
 import { navigate } from '../ui/router.js';
 import { openModal, toast, promptDialog, choiceDialog, formValues } from '../ui/dom.js';
-import { pageTitle, kv, prestationBadge, kindBadge, auditBadge, badge, docBadge, empty, options, critBadge, deviationBadge, operatorName, field } from '../ui/components.js';
-import { PRESTATION_STATUS, CONTROL_LEVELS, DOC_TYPES, OPEN_DEVIATION, EQUIPMENT_STATUS } from '../domain/model.js';
+import { pageTitle, kv, prestationBadge, kindBadge, auditBadge, badge, docBadge, empty, options, critBadge, deviationBadge, operatorName, field, tourStationsLabel } from '../ui/components.js';
+import { PRESTATION_STATUS, CONTROL_LEVELS, DOC_TYPES, OPEN_DEVIATION, EQUIPMENT_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { recurringDeviations } from '../domain/summary.js';
 import { applicableDocuments, docInForce } from '../app/documents.js';
@@ -51,7 +51,7 @@ export default {
     const eqs = store.filter('equipment', e => e.providerId === p.providerId && e.status !== 'reforme');
     const audits = auditsOf(p.id);
     const current = audits.find(a => a.status === 'en_cours' || a.status === 'termine');
-    const provAudits = sortBy(store.filter('audit', a => a.providerId === p.providerId && a.status !== 'abandonne' && a.prestationId !== p.id), '-startedAt').slice(0, 5);
+    const provAudits = store.filter('audit', a => a.providerId === p.providerId && a.status !== 'abandonne' && a.prestationId !== p.id && !(a.prestationIds || []).includes(p.id)).sort(byAuditDateDesc).slice(0, 5);
     const provDevs = store.filter('deviation', d => d.providerId === p.providerId && OPEN_DEVIATION.includes(d.status));
     const recurring = recurringDeviations(store.filter('deviation', d => d.providerId === p.providerId));
     const camp = store.get('campaign', p.campaignId);
@@ -102,7 +102,7 @@ export default {
           <a class="kpi ${provDevs.length ? 'alert-kpi' : ''}" href="#/ecarts?prestataire=${p.providerId}"><span class="k">Écarts ouverts</span><span class="v">${provDevs.length}</span></a>
           <div class="kpi ${recurring.length ? 'warn-kpi' : ''}"><span class="k">Écarts récurrents</span><span class="v">${recurring.length}</span></div>
         </div>
-        ${provAudits.length ? html`<div class="list">${provAudits.map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(a.startedAt)} · ${store.get('site', a.siteId)?.name || ''}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit antérieur de ce prestataire.</p>`}
+        ${provAudits.length ? html`<div class="list">${provAudits.map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${tourStationsLabel(a)}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit antérieur de ce prestataire.</p>`}
         ${provDevs.length ? html`<h3>Écarts ouverts</h3><div class="list">${provDevs.slice(0, 6).map(d => html`<a class="li" href="#/ecart/${d.id}"><div class="li-main"><div class="li-title">${d.number}</div><div class="li-sub">${d.requirement}</div></div>${critBadge(d.criticalityCode)}${deviationBadge(d.status)}</a>`)}</div>` : ''}
         ${recurring.length ? html`<h3>Points de vigilance (écarts récurrents)</h3><ul>${recurring.slice(0, 5).map(r => html`<li>${r.requirement} — ${r.audits.length} audits</li>`)}</ul>` : ''}</div>
 

@@ -14,10 +14,10 @@ import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
 import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO, localDate } from '../core/util.js';
-import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS } from '../domain/model.js';
+import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate } from '../domain/model.js';
 import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
-import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid } from './audits.js';
+import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace } from './audits.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { refLabel } from './documents.js';
 import { orgSettings } from './settings.js';
@@ -71,6 +71,9 @@ export async function buildAuditReport(auditId) {
   const stations = st.stations || [];
   const multi = stations.length > 1;
   const sheetGrid = isSheetGrid(st.grid);
+  // Date de l'audit = date de la tournée (la même que celle des écrans et des fiches de contrôle PDF).
+  const date = auditDate(audit);
+  const entryDay = audit.startedAt ? localDate(new Date(audit.startedAt)) : '';
   const doc = new PDFDocument({ title, author: audit.auditorName, subject: `Audit terrain de prestation de prélèvement — ${stations.length ? stations.map(x => x.name).join(', ') : site?.name || ''}`, keywords: `audit;prélèvement;${audit.number}` });
   const brand = await branding(doc);
   const generatedAt = nowISO();
@@ -110,7 +113,7 @@ export async function buildAuditReport(auditId) {
   doc.y = 90;
   doc.text('RAPPORT D’AUDIT TERRAIN', doc.m.left, doc.y, { font: 'bold', size: 11, color: '#007f96' }); doc.y += 18;
   doc.paragraph(multi ? `Tournée de contrôle — ${stations.length} stations : ${stations.map(x => x.name).join(', ')}` : `Prestation de prélèvement — ${stations[0]?.name || site?.name || 'site non renseigné'}`, { size: 18, font: 'bold', color: doc.style.heading, gap: 2 });
-  doc.paragraph(`${audit.number} · ${fmtDate(audit.startedAt)} · ${provider?.name || ''}`, { size: 12, color: '#4f5f67', gap: 10 });
+  doc.paragraph(`${audit.number} · ${fmtDate(date)} · ${provider?.name || ''}`, { size: 12, color: '#4f5f67', gap: 10 });
   if (provisional) doc.paragraph('RAPPORT PROVISOIRE — audit non signé ou non verrouillé. Ce document ne vaut pas rapport définitif.', { font: 'bold', color: '#b3261e', size: 10 });
   doc.paragraph('Périmètre : le présent audit porte exclusivement sur le processus de prélèvement et d’échantillonnage, et sur la partie pré-analytique directement liée (conservation, transport, remise au laboratoire). Les analyses de laboratoire, leur validation, le traitement statistique et l’interprétation des résultats sont hors périmètre.', { size: 8.5, color: '#4f5f67', gap: 8 });
 
@@ -146,7 +149,7 @@ export async function buildAuditReport(auditId) {
   doc.heading('1. Identification de l’audit');
   doc.keyValues([
     ['Numéro d’audit', audit.number], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné (non planifié)' : 'Audit planifié'],
-    ['Date', fmtDate(audit.startedAt)], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
+    ['Date', fmtDate(date)], ['Heure de début', `${fmtTime(audit.startedAt)}${entryDay && entryDay !== date ? ` (saisie démarrée le ${fmtDate(entryDay)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
     ['Auditeur', `${audit.auditorName} (${audit.auditorRole || ''})`], ['Appareil utilisé', `${audit.device?.name || ''} — ${audit.device?.id || ''}`],
     ['Version de l’application', audit.appVersion], ['Grille d’audit', `${audit.gridSnapshot?.name} — ${audit.gridCode} v${audit.gridVersion}`],
     ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
@@ -184,7 +187,7 @@ export async function buildAuditReport(auditId) {
   else doc.table({
     columns: [{ label: 'Opérateur', width: 110 }, { label: 'Fonction', width: 90 }, { label: 'Habilitations / qualifications', width: 216 }, { label: 'État à la date de l’audit', width: 95 }],
     rows: st.operators.map(o => {
-      const os = operatorStatus(o, (audit.startedAt || '').slice(0, 10), audit.samplingTypeId);
+      const os = operatorStatus(o, date, audit.samplingTypeId);
       return [opName(o), o.function || '', (o.qualifications || []).map(q => `${QUALIFICATION_TYPES[q.type] || q.type} : ${q.label}${q.ref ? ' (' + q.ref + ')' : ''}${q.validUntil ? ' — jusqu’au ' + fmtDate(q.validUntil) : ''}`).join('\n') || '—', { text: os.ok ? 'Habilité' : 'Non habilité : ' + os.message, color: os.ok ? COLORS.C : COLORS.NC, font: 'bold' }];
     })
   });
@@ -244,7 +247,7 @@ export async function buildAuditReport(auditId) {
       doc.paragraph('Matériel de mesure contrôlé', { font: 'bold', size: 9, color: '#003d7a' });
       doc.table({
         columns: [{ label: 'Équipement', width: 100 }, { label: 'Inventaire / série', width: 85 }, { label: 'Marque / modèle', width: 80 }, { label: 'Vérif. / étalonnage', width: 82 }, { label: 'Validité', width: 60 }, { label: 'Constat', width: 104 }],
-        rows: audit.equipmentChecks.map(e => { const es = equipmentStatus(e, (audit.startedAt || '').slice(0, 10)); return [e.label || '', `${e.inventoryNo || '—'} / ${e.serial || '—'}`, `${e.brand || ''} ${e.model || ''}`, `${fmtDate(e.checkDate) || '—'} / ${fmtDate(e.calibrationDate) || '—'}`, fmtDate(e.validUntil) || '—', { text: (es.ok ? 'Valide' : es.reasons.join(' ; ')) + (e.certificateAvailable ? ' — certificat disponible' : ''), color: es.ok ? COLORS.C : COLORS.NC }]; }), fontSize: 7.8
+        rows: audit.equipmentChecks.map(e => { const es = equipmentStatus(e, date); return [e.label || '', `${e.inventoryNo || '—'} / ${e.serial || '—'}`, `${e.brand || ''} ${e.model || ''}`, `${fmtDate(e.checkDate) || '—'} / ${fmtDate(e.calibrationDate) || '—'}`, fmtDate(e.validUntil) || '—', { text: (es.ok ? 'Valide' : es.reasons.join(' ; ')) + (e.certificateAvailable ? ' — certificat disponible' : ''), color: es.ok ? COLORS.C : COLORS.NC }]; }), fontSize: 7.8
       });
     }
     if (sec.module === 'samples' && audit.samples?.length) {
@@ -291,7 +294,8 @@ export async function buildAuditReport(auditId) {
   if (!devs.length) doc.paragraph('Aucun écart enregistré.');
   else doc.table({
     columns: [{ label: 'N°', width: 70 }, { label: 'Exigence et référence', width: 130 }, { label: 'Constat factuel', width: 170 }, { label: 'Criticité', width: 66 }, { label: 'Action immédiate', width: 75 }],
-    rows: devs.map(d => [`${d.number}\n${fmtDate(d.date)} ${d.time || ''}`, `${d.requirement || ''}${(d.docRefs || []).length ? '\nRéf. : ' + d.docRefs.map(r => refLabel(r, audit.documentsSnapshot)).join(' ; ') : ''}`, `${d.description || ''}${d.auditorObservation ? '\nObservation : ' + d.auditorObservation : ''}${d.location ? `\nGPS ${d.location.lat.toFixed(5)}, ${d.location.lon.toFixed(5)}` : ''}`, { text: crit(d.criticalityCode)?.label || d.criticalityCode, color: crit(d.criticalityCode)?.color || '#10202b', font: 'bold' }, d.immediateAction || '—']),
+    // Tournée de plusieurs stations : station de l'écart (« Tournée (A, B) » pour un écart commun, « (retirée) »).
+    rows: devs.map(d => [`${d.number}\n${fmtDate(d.date)} ${d.time || ''}${multi || (d.stationKey && !stations.some(x => x.key === d.stationKey)) ? `\n${deviationPlace(d, { codes: false })}` : ''}`, `${d.requirement || ''}${(d.docRefs || []).length ? '\nRéf. : ' + d.docRefs.map(r => refLabel(r, audit.documentsSnapshot)).join(' ; ') : ''}`, `${d.description || ''}${d.auditorObservation ? '\nObservation : ' + d.auditorObservation : ''}${d.location ? `\nGPS ${d.location.lat.toFixed(5)}, ${d.location.lon.toFixed(5)}` : ''}`, { text: crit(d.criticalityCode)?.label || d.criticalityCode, color: crit(d.criticalityCode)?.color || '#10202b', font: 'bold' }, d.immediateAction || '—']),
     fontSize: 7.8
   });
 

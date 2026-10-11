@@ -12,7 +12,7 @@ import { field, options, badge, kv, thumbs, evidenceButtons, voiceBtn, operatorN
 import { icon } from '../ui/icons.js';
 import { getPosition } from '../ui/gps.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
-import { EQUIPMENT_STATUS, QUALIFICATION_TYPES, DOC_TYPES } from '../domain/model.js';
+import { EQUIPMENT_STATUS, QUALIFICATION_TYPES, DOC_TYPES, auditDate } from '../domain/model.js';
 import { allItems } from '../domain/grids.js';
 import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid } from '../app/audits.js';
 import { refLabel } from '../app/documents.js';
@@ -55,7 +55,7 @@ export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/
     const sg = sig[role];
     if (!sg) return html`<p class="note">Non signé.</p>`;
     return html`<div class="banner ${sg.refused ? 'warn' : 'ok'}">${sg.refused ? html`Refus / absence de signature consigné le ${fmtDateTime(sg.at)} — ${sg.name || ''}. Motif : ${sg.comment || '—'}` : html`Signé par <b>${sg.name}</b>${sg.function ? ' (' + sg.function + ')' : ''} le ${fmtDate(sg.at)} à ${fmtTime(sg.at)}${sg.offline ? ' — hors connexion' : ''}`}</div>
-      ${sg.mediaId ? thumbs([store.get('media', sg.mediaId)].filter(Boolean)) : ''}<div class="tiny muted mono">Empreinte signée : ${sg.contentHash}</div>`;
+      ${sg.mediaId && store.get('media', sg.mediaId) ? html`<img class="sig-img" data-media="${sg.mediaId}" alt="${sg.name ? `Signature de ${sg.name}` : role === 'auditor' ? 'Signature de l’auditeur' : 'Signature du représentant du prestataire'}" style="display:block;width:auto;height:auto;max-width:min(100%,340px);max-height:140px;object-fit:contain;margin:8px 0 4px">` : ''}<div class="tiny muted mono">Empreinte signée : ${sg.contentHash}</div>`;
   };
   return html`
     ${locked ? html`<div class="card" style="border-color:var(--ok)"><h2><span class="row" style="gap:8px">${icon('lock', { size: 20 })}Audit signé et verrouillé</span></h2>
@@ -91,7 +91,7 @@ export function auditOperators(audit) {
 
 /* ---------- Opérateurs ---------- */
 export function operatorsModule(audit, editable) {
-  const date = (audit.startedAt || '').slice(0, 10);
+  const date = auditDate(audit);
   const ops = auditOperators(audit);
   const candidates = sortBy(store.filter('operator', o => o.providerId === audit.providerId && o.active !== false && !(audit.operatorIds || []).includes(o.id)), 'code');
   return html`<div class="module"><h3>👷 Opérateurs contrôlés</h3>
@@ -142,7 +142,7 @@ export const operatorHandlers = {
 
 /* ---------- Équipements de mesure ---------- */
 export function equipmentModule(audit, editable) {
-  const date = (audit.startedAt || '').slice(0, 10);
+  const date = auditDate(audit);
   const list = audit.equipmentChecks || [];
   return html`<div class="module"><h3>🧪 Matériel de mesure contrôlé</h3>
     ${list.length ? html`<div class="list">${list.map(e => { const st = equipmentStatus(e, date); const ph = mediaFor({ type: 'equipment', id: e.id }); return html`

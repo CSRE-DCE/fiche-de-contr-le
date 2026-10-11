@@ -11,7 +11,7 @@
  * de station porte `stationKey`.
  */
 import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAnswerable, sheetsOf } from './grids.js';
-import { itemInput } from './model.js';
+import { itemInput, auditDate as dateOfAudit } from './model.js';
 import { haversine, fmtDistance, fmtDate, daysBetween } from '../core/util.js';
 import { ecartGPS } from '../lib/geo.js';
 
@@ -108,8 +108,10 @@ export function computeAlerts(input) {
   const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {}, stationSites = {} } = input;
   const siteOf = it => (it?.station && stationSites[it.station.key]) || site;
   const stationKeyOf = it => (it?.station && !it.shared ? it.station.key : null);
-  const today = input.today || (audit.startedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
-  const auditDate = (audit.startedAt || today).slice(0, 10);
+  // Date de l'audit = date de la tournée (dateOfAudit : « Date mission », audit.date ou date de création), la même
+  // que celle des feuilles (étalonnage des sondes), des listes et des PDF.
+  const today = input.today || dateOfAudit(audit) || new Date().toISOString().slice(0, 10);
+  const auditDate = dateOfAudit(audit) || today;
   const responses = audit.responses || {};
   const out = [];
   const add = a => out.push({ level: 'attention', ...a, key: a.key || `${a.code}:${a.itemId || a.target?.id || ''}` });

@@ -13,15 +13,31 @@ import { navigate } from '../ui/router.js';
 import { toast, promptDialog, confirmDialog, openModal, downloadBlob, choiceDialog } from '../ui/dom.js';
 import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar, auditBadge, critBadge, deviationBadge, empty, operatorName, siteName, providerName, kindBadge } from '../ui/components.js';
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
-import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality } from '../domain/model.js';
+import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate } from '../domain/model.js';
 import { allowedResponses, isAnswered, isAnswerable, needsJustification } from '../domain/grids.js';
 import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
 import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem } from './audit-modules.js';
-import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep } from './audit-sheet.js';
+import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor } from './audit-sheet.js';
 
 const amendState = new Map();   // « utilisateur:audit » → motif de la modification en cours (audit signé)
+const amendBaseline = new Map(); // même clé → points bloquants déjà présents au début de la modification
 const amendKey = id => `${session.user?.id}:${session.unlockedAt}:${id}`;
+/** Points bloquants (erreurs du contrôle avant clôture) d'un audit, identifiés par critère, champ et message. */
+const issueKey = e => `${e.itemId || ''}|${e.field || ''}|${e.message}`;
+const blockingIssues = audit => auditState(audit).validation.filter(v => v.level === 'error');
+
+/**
+ * Effacement d'une réponse (nouvel appui sur le statut ou la valeur déjà choisis) pendant une modification motivée
+ * d'un audit signé : refusé pour un critère obligatoire, sinon après confirmation explicite. Retourne true si permis.
+ */
+async function allowClear(ctx, audit, itemId, label) {
+  if (!ctx.amendReason) return true;
+  const it = findItem(audit, itemId);
+  const code = it?.code || itemId;
+  if (it?.required) { toast(`${code} est obligatoire : sa réponse ne peut pas être effacée dans un audit signé. Choisissez la réponse corrigée.`, 'warn', 6000); return false; }
+  return confirmDialog({ title: 'Effacer la réponse', message: `Effacer la réponse « ${label} » de ${code} ${it?.label ? `(${it.label}) ` : ''}? La modification sera historisée avec la valeur précédente.`, okLabel: 'Effacer', danger: true });
+}
 const STEP_FIXED = { identification: '🪪 Identification', ecarts: '⚠️ Écarts', synthese: '📊 Synthèse', signatures: '✍️ Signatures' };
 
 function stepsOf(st) {
@@ -73,7 +89,7 @@ function itemCard(audit, item, st, editable) {
     ${control}
     ${alerts.map(a => alertBox(a, editable))}
     ${isAnswerable(item) ? html`<div class="comment"><label class="label" for="cm-${item.id}">${needJ ? html`Justification obligatoire <span class="req">*</span>` : 'Observation (facultatif)'}</label>
-      <div class="input-wrap"><textarea ${dis} id="cm-${item.id}" data-change="comment" data-item="${item.id}" rows="2" style="min-height:56px" placeholder="${needJ ? 'Décrire factuellement l’écart constaté' : 'Constat, précision…'}">${r?.comment || ''}</textarea>${editable ? voiceBtn('cm-' + item.id) : ''}</div></div>` : ''}
+      <div class="input-wrap"><textarea ${editable && !audit.lock?.lockedAt ? raw('data-autosave') : ''} ${dis} id="cm-${item.id}" data-change="comment" data-item="${item.id}" rows="2" style="min-height:56px" placeholder="${needJ ? 'Décrire factuellement l’écart constaté' : 'Constat, précision…'}">${r?.comment || ''}</textarea>${editable ? voiceBtn('cm-' + item.id) : ''}</div></div>` : ''}
     ${thumbs(media)}
     <div class="item-tools">
       ${editable && !audit.lock?.lockedAt ? evidenceButtons({ type: 'item', id: audit.id, itemId: item.id }, { auditId: audit.id }) : ''}
@@ -91,7 +107,7 @@ function identificationStep(audit, st, editable) {
   return html`
     <div class="card"><h2>Identification de l’audit</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit planifié'],
-      ['Date', fmtDate(audit.startedAt)], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
+      ['Date', fmtDate(auditDate(audit))], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
       ['Auditeur', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
@@ -130,9 +146,9 @@ function synthesisStep(audit, st, editable) {
       <h3>Actions demandées</h3>${s.actions.length ? html`<ul>${s.actions.map(a => html`<li><b>${a.number}</b> (${a.criticality}) : ${a.action || a.immediate}${a.responsible ? ' — ' + a.responsible : ''}${a.dueDate ? ' — avant le ' + fmtDate(a.dueDate) : ''}</li>`)}</ul>` : html`<p class="note">Aucune action demandée.</p>`}
     </div>
     <div class="card"><h2>Conclusions de l’auditeur</h2>
-      <div class="field"><label>Points forts complémentaires</label><div class="input-wrap"><textarea ${dis} id="cc-strengths" data-change="concl" data-k="strengths">${audit.conclusions?.strengths || ''}</textarea>${editable ? voiceBtn('cc-strengths') : ''}</div></div>
-      <div class="field"><label>Points de vigilance complémentaires</label><div class="input-wrap"><textarea ${dis} id="cc-vigilance" data-change="concl" data-k="vigilance">${audit.conclusions?.vigilance || ''}</textarea>${editable ? voiceBtn('cc-vigilance') : ''}</div></div>
-      <div class="field"><label>Commentaire général</label><div class="input-wrap"><textarea ${dis} id="cc-comment" data-change="concl" data-k="comment">${audit.conclusions?.comment || ''}</textarea>${editable ? voiceBtn('cc-comment') : ''}</div></div>
+      <div class="field"><label>Points forts complémentaires</label><div class="input-wrap"><textarea ${editable && !audit.lock?.lockedAt ? raw('data-autosave') : ''} ${dis} id="cc-strengths" data-change="concl" data-k="strengths">${audit.conclusions?.strengths || ''}</textarea>${editable ? voiceBtn('cc-strengths') : ''}</div></div>
+      <div class="field"><label>Points de vigilance complémentaires</label><div class="input-wrap"><textarea ${editable && !audit.lock?.lockedAt ? raw('data-autosave') : ''} ${dis} id="cc-vigilance" data-change="concl" data-k="vigilance">${audit.conclusions?.vigilance || ''}</textarea>${editable ? voiceBtn('cc-vigilance') : ''}</div></div>
+      <div class="field"><label>Commentaire général</label><div class="input-wrap"><textarea ${editable && !audit.lock?.lockedAt ? raw('data-autosave') : ''} ${dis} id="cc-comment" data-change="concl" data-k="comment">${audit.conclusions?.comment || ''}</textarea>${editable ? voiceBtn('cc-comment') : ''}</div></div>
     </div>`;
 }
 
@@ -218,8 +234,11 @@ export default {
       const audit = store.get('audit', this.params.id);
       const cur = audit.responses?.[el.dataset.item];
       const value = el.dataset.value;
-      // Un nouvel appui sur la réponse déjà choisie l'annule (correction d'une erreur de saisie, tracée).
-      await setResponse(audit, el.dataset.item, cur?.status === value ? { status: undefined } : { status: value }, { reason: this.amendReason });
+      // Un nouvel appui sur la réponse déjà choisie l'annule (correction d'une erreur de saisie, tracée) ; audit signé en
+      // cours de modification : jamais pour un critère obligatoire, et seulement après confirmation.
+      const clear = cur?.status === value;
+      if (clear && !(await allowClear(this, audit, el.dataset.item, RESPONSES[value]?.label || value))) return;
+      await setResponse(audit, el.dataset.item, clear ? { status: undefined } : { status: value }, { reason: this.amendReason });
       navigator.vibrate?.(20);
       await refreshKeep(this);
     },
@@ -227,6 +246,7 @@ export default {
       const audit = store.get('audit', this.params.id);
       const raw = el.dataset.value, value = raw === 'true' ? true : raw === 'false' ? false : raw;
       const cur = audit.responses?.[el.dataset.item];
+      if (cur?.value === value && !(await allowClear(this, audit, el.dataset.item, el.textContent.trim() || raw))) return;
       await setResponse(audit, el.dataset.item, cur?.value === value ? { value: undefined } : { value, status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
       this.refresh();
     },
@@ -254,7 +274,8 @@ export default {
     async comment(el) {
       const audit = store.get('audit', this.params.id);
       const value = el.value.trim();
-      await setResponse(audit, el.dataset.item, { comment: value || undefined }, { reason: this.amendReason });
+      // Enregistrement différé pendant la frappe puis « change » à la sortie du champ : pas de seconde écriture identique.
+      if ((audit.responses?.[el.dataset.item]?.comment || '') !== value) await setResponse(audit, el.dataset.item, { comment: value || undefined }, { reason: this.amendReason });
       // Feuilles : observation recopiée dans la version « tableau » / « carte » du critère, obligation signalée.
       for (const pfx of ['t', 'k']) {
         const twin = document.getElementById(`${pfx}-o-${el.dataset.item}`);
@@ -266,7 +287,7 @@ export default {
     },
     async concl(el) {
       const audit = store.get('audit', this.params.id);
-      await updateAudit(audit, a => { a.conclusions = { ...(a.conclusions || {}), [el.dataset.k]: el.value }; }, { reason: this.amendReason });
+      if ((audit.conclusions?.[el.dataset.k] || '') !== el.value) await updateAudit(audit, a => { a.conclusions = { ...(a.conclusions || {}), [el.dataset.k]: el.value }; }, { reason: this.amendReason });
       const s = document.getElementById('saveState'); if (s) s.textContent = `Enregistré sur l’appareil ✓ ${localTime()}`;
     },
     async voice(el) { (await import('../ui/voice.js')).dictate(document.getElementById(el.dataset.target)); },
@@ -363,11 +384,29 @@ export default {
       const reason = await promptDialog({ title: 'Modifier un audit signé', label: 'Motif de la modification (obligatoire)', hint: 'Le motif, l’auteur, la date et les valeurs avant/après seront conservés.' });
       if (!reason) return;
       amendState.set(amendKey(this.params.id), reason);
+      amendBaseline.set(amendKey(this.params.id), new Set(blockingIssues(store.get('audit', this.params.id)).map(issueKey)));
       await store.log('amend-start', { entityType: 'audit', entityId: this.params.id, entityLabel: store.get('audit', this.params.id).number, reason });
       this.refresh();
     },
     async 'amend-stop'() {
+      // Clôture des modifications refusée tant qu'elles ont introduit un point bloquant (réponse obligatoire effacée,
+      // P / NC sans observation…) : l'audit signé doit rester complet.
+      const audit = store.get('audit', this.params.id);
+      const before = amendBaseline.get(amendKey(audit.id)) || new Set();
+      const added = blockingIssues(audit).filter(e => !before.has(issueKey(e)));
+      if (added.length) {
+        const href = isSheetAudit(audit) ? issueHrefFor(audit, auditState(audit)) : e => `#/audit/${audit.id}/${e.sectionId}`;
+        const m = openModal({
+          title: 'Modifications à compléter',
+          body: html`<div class="banner nc">${added.length} point(s) bloquant(s) introduit(s) par la modification en cours : complétez-les avant de terminer les modifications (l’audit signé doit rester complet).</div>
+            <div class="list as-issues">${added.map(e => html`<a class="li stripe-nc" href="${href(e)}"><div class="li-main"><div class="li-sub">${e.message}</div></div><span class="chev">›</span></a>`)}</div>`,
+          actions: [{ label: 'Continuer les modifications', cls: 'primary' }]
+        });
+        m.root.addEventListener('click', ev => { if (ev.target.closest('a[href^="#/"]')) m.close(); });
+        return;
+      }
       amendState.delete(amendKey(this.params.id));
+      amendBaseline.delete(amendKey(this.params.id));
       await store.log('amend-stop', { entityType: 'audit', entityId: this.params.id, entityLabel: store.get('audit', this.params.id).number });
       this.refresh();
     },

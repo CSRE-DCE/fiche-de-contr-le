@@ -189,3 +189,25 @@ export function recurringDeviations(deviations, { min = 2, key = d => String(d.i
 export function isOverdue(d, today) {
   return OPEN_DEVIATION.includes(d.status) && d.dueDate && String(d.dueDate).slice(0, 10) < today;
 }
+
+/* ---------- Prestations : échéance et retard ---------- */
+const lastDayOfMonth = day => {
+  const [y, m] = String(day).slice(0, 7).split('-').map(Number);
+  if (!y || !m) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+};
+/**
+ * Échéance d'une prestation (AAAA-MM-JJ) : sa date programmée ; date INDICATIVE (convention : 1er jour du mois de
+ * session) → fin de la campagne, à défaut fin du mois de la date indicative. '' si la prestation n'est pas datée.
+ */
+export function prestationDueDate(p, campaign = null) {
+  if (!p?.plannedDate) return '';
+  if (!p.dateIndicative) return String(p.plannedDate).slice(0, 10);
+  const end = String(campaign?.end || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(end) && end >= String(p.plannedDate).slice(0, 10) ? end : lastDayOfMonth(p.plannedDate);
+}
+/** Prestation en retard : échéance (prestationDueDate) passée, toujours « prévue » et sans audit (audited : booléen). */
+export function isPrestationLate(p, { today, campaign = null, audited = false } = {}) {
+  const due = prestationDueDate(p, campaign);
+  return !!due && due < today && p.status === 'prevue' && !audited;
+}

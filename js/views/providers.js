@@ -5,8 +5,8 @@ import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, openModal, formValues, confirmDialog } from '../ui/dom.js';
-import { pageTitle, kv, badge, kindBadge, empty, options, field, auditBadge, critBadge, deviationBadge, operatorName, siteName } from '../ui/components.js';
-import { PROVIDER_KINDS, OPEN_DEVIATION, QUALIFICATION_TYPES, EQUIPMENT_STATUS, ACTION_STATUS } from '../domain/model.js';
+import { pageTitle, kv, badge, kindBadge, empty, options, field, auditBadge, critBadge, deviationBadge, operatorName, siteName, tourStationsLabel, auditSiteIds } from '../ui/components.js';
+import { PROVIDER_KINDS, OPEN_DEVIATION, QUALIFICATION_TYPES, EQUIPMENT_STATUS, ACTION_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { recurringDeviations, isOverdue } from '../domain/summary.js';
 
@@ -98,11 +98,11 @@ export const detailView = {
     const today = localDate();
     const ops = sortBy(store.filter('operator', o => o.providerId === id), 'code');
     const eqs = sortBy(store.filter('equipment', e => e.providerId === id), 'label');
-    const audits = sortBy(store.filter('audit', a => a.providerId === id && a.status !== 'abandonne'), '-startedAt');
+    const audits = store.filter('audit', a => a.providerId === id && a.status !== 'abandonne').sort(byAuditDateDesc);
     const devs = sortBy(store.filter('deviation', d => d.providerId === id), '-date');
     const actions = devs.flatMap(d => (d.correctiveActions || []).map(a => ({ ...a, dev: d })));
     const recurring = recurringDeviations(devs);
-    const siteIds = [...new Set([...store.filter('prestation', x => x.providerId === id).map(x => x.siteId), ...audits.map(a => a.siteId)])];
+    const siteIds = [...new Set([...store.filter('prestation', x => x.providerId === id).map(x => x.siteId), ...audits.flatMap(auditSiteIds)])];
     const edit = can('ref.manage');
     return html`${pageTitle(p.name, `${p.code} · ${PROVIDER_KINDS[p.kind] || ''}`, html`${kindBadge(p.kind)}${edit ? html`<button class="btn ghost sm" data-act="edit">✏️ Modifier</button>` : ''}`, '#/prestataires')}
       <div class="kpis" style="margin-bottom:12px">
@@ -120,7 +120,7 @@ export const detailView = {
         ${edit ? html`<button class="btn ghost sm" style="margin-top:8px" data-act="op-new">＋ Opérateur</button>` : ''}</div>
       <div class="card"><h2>Équipements (${eqs.length})</h2>${eqs.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Équipement</th><th>Inventaire / série</th><th>Validité</th><th>État</th></tr></thead><tbody>${eqs.map(e => { const st = equipmentStatus(e, today); return html`<tr><td>${e.label}<div class="tiny muted">${e.brand} ${e.model}</div></td><td class="mono tiny">${e.inventoryNo}<br>${e.serial}</td><td>${fmtDate(e.validUntil) || '—'}</td><td>${st.ok ? badge(EQUIPMENT_STATUS[e.status] || 'Valide', 'ok') : badge(st.reasons[0], st.level === 'critique' ? 'nc' : 'warn')}</td></tr>`; })}</tbody></table></div>` : html`<p class="note">Aucun équipement enregistré (gestion dans Référentiels › Équipements).</p>`}</div>
       <div class="card"><h2>Sites d’intervention (${siteIds.length})</h2><p>${siteIds.map(s => siteName(s)).join(' · ') || '—'}</p></div>
-      <div class="card"><h2>Historique des audits</h2>${audits.length ? html`<div class="list">${audits.slice(0, 20).map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${siteName(a.siteId)}</div><div class="li-sub">${fmtDate(a.startedAt)} · ${a.auditorName}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit.</p>`}</div>
+      <div class="card"><h2>Historique des audits</h2>${audits.length ? html`<div class="list">${audits.slice(0, 20).map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${a.auditorName}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit.</p>`}</div>
       <div class="card"><h2>Historique des écarts</h2>${devs.length ? html`<div class="list">${devs.slice(0, 30).map(d => html`<a class="li" href="#/ecart/${d.id}"><div class="li-main"><div class="li-title">${d.number}</div><div class="li-sub">${d.requirement}</div></div>${critBadge(d.criticalityCode)}${deviationBadge(d.status)}</a>`)}</div>` : html`<p class="note">Aucun écart.</p>`}
         ${recurring.length ? html`<h3>Écarts récurrents</h3><ul>${recurring.map(r => html`<li>${r.requirement} — ${r.audits.length} audits (${r.open} ouvert(s))</li>`)}</ul>` : ''}</div>
       <div class="card"><h2>Actions correctives (${actions.length})</h2>${actions.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Écart</th><th>Action</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>${actions.map(a => html`<tr class="click" data-act="goto" data-href="#/ecart/${a.dev.id}"><td>${a.dev.number}</td><td>${a.description}</td><td>${fmtDate(a.dueDate)}</td><td>${ACTION_STATUS[a.status]}</td></tr>`)}</tbody></table></div>` : html`<p class="note">Aucune action corrective.</p>`}</div>`;

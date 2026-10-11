@@ -8,11 +8,11 @@ import { can, isTeamMode } from '../core/auth.js';
 import { mediaFor } from '../core/media.js';
 import { navigate, currentView } from '../ui/router.js';
 import { toast, openModal, choiceDialog, formValues } from '../ui/dom.js';
-import { pageTitle, kv, badge, empty, options, thumbs, hydrateMedia, evidenceButtons, siteName, providerName, operatorName, voiceBtn, field } from '../ui/components.js';
+import { pageTitle, kv, badge, empty, options, thumbs, hydrateMedia, evidenceButtons, siteName, providerName, operatorName, voiceBtn, field, tourStationsLabel, auditSiteIds } from '../ui/components.js';
 import { addFilesFromInput, viewMedia, compressImage } from '../ui/capture.js';
 import { getPosition } from '../ui/gps.js';
 import { saveMedia } from '../core/media.js';
-import { EMERGENCY_CATEGORIES } from '../domain/model.js';
+import { EMERGENCY_CATEGORIES, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { createDeviation } from '../app/audits.js';
 
 /** Contexte courant : audit ouvert à l'écran, sinon rien. */
@@ -113,9 +113,9 @@ export default {
     async 'media-view'(el) { await viewMedia(el.dataset.id); },
     async 'link-audit'(el) {
       const o = store.get('observation', el.dataset.id);
-      const audits = sortBy(store.filter('audit', a => a.status !== 'abandonne' && (!o.siteId || a.siteId === o.siteId || !o.providerId || a.providerId === o.providerId)), '-startedAt').slice(0, 30);
+      const audits = store.filter('audit', a => a.status !== 'abandonne' && (!o.siteId || auditSiteIds(a).includes(o.siteId) || !o.providerId || a.providerId === o.providerId)).sort(byAuditDateDesc).slice(0, 30);
       if (!audits.length) { toast('Aucun audit correspondant.', 'warn'); return; }
-      const id = await choiceDialog({ title: 'Rattacher l’observation', options: audits.map(a => ({ value: a.id, label: `${a.number} — ${siteName(a.siteId)}`, desc: `${fmtDate(a.startedAt)} · ${providerName(a.providerId)}` })) });
+      const id = await choiceDialog({ title: 'Rattacher l’observation', options: audits.map(a => ({ value: a.id, label: `${a.number} — ${tourStationsLabel(a)}`, desc: `${fmtDate(auditDate(a))} · ${providerName(a.providerId)}` })) });
       if (!id) return;
       await store.put('observation', { ...o, linkedAuditId: id }, { reason: 'Rattachement à un audit' });
       this.refresh();

@@ -134,9 +134,19 @@ textarea.as-obs.need::placeholder{color:var(--nc);opacity:.9}
 .st-row-card .alert{margin:10px 0 0}
 
 /* ---------- Repères terrain (feuille 1) ---------- */
-.as-rep .as-rep-row{align-items:center;gap:10px;min-height:52px}
-.as-rep .as-rep-row>label{flex:none;white-space:nowrap;font-weight:500;color:var(--th-dark);max-width:48%;overflow:hidden;text-overflow:ellipsis}
-.as-rep-v{flex:1;min-width:0;display:flex;align-items:center}
+/* Libellé et valeur sur la même ligne ; la valeur passe sous son libellé dès que la ligne ne peut plus lui laisser
+ * 15em (champ date / heure + bouton « Aujourd'hui » / « Maintenant » lisibles en entier, libellé jamais tronqué). */
+.as-rep .as-rep-row{flex-wrap:wrap;align-items:center;column-gap:10px;row-gap:0;min-height:52px}
+.as-rep .as-rep-row>label{flex:0 1 auto;min-width:0;max-width:100%;white-space:nowrap;font-weight:500;color:var(--th-ink,var(--oeg-navy));overflow:hidden;text-overflow:ellipsis}
+.as-rep-v{flex:1 1 15em;min-width:0;display:flex;align-items:center}
+/* Saisie : une colonne de repères tant que la fiche est étroite (deux colonnes « 1fr » débordaient de la carte en
+ * 1055 px de large), deux colonnes de largeur égale au-delà ; téléphone : chaque libellé au-dessus de sa valeur. */
+@container ss (max-width:899px){.as-frame .as-rep .ss-rep-rows{grid-template-columns:minmax(0,1fr)}}
+@container ss (min-width:900px){.as-frame .as-rep .ss-rep-rows{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container ss (max-width:560px){
+  .as-rep .as-rep-row{row-gap:2px;padding:6px 0}
+  .as-rep .as-rep-row>label,.as-rep .as-rep-row>.as-rep-v{flex:1 1 100%}
+}
 .as-rep-v>*{flex:1;min-width:0}
 .as-rep-v :is(input,select),.as-lined{border:0;border-bottom:1.5px dotted var(--oeg-dots);border-radius:0;background:transparent;min-height:40px;padding:4px 2px;font-size:16px;color:var(--oeg-ink)}
 .as-rep-v .as-inline>input{border:0;border-bottom:1.5px dotted var(--oeg-dots);border-radius:0;background:transparent;min-height:40px;padding:4px 2px}
@@ -144,10 +154,15 @@ textarea.as-obs.need::placeholder{color:var(--nc);opacity:.9}
 .as-rep .as-rep-row.is-prefilled .as-rep-v :is(input,select){color:#2b5a8a;font-style:italic}
 .as-rep-long textarea{margin-top:2px}
 
-/* Zone de texte lignée (encadrés, observations) : lignes pointillées comme les fiches papier */
-.as-lined{--lh:30px;display:block;width:100%;min-height:calc(var(--lh) * 3 + 8px);resize:vertical;line-height:var(--lh);padding:2px 4px;
-  border:0!important;border-radius:0;background:transparent radial-gradient(circle,var(--oeg-dots) .9px,transparent 1.3px) 0 calc(var(--lh) - 3px) / 6px var(--lh) repeat;
-  background-attachment:local;font:inherit;font-size:16px;color:var(--oeg-ink)}
+/* Zone de texte lignée (encadrés, observations) : lignes pointillées comme les fiches papier, le texte posé SUR
+ * chaque pointillé. Le pas des pointillés (--lh) est l'interligne du texte : line-height est déclaré APRÈS le
+ * raccourci « font » (qui le remettrait à la valeur héritée). Le point est centré dans sa tuile de --lh : décalée
+ * de --lh / 2 - 1px, la tuile place le point 3 px au-dessus du bas de chaque ligne (padding-top 2 px), sous les
+ * jambages. */
+.as-lined{--lh:30px;display:block;width:100%;min-height:calc(var(--lh) * 3 + 8px);resize:vertical;padding:2px 4px;
+  border:0!important;border-radius:0;font:inherit;font-size:16px;line-height:var(--lh);color:var(--oeg-ink);
+  background:transparent radial-gradient(circle,var(--oeg-dots) .9px,transparent 1.3px) 0 calc(var(--lh) / 2 - 1px) / 6px var(--lh) repeat;
+  background-attachment:local}
 textarea.as-lined[rows="2"]{min-height:calc(var(--lh) * 2 + 8px)}
 .as-lined:disabled{opacity:1}
 
@@ -215,7 +230,7 @@ table.as-sum tr.as-sum-tour>th{color:var(--sky)}
 
 /* ---------- Pied de navigation ---------- */
 .as-footer .btn{flex-direction:column;gap:0;line-height:1.15}
-.as-footer .btn small{font-size:12px;font-weight:600;opacity:.85;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.as-footer .btn small{display:block;font-size:12px;font-weight:600;opacity:.85;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .as-fl{white-space:nowrap}
 
 /* ---------- Plein soleil ---------- */

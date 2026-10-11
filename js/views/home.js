@@ -11,6 +11,7 @@ import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { icon } from '../ui/icons.js';
 import { empty, options } from '../ui/components.js';
+import { auditDate, byAuditDateDesc } from '../domain/model.js';
 import { guyaneInset, assetURL, LOGO_URL } from '../ui/sheet-chrome.js';
 import { mediaURL } from '../core/media.js';
 import { TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
@@ -37,7 +38,7 @@ function collect() {
     prestBySite.get(p.siteId).push(p);
   }
   return store.all('site').map(site => {
-    const audits = sortBy(bySite.get(site.id) || [], '-startedAt');
+    const audits = [...(bySite.get(site.id) || [])].sort(byAuditDateDesc);
     const prestations = sortBy((prestBySite.get(site.id) || []).filter(p => !audits.some(a => a.lock?.lockedAt && ((a.prestationIds || []).includes(p.id) || a.prestationId === p.id))), p => p.plannedDate || '9999');
     return { site, types: siteTypes(site), status: stationStatus(site.id, { year, audits }), audits, prestations, text: searchText(site) };
   });
@@ -69,14 +70,14 @@ function stationCard(x, grid) {
     <span class="hm-foot">
       <span class="badge ${status.cls}">${status.key === 'en_cours' ? icon('route', { size: 14 }) : status.key === 'controlee' ? icon('check', { size: 14 }) : ''}${status.label}</span>
       ${next ? html`<span class="hm-next${next.plannedDate ? '' : ' is-unplanned'}" title="${next.ref}">${icon('calendar', { size: 14 })}${providerHeaderName(store.get('provider', next.providerId)) || ''} · ${plannedLabel(next)}</span>` : ''}
-      ${last && status.key !== 'en_cours' ? html`<span class="hm-last">Dernière tournée : ${last.number} (${fmtDate(last.startedAt)})</span>` : ''}
+      ${last && status.key !== 'en_cours' ? html`<span class="hm-last">Dernière tournée : ${last.number} (${fmtDate(auditDate(last))})</span>` : ''}
     </span>
   </a>`;
 }
 
 function openTours() {
   const list = store.filter('audit', a => !a.lock?.lockedAt && ['en_cours', 'termine'].includes(a.status));
-  return sortBy(list, a => (a.auditorId === session.user?.id ? 0 : 1), '-startedAt');
+  return [...list].sort(byAuditDateDesc).sort((a, b) => (a.auditorId === session.user?.id ? 0 : 1) - (b.auditorId === session.user?.id ? 0 : 1));
 }
 
 export default {
@@ -108,7 +109,7 @@ export default {
         const names = (a.stations || []).map(s => store.get('site', s.siteId)?.name || s.key);
         return html`<a class="hm-tour" href="#/audit/${a.id}"><span class="hm-tour-top"><b>${a.number}</b>${tt ? html`<span class="type-badge t-${a.auditType}">${icon(tt.icon, { size: 14 })}${tt.label}</span>` : ''}</span>
           <span class="hm-tour-st">${names.length ? names.map((n, i) => html`<span><i>${i + 1}</i>${n}</span>`) : '—'}</span>
-          <span class="hm-tour-meta">${providerHeaderName(store.get('provider', a.providerId)) || '—'} · ${fmtDate(a.startedAt)} · ${a.auditorName || ''}</span>
+          <span class="hm-tour-meta">${providerHeaderName(store.get('provider', a.providerId)) || '—'} · ${fmtDate(auditDate(a))} · ${a.auditorName || ''}</span>
           <span class="btn primary sm">Reprendre</span></a>`;
       })}</div></section>` : ''}
       <section class="hm-filters" aria-label="Filtres">

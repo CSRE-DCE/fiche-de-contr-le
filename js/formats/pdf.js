@@ -382,11 +382,23 @@ export class PDFDocument {
     const codes = toWinAnsi(str);
     return codes.reduce((s, c) => s + (f.widths[c] || 0), 0) * size / 1000 + charSpace * Math.max(0, codes.length - 1);
   }
-  /** Retour à la ligne : lignes tenant dans maxWidth (mots trop longs coupés). */
+  /** Retour à la ligne : lignes tenant dans maxWidth (mots trop longs coupés). Typographie française : une
+   * ponctuation haute précédée d'une espace (« : », « ; », « ! », « ? », « » ») reste avec le mot qui la précède et
+   * un guillemet ouvrant « « » avec le mot qui le suit (jamais seuls en début ou en fin de ligne). */
   wrap(str, font = 'regular', size = 10, maxWidth = this.contentWidth, charSpace = 0) {
     const out = [];
+    const blank = w => /^[ \t]+$/.test(w);
     for (const para of String(str ?? '').split(/\r?\n/)) {
-      const words = para.split(/([ \t]+)/).filter(w => w !== '');
+      const words = [];
+      for (const w of para.split(/([ \t]+)/)) {
+        if (w === '') continue;
+        const n = words.length;
+        if (!blank(w) && n >= 2 && blank(words[n - 1]) && (/^[:;!?»]/.test(w) || /«$/.test(words[n - 2]))) {
+          words[n - 2] += words.pop() + w;
+          continue;
+        }
+        words.push(w);
+      }
       let line = '';
       for (const w of words) {
         const cand = line + w;

@@ -7,7 +7,8 @@
 import { test, assert, eq, deepEq } from './harness.js';
 import { evalCondition, itemIndex, visibleStructure, progress, validateResponses, validateGrid, rankGrids, allItems, conditionErrors } from '../../js/domain/grids.js';
 import { computeAlerts, operatorStatus, equipmentStatus, qualificationValid } from '../../js/domain/rules.js';
-import { auditSummary, recurringDeviations, isOverdue } from '../../js/domain/summary.js';
+import { auditSummary, recurringDeviations, isOverdue, prestationDueDate, isPrestationLate } from '../../js/domain/summary.js';
+import { auditDate, byAuditDateDesc, TOUR_DATE_ITEM } from '../../js/domain/model.js';
 import { compareAudits } from '../../js/domain/compare.js';
 import { mergeEntity, stripMeta, IMMUTABLE_TYPES } from '../../js/domain/merge.js';
 import { GRID_GENERAL, GRID_RAPIDE, DEFAULT_GRIDS } from '../../js/domain/default-grids.js';
@@ -206,4 +207,58 @@ test('droits par profil', () => {
   eq(roleCan('auditeur', 'inconnu'), false);
   eq(writePermission('inconnu'), null);
   deepEq(Object.keys(ROLES), ['admin', 'rq', 'superviseur', 'auditeur', 'consultation']);
+});
+
+/* ---------- Date d'un audit (date de la tournée) ---------- */
+test('date de l’audit : « Date mission », puis date de la tournée, puis date de création (heure locale)', () => {
+  const created = new Date(2026, 9, 11, 1, 16).toISOString();   // 11/10/2026 01:16 heure locale (le 11 en UTC aussi)
+  eq(auditDate({ startedAt: created }), '2026-10-11', 'audit ancien sans date : date locale de création');
+  eq(auditDate({ startedAt: created, date: '2026-10-09' }), '2026-10-09', 'date de tournée choisie à la création');
+  eq(auditDate({ startedAt: created, date: '2026-10-09', responses: { [TOUR_DATE_ITEM]: { value: '2026-10-08' } } }), '2026-10-08', '« Date mission » corrigée par l’auditeur');
+  eq(auditDate({ startedAt: created, date: '2026-10-09', responses: { [TOUR_DATE_ITEM]: { value: '' } } }), '2026-10-09', 'réponse vidée : date de la tournée');
+  eq(auditDate({ startedAt: created, date: 'n’importe quoi' }), '2026-10-11');
+  const late = new Date(2026, 9, 10, 22, 30);   // 22 h 30 à Cayenne = lendemain en UTC
+  eq(auditDate({ startedAt: late.toISOString() }), `2026-10-${String(late.getDate()).padStart(2, '0')}`, 'jour LOCAL de création');
+  eq(auditDate(null), '');
+  const list = [{ id: 'a', date: '2026-10-09', startedAt: '2026-10-11T04:00:00Z' }, { id: 'b', date: '2026-10-10', startedAt: '2026-10-10T12:00:00Z' }, { id: 'c', date: '2026-10-09', startedAt: '2026-10-11T05:00:00Z' }];
+  deepEq(list.sort(byAuditDateDesc).map(a => a.id), ['b', 'c', 'a'], 'tri : date de la tournée puis création, la plus récente d’abord');
+});
+
+test('alertes calculées à la date de la tournée (tournée saisie après coup)', () => {
+  const audit = { startedAt: '2026-10-11T04:16:00Z', date: '2026-10-09', responses: {}, providerId: 'p1' };
+  const prestation = { id: 'pr', siteId: 's1', providerId: 'p1', plannedDate: '2026-10-09' };
+  const codes = a => computeAlerts({ audit: a, grid: GRID_RAPIDE, prestation, settings: {} }).filter(x => x.code === 'PRESTATION_DIFFERENT').map(x => x.message);
+  deepEq(codes(audit), [], 'prestation programmée le jour de la tournée : pas d’écart de date');
+  assert(codes({ ...audit, date: '2026-10-11' }).some(m => /date programmée/.test(m)), 'tournée le 11/10 pour une prestation du 09/10 : écart de date');
+  const op = { id: 'op', firstName: 'A', lastName: 'B', qualifications: [{ type: 'habilitation', label: 'H', validUntil: '2026-10-10' }] };
+  const notQualified = a => computeAlerts({ audit: { ...a, operatorIds: ['op'] }, grid: GRID_RAPIDE, operators: [op], settings: {} }).some(x => x.code === 'OPERATOR_NOT_QUALIFIED');
+  eq(notQualified(audit), false, 'habilitation valide le jour de la tournée (09/10)');
+  eq(notQualified({ ...audit, date: '2026-10-11' }), true, 'habilitation expirée le 11/10');
+});
+
+/* ---------- Prestations : échéance des dates indicatives ---------- */
+test('prestations à date indicative : en retard seulement après la fin de la campagne (ou du mois)', async () => {
+  const DATA = await loadDATA();
+  const r = oegReferential(DATA);
+  const prog = oegProgramme(DATA);
+  const camp = p => r.campaign.find(c => c.id === p.campaignId) || null;
+  const today = '2026-10-11';
+  const rco = prog.filter(p => p.campaignId === 'camp-RCO-S1_-_Octobre_2026');
+  assert(rco.length >= 10 && rco.every(p => p.plannedDate === '2026-10-01' && p.dateIndicative), `prestations RCO S1 : ${rco.length}`);
+  for (const p of rco) {
+    eq(prestationDueDate(p, camp(p)), '2026-10-31', `${p.ref} : échéance = fin de la campagne`);
+    eq(isPrestationLate(p, { today, campaign: camp(p) }), false, `${p.ref} : pas en retard le 11/10`);
+  }
+  const chimie = prog.filter(p => p.campaignId === 'camp-Chimie-S1_-_Sept_26');
+  assert(chimie.length > 0 && chimie.every(p => p.plannedDate === '2026-09-01'), 'prestations Chimie S1 (septembre)');
+  for (const p of chimie) eq(isPrestationLate(p, { today, campaign: camp(p) }), true, `${p.ref} : campagne close le 30/09 ⇒ en retard`);
+  eq(isPrestationLate(chimie[0], { today, campaign: camp(chimie[0]), audited: true }), false, 'auditée : jamais en retard');
+  eq(isPrestationLate({ ...chimie[0], status: 'reportee' }, { today, campaign: camp(chimie[0]) }), false, 'reportée : pas « en retard »');
+  // Sans campagne : fin du mois de la date indicative ; date ferme : la date elle-même.
+  eq(prestationDueDate({ plannedDate: '2026-02-01', dateIndicative: true }), '2026-02-28');
+  eq(prestationDueDate({ plannedDate: '2028-02-01', dateIndicative: true }), '2028-02-29');
+  eq(prestationDueDate({ plannedDate: '2026-10-05', dateIndicative: false }, { end: '2026-10-31' }), '2026-10-05');
+  eq(isPrestationLate({ plannedDate: '2026-10-05', status: 'prevue' }, { today }), true, 'date ferme passée');
+  eq(isPrestationLate({ plannedDate: '2026-10-01', dateIndicative: true, status: 'prevue' }, { today }), false, 'indicative d’octobre sans campagne');
+  eq(isPrestationLate({ plannedDate: '', dateIndicative: true, status: 'prevue' }, { today }), false, 'à planifier : jamais en retard');
 });

@@ -14,7 +14,7 @@
  * appui sur le statut choisi l'annule ; observation obligatoire pour P et NC (contrôle avant clôture) ; critères
  * « Commun à la tournée » : une seule réponse partagée par toutes les stations (identifiant sans « @ »).
  * Lecture seule si l'audit est verrouillé (sauf modification motivée en cours). */
-import { html, raw, fmtDate, fmtTime, fmtDateTime, normalize, sortBy } from '../core/util.js';
+import { html, raw, fmtDate, fmtTime, fmtDateTime, normalize, sortBy, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { can } from '../core/auth.js';
@@ -28,12 +28,12 @@ import {
   oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, sheetFooter, sheetFrame, STATUS_SCALE, statusHeadCells,
   statusLegend, sharedBadge, tourStations, assetURL
 } from '../ui/sheet-chrome.js';
-import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES } from '../domain/model.js';
+import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate } from '../domain/model.js';
 import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
 } from '../domain/grids.js';
 import { calibrationStatus } from '../domain/rules.js';
-import { addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf } from '../app/audits.js';
+import { addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel } from '../app/audits.js';
 import { alertBox, documentsCard, signaturesStep, deviationChips, findItem } from './audit-modules.js';
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -47,6 +47,9 @@ const FIXED = {
   signatures: { label: 'Signatures', icon: 'signature' }, infos: { label: 'Infos', icon: 'info' }
 };
 const OPT_CLS = { C: 'ok', P: 'p', NC: 'nc', NA: 'na' };
+/** Zones de texte libre (observations, encadrés, bilan) : enregistrement différé pendant la frappe (data-autosave,
+ * js/ui/dom.js), sauf sur un audit signé (une modification motivée est enregistrée quand le champ est quitté). */
+const autosave = c => (c.editable && !c.locked ? raw('data-autosave') : '');
 
 /** Dernière station affichée par audit (sélecteur de stations, onglets des étapes fixes). */
 const lastStation = new Map();
@@ -94,6 +97,11 @@ function defaultStep(audit, st, model) {
 function itemHref(audit, model, itemId) {
   const key = model.itemSheet.get(itemId);
   return key ? `#/audit/${audit.id}/feuille-${key}?item=${encodeURIComponent(itemId)}` : `#/audit/${audit.id}/signatures`;
+}
+/** Liens des points du contrôle avant clôture (issue → adresse de la feuille du critère), pour un état st = auditState(audit). */
+export function issueHrefFor(audit, st) {
+  const model = navModel(st);
+  return e => itemHref(audit, model, e.itemId);
 }
 
 /* ---------- Champs de saisie ---------- */
@@ -164,7 +172,7 @@ function obsField(c, it, r, pfx) {
   const need = needsJustification(it, r);
   const empty = need && blankStr(r?.comment);
   const dis = c.editable ? '' : raw('disabled');
-  return html`<textarea id="${pfx}-o-${it.id}" class="as-obs${empty ? ' need' : ''}" rows="${pfx === 't' ? 1 : 2}" data-change="comment" data-item="${it.id}" data-need="${need ? '1' : ''}" aria-label="Observations — ${it.label}" placeholder="${need ? 'Observation obligatoire (constat factuel)' : pfx === 't' ? '' : 'Constat, précision…'}" ${dis}>${r?.comment || ''}</textarea>`;
+  return html`<textarea ${autosave(c)} id="${pfx}-o-${it.id}" class="as-obs${empty ? ' need' : ''}" rows="${pfx === 't' ? 1 : 2}" data-change="comment" data-item="${it.id}" data-need="${need ? '1' : ''}" aria-label="Observations — ${it.label}" placeholder="${need ? 'Observation obligatoire (constat factuel)' : pfx === 't' ? '' : 'Constat, précision…'}" ${dis}>${r?.comment || ''}</textarea>`;
 }
 const helpButton = it => (it.help || it.refs?.length) ? html`<button type="button" class="as-help" data-act="item-help" data-item="${it.id}" title="${it.help || 'Références'}" aria-label="Aide : ${it.label}">${icon('info', { size: 17 })}</button>` : '';
 function rowClass(c, it, r) {
@@ -246,7 +254,6 @@ function instrumentsModule(c, sh) {
   const key = sheetStoreKey(sh, 'instruments');
   const data = c.audit.sheets?.[key]?.instruments || {};
   const dis = c.editable ? '' : raw('disabled');
-  const auditDate = c.audit.responses?.['it-F2-1.4']?.value || String(c.audit.startedAt || '').slice(0, 10);
   const maxDays = Number(c.baseGrid?.settings?.calibrationMaxDays) || 30;
   const idFields = sh.instrumentFields || [{ key: 'model', label: 'Marque / modèle', type: 'text' }, { key: 'serial', label: 'N° de série', type: 'text' }, { key: 'calibration', label: 'Dernière calibration', type: 'date' }];
   const calFields = sh.calibrationFields || [];
@@ -257,7 +264,7 @@ function instrumentsModule(c, sh) {
     return html`<div class="as-kv"><label class="as-kv-k" for="${id}">${f.label}&nbsp;:</label><input id="${id}" class="st-input" type="${f.type === 'date' ? 'date' : 'text'}" value="${val}" placeholder="${f.key === 'standards' ? ins.standards || f.placeholder || '' : f.placeholder || ''}" data-change="instr" data-sheet="${key}" data-ins="${ins.key}" data-k="${f.key}" autocomplete="off" ${dis}></div>`;
   };
   const cards = (sh.instruments || []).map(ins => {
-    const cal = calibrationStatus(data[ins.key]?.calibration, auditDate, maxDays);
+    const cal = calibrationStatus(data[ins.key]?.calibration, c.date, maxDays);
     const alert = c.st.alerts.find(a => a.key === `CALIBRATION:${sh.no}:${ins.key}`);
     const filled = calFields.some(f => !blankStr(data[ins.key]?.[f.key]));
     return sectionCard({
@@ -272,7 +279,7 @@ function instrumentsModule(c, sh) {
   return html`<div class="as-module">
     <div class="as-module-title"><span class="bc-ic">${icon('wrench')}</span><span>Appareils de mesure (in situ)</span>${c.multi ? sharedBadge() : ''}</div>
     <div class="as-instr">${cards}
-      ${sectionCard({ icon: 'people', title: 'Agent(s) prestataire(s) / fonction', cls: 'as-ins', body: html`<textarea id="sheet-${agentsKey}-agents" class="as-lined" rows="3" data-change="sheet-text" data-sheet="${agentsKey}" data-k="agents" aria-label="Agent(s) prestataire(s) / fonction" ${dis}>${c.audit.sheets?.[agentsKey]?.agents || ''}</textarea>` })}</div>
+      ${sectionCard({ icon: 'people', title: 'Agent(s) prestataire(s) / fonction', cls: 'as-ins', body: html`<textarea ${autosave(c)} id="sheet-${agentsKey}-agents" class="as-lined" rows="3" data-change="sheet-text" data-sheet="${agentsKey}" data-k="agents" aria-label="Agent(s) prestataire(s) / fonction" ${dis}>${c.audit.sheets?.[agentsKey]?.agents || ''}</textarea>` })}</div>
   </div>`;
 }
 
@@ -288,12 +295,12 @@ function conclusionBody(c, sh, b) {
   const dis = c.editable ? '' : raw('disabled');
   const fields = b.fields || ['controller', 'date', 'signature'];
   const summary = c.st.summary.sheets.find(x => x.instanceKey === sh.instanceKey);
-  const date = c.audit.responses?.['it-F2-1.4']?.value || String(c.audit.startedAt || '').slice(0, 10);
+  const date = c.date;
   const sig = c.audit.signatures || {};
   const opts = b.options || Object.entries(SHEET_CONCLUSIONS);
   return html`<div class="bc-options" role="group" aria-label="${b.title}">${opts.map(([k, l]) => html`<button type="button" class="bc-option${concl.status === k ? ' sel' : ''}" aria-pressed="${concl.status === k}" data-act="sheet-concl" data-sheet="${key}" data-value="${k}" ${dis}>${checkSquare({ checked: concl.status === k, cls: OPT_CLS[k] || '' })}${l}</button>`)}</div>
     ${summary?.hint ? html`<p class="as-hint">${icon('info', { size: 15 })}Constat de la feuille : ${summary.hint}. <span>La conclusion reste le choix du contrôleur.</span></p>` : ''}
-    ${fields.includes('comments') ? html`<div class="bc-field"><label class="bc-k" for="concl-${key}">Commentaires</label><textarea id="concl-${key}" class="as-lined" rows="2" data-change="sheet-concl-text" data-sheet="${key}" ${dis}>${concl.comments || ''}</textarea></div>` : ''}
+    ${fields.includes('comments') ? html`<div class="bc-field"><label class="bc-k" for="concl-${key}">Commentaires</label><textarea ${autosave(c)} id="concl-${key}" class="as-lined" rows="2" data-change="sheet-concl-text" data-sheet="${key}" ${dis}>${concl.comments || ''}</textarea></div>` : ''}
     <div class="bc-fields">${fields.filter(f => f === 'controller' || f === 'date').map(f => html`<div class="bc-field"><span class="bc-k">${f === 'date' ? 'Date' : 'Nom du contrôleur OEG'}</span><span class="bc-v">${f === 'date' ? fmtDate(date) : c.audit.auditorName}</span></div>`)}</div>
     ${fields.some(f => f === 'signature' || f === 'providerSignature') ? html`<div class="bc-fields">${fields.includes('signature') ? html`<div class="bc-field"><span class="bc-k">Signature du contrôleur</span>${signatureView(sig.auditor)}</div>` : ''}${fields.includes('providerSignature') ? html`<div class="bc-field"><span class="bc-k">Nom et signature du prestataire${sig.provider?.name ? ` : ${sig.provider.name}` : ''}</span>${signatureView(sig.provider)}</div>` : ''}</div>
       ${!sig.auditor ? html`<p class="note as-sign-note">Signature électronique unique de la tournée : onglet « Signatures ».</p>` : ''}` : ''}`;
@@ -302,7 +309,7 @@ function textBlock(c, sh, b) {
   const key = sheetStoreKey(sh, b.key);
   const dis = c.editable ? '' : raw('disabled');
   const media = b.key === 'photos' ? (c.mediaBySheet.get(key) || []) : [];
-  return html`<textarea id="sheet-${key}-${b.key}" class="as-lined" rows="4" data-change="sheet-text" data-sheet="${key}" data-k="${b.key}" aria-label="${b.title}" ${dis}>${c.audit.sheets?.[key]?.[b.key] || ''}</textarea>
+  return html`<textarea ${autosave(c)} id="sheet-${key}-${b.key}" class="as-lined" rows="4" data-change="sheet-text" data-sheet="${key}" data-k="${b.key}" aria-label="${b.title}" ${dis}>${c.audit.sheets?.[key]?.[b.key] || ''}</textarea>
     ${b.key === 'photos' ? html`${thumbs(media)}${c.editable && !c.locked ? html`<div class="st-rc-tools">${fileInput(c, { type: 'sheet', id: c.audit.id, itemId: key }, { capture: true, label: 'Photo', cls: 'btn ghost sm as-file' })}${fileInput(c, { type: 'sheet', id: c.audit.id, itemId: key }, { label: 'Joindre', cls: 'btn ghost sm as-file' })}</div>` : ''}` : ''}`;
 }
 function blocksArea(c, sh) {
@@ -386,9 +393,10 @@ function tableSheetView(c, sh, site) {
 /* ---------- Étapes fixes ---------- */
 function deviationsView(c) {
   const devs = c.st.deviations;
-  const stName = k => k ? c.stations.find(s => s.key === k)?.name || k : 'Tournée';
+  // Station de l'écart ; station retirée de la tournée : « Nom (retirée) » ; écart commun : « Tournée ».
+  const stName = k => k ? stationLabel(c.audit, k) : 'Tournée';
   return html`<div class="card"><h2>Écarts de la tournée (${devs.length})</h2>
-    ${devs.length ? html`<div class="list">${devs.map(d => html`<a class="li ${d.status === 'clos' ? 'stripe-ok' : d.criticalityCode === 'OBS' ? 'stripe-perf' : 'stripe-nc'}" href="#/ecart/${d.id}"><div class="li-main"><div class="li-title">${d.number}${d.itemCode ? ' · ' + d.itemCode : ''}</div><div class="li-sub">${d.requirement}</div><div class="li-sub">${d.description}</div><div class="row" style="gap:6px;margin-top:4px">${c.multi ? badge(stName(d.stationKey), 'outline') : ''}${d.responseStatus ? badge(RESPONSES[d.responseStatus]?.label || d.responseStatus, RESPONSES[d.responseStatus]?.cls || '') : ''}${critBadge(d.criticalityCode)}${deviationBadge(d.status)}${d.dueDate ? badge('Délai ' + fmtDate(d.dueDate), 'outline') : ''}</div></div><span class="chev">›</span></a>`)}</div>`
+    ${devs.length ? html`<div class="list">${devs.map(d => html`<a class="li ${d.status === 'clos' ? 'stripe-ok' : d.criticalityCode === 'OBS' ? 'stripe-perf' : 'stripe-nc'}" href="#/ecart/${d.id}"><div class="li-main"><div class="li-title">${d.number}${d.itemCode ? ' · ' + d.itemCode : ''}</div><div class="li-sub">${d.requirement}</div><div class="li-sub">${d.description}</div><div class="row" style="gap:6px;margin-top:4px">${c.multi || (d.stationKey && !c.stations.some(s => s.key === d.stationKey)) ? badge(stName(d.stationKey), 'outline') : ''}${d.responseStatus ? badge(RESPONSES[d.responseStatus]?.label || d.responseStatus, RESPONSES[d.responseStatus]?.cls || '') : ''}${critBadge(d.criticalityCode)}${deviationBadge(d.status)}${d.dueDate ? badge('Délai ' + fmtDate(d.dueDate), 'outline') : ''}</div></div><span class="chev">›</span></a>`)}</div>`
       : empty(icon('check-circle', { size: 44 }), 'Aucun écart enregistré pour cette tournée.')}
     <p class="note">Un écart naît d’une décision de l’auditeur : depuis un point perfectible (criticité proposée : observation / piste d’amélioration) ou non conforme (criticité proposée : mineure), jamais automatiquement.</p>
     ${c.editable && can('deviation.manage') ? html`<button class="btn danger lg block" style="margin-top:12px" data-act="dev-new"><span class="ic">${icon('warning')}</span>Enregistrer un écart (hors critère)</button>` : ''}
@@ -427,13 +435,13 @@ function synthesisView(c) {
       ${s.actions.length ? html`<h3>Actions demandées</h3><ul>${s.actions.map(a => html`<li><b>${a.number}</b> (${a.criticality}) : ${a.action || a.immediate}${a.responsible ? ' — ' + a.responsible : ''}${a.dueDate ? ' — avant le ' + fmtDate(a.dueDate) : ''}</li>`)}</ul>` : ''}
     </div>
     <div class="card"><h2>Bilan de l’auditeur</h2>
-      <div class="field"><label for="cc-comment">Commentaire et bilan de l’auditeur</label><div class="input-wrap"><textarea ${dis} id="cc-comment" data-change="concl" data-k="comment" rows="4">${c.audit.conclusions?.comment || ''}</textarea>${c.editable ? voiceBtn('cc-comment') : ''}</div></div>
-      <div class="field"><label for="cc-preconisations">Autres préconisations</label><div class="input-wrap"><textarea ${dis} id="cc-preconisations" data-change="concl" data-k="preconisations" rows="3">${c.audit.conclusions?.preconisations || ''}</textarea>${c.editable ? voiceBtn('cc-preconisations') : ''}</div></div>
+      <div class="field"><label for="cc-comment">Commentaire et bilan de l’auditeur</label><div class="input-wrap"><textarea ${autosave(c)} ${dis} id="cc-comment" data-change="concl" data-k="comment" rows="4">${c.audit.conclusions?.comment || ''}</textarea>${c.editable ? voiceBtn('cc-comment') : ''}</div></div>
+      <div class="field"><label for="cc-preconisations">Autres préconisations</label><div class="input-wrap"><textarea ${autosave(c)} ${dis} id="cc-preconisations" data-change="concl" data-k="preconisations" rows="3">${c.audit.conclusions?.preconisations || ''}</textarea>${c.editable ? voiceBtn('cc-preconisations') : ''}</div></div>
       <details ${c.audit.conclusions?.strengths || c.audit.conclusions?.vigilance ? raw('open') : ''}><summary>Points forts et points de vigilance</summary>
         ${s.strengths.length ? html`<h3>Points forts constatés</h3><ul>${s.strengths.map(x => html`<li>${x}</li>`)}</ul>` : ''}
         ${s.vigilance.length ? html`<h3>Points de vigilance constatés</h3><ul>${s.vigilance.slice(0, 12).map(x => html`<li>${x}</li>`)}</ul>${s.vigilance.length > 12 ? html`<p class="note">… et ${s.vigilance.length - 12} autre(s).</p>` : ''}` : ''}
-        <div class="field"><label for="cc-strengths">Points forts complémentaires</label><textarea ${dis} id="cc-strengths" data-change="concl" data-k="strengths">${c.audit.conclusions?.strengths || ''}</textarea></div>
-        <div class="field"><label for="cc-vigilance">Points de vigilance complémentaires</label><textarea ${dis} id="cc-vigilance" data-change="concl" data-k="vigilance">${c.audit.conclusions?.vigilance || ''}</textarea></div>
+        <div class="field"><label for="cc-strengths">Points forts complémentaires</label><textarea ${autosave(c)} ${dis} id="cc-strengths" data-change="concl" data-k="strengths">${c.audit.conclusions?.strengths || ''}</textarea></div>
+        <div class="field"><label for="cc-vigilance">Points de vigilance complémentaires</label><textarea ${autosave(c)} ${dis} id="cc-vigilance" data-change="concl" data-k="vigilance">${c.audit.conclusions?.vigilance || ''}</textarea></div>
       </details>
     </div>`;
 }
@@ -446,7 +454,7 @@ function infosView(c) {
   return html`
     <div class="card"><h2>Identification de la tournée</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit avec rendez-vous'],
-      ['Date', fmtDate(c.date)], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
+      ['Date', fmtDate(c.date)], ['Heure de début', `${fmtTime(audit.startedAt)}${audit.startedAt && localDate(new Date(audit.startedAt)) !== c.date ? ` (saisie démarrée le ${fmtDate(audit.startedAt)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
       ['Auditeur', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
@@ -544,7 +552,8 @@ export async function renderSheetAudit({ audit, st, step, q = {}, editable, lock
   const c = {
     audit, st, editable, locked, amendReason, model, curKey, stations: st.stations || [], multi: (st.stations || []).length > 1, type: st.auditType || auditTypeOf(audit),
     baseGrid: st.baseGrid, mediaByItem, mediaBySheet, devsByItem, SS: null,
-    date: audit.responses?.['it-F2-1.4']?.value || String(audit.startedAt || '').slice(0, 10),
+    // Date de la tournée (auditDate : « Date mission », date choisie à la création ou date de création).
+    date: auditDate(audit),
     providerLabel: prov ? (prov.kind === 'regie' && prov.code ? `${prov.code} en régie` : prov.name) : ''
   };
   let body, siteId = null;
@@ -671,7 +680,10 @@ export const sheetHandlers = {
   },
   /** Encadré texte d'une feuille (observations, notes, photos) et agents du prestataire (F4). */
   async 'sheet-text'(el) {
-    await updateSheet(store.get('audit', this.params.id), el.dataset.sheet, { [el.dataset.k]: el.value.trim() ? el.value : null }, { reason: this.amendReason });
+    const audit = store.get('audit', this.params.id);
+    const v = el.value.trim() ? el.value : null;
+    // Enregistrement différé pendant la frappe puis « change » à la sortie du champ : pas de seconde écriture identique.
+    if ((audit.sheets?.[el.dataset.sheet]?.[el.dataset.k] || null) !== v) await updateSheet(audit, el.dataset.sheet, { [el.dataset.k]: v }, { reason: this.amendReason });
     saved();
   },
   /** Conclusion d'une feuille (choix du contrôleur) ; un nouvel appui l'annule. */
@@ -682,7 +694,9 @@ export const sheetHandlers = {
     await refreshKeep(this);
   },
   async 'sheet-concl-text'(el) {
-    await updateSheet(store.get('audit', this.params.id), el.dataset.sheet, { conclusion: { comments: el.value.trim() ? el.value : null } }, { reason: this.amendReason });
+    const audit = store.get('audit', this.params.id);
+    const v = el.value.trim() ? el.value : null;
+    if ((audit.sheets?.[el.dataset.sheet]?.conclusion?.comments || null) !== v) await updateSheet(audit, el.dataset.sheet, { conclusion: { comments: v } }, { reason: this.amendReason });
     saved();
   },
   /** Appareil de mesure (F4, donnée de tournée : clé de stockage sheetStoreKey(feuille, 'instruments')). */
@@ -748,7 +762,10 @@ export const sheetHandlers = {
     toast(`Station ${store.get('site', v.siteId)?.name || ''} ajoutée à la tournée (${updated.stations.length} stations)`, 'ok');
     navigate(`/audit/${audit.id}/feuille-1@${key}`);
   },
-  /** Retrait d'une station : simple sans saisie, sinon motif obligatoire (saisies conservées dans l'historique). */
+  /**
+   * Retrait d'une station : simple sans saisie, sinon motif obligatoire (saisies conservées dans l'historique) ;
+   * écarts OUVERTS de la station : annulés avec le même motif après confirmation, sinon la station reste.
+   */
   async 'tour-remove'(el) {
     const audit = store.get('audit', this.params.id);
     const key = el.dataset.key;
@@ -758,11 +775,17 @@ export const sheetHandlers = {
     if (!(await confirmDialog({ title: 'Retirer la station', message: `Retirer la station ${name} de la tournée ${audit.number} ?`, okLabel: 'Retirer', danger: true }))) return;
     try { await removeStation(audit, key, {}); }
     catch (e) {
-      if (!e.needsReason) throw e;
+      if (!e.needsReason && !e.needsCancel) throw e;
       const n = e.entries || {};
-      const reason = await promptDialog({ title: `Retirer ${name}`, label: 'Motif du retrait (obligatoire)', hint: `Constats déjà saisis pour cette station : ${n.responses?.length || 0} réponse(s), ${n.sheets?.length || 0} encadré(s), ${n.media || 0} preuve(s), ${n.deviations || 0} écart(s). Ils sont conservés dans l’historique de la tournée.` });
-      if (!reason) return;
-      await removeStation(audit, key, { reason });
+      const open = e.openDeviations || [];
+      const numbers = open.map(d => d.number).join(', ');
+      let reason = null;
+      if (e.needsReason) {
+        reason = await promptDialog({ title: `Retirer ${name}`, label: 'Motif du retrait (obligatoire)', hint: `Constats déjà saisis pour cette station : ${n.responses?.length || 0} réponse(s), ${n.sheets?.length || 0} encadré(s), ${n.media || 0} preuve(s), ${n.deviations || 0} écart(s). Ils sont conservés dans l’historique de la tournée.${open.length ? ` Écart(s) ouvert(s) : ${numbers} — ils seront annulés avec ce motif.` : ''}` });
+        if (!reason) return;
+      }
+      if (open.length && !(await confirmDialog({ title: 'Écarts ouverts de la station', message: `La station ${name} a ${open.length} écart(s) ouvert(s) : ${numbers}. Pour la retirer de la tournée, ${open.length > 1 ? 'ils seront annulés' : 'il sera annulé'} avec le motif « ${reason || ''} » (annulation tracée dans l’historique de l’écart). Continuer ?`, okLabel: 'Annuler les écarts et retirer', cancelLabel: 'Garder la station', danger: true }))) return;
+      await removeStation(audit, key, { reason, cancelDeviations: open.length > 0 });
     }
     if (lastStation.get(audit.id) === key) lastStation.delete(audit.id);
     toast(`Station ${name} retirée de la tournée`, 'ok');

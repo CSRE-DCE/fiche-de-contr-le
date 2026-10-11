@@ -17,7 +17,7 @@ import {
   allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, stationProgress, prefillResponses, normalizeCompartments,
   isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries
 } from '../domain/grids.js';
-import { defaultCriticality } from '../domain/model.js';
+import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
 import { CT_GRID_ID } from '../domain/default-grids.js';
@@ -66,6 +66,32 @@ export function stationsOf(audit) {
     const site = store.get('site', st.siteId);
     return { ...st, index, site, point: st.pointId ? store.get('point', st.pointId) : null, prestation: st.prestationId ? store.get('prestation', st.prestationId) : null, name: site?.name || st.key, code: site?.code || st.key, codeType: site?.codeType || 'SANDRE' };
   });
+}
+
+/**
+ * Nom d'une station de la tournée par sa clé : nom du site ; station retirée de la tournée (audit.removedStations,
+ * à défaut journal audit.stationLog) : « Nom (retirée) » ; inconnue : la clé. codes : ajoute le code (« Nom (09271503) »).
+ */
+export function stationLabel(audit, key, { codes = false } = {}) {
+  if (!key) return '';
+  const fmt = (siteId, suffix = '') => { const s = store.get('site', siteId); return s ? `${s.name}${codes && s.code ? ` (${s.code})` : ''}${suffix}` : ''; };
+  const cur = (audit?.stations || []).find(st => st.key === key);
+  if (cur) return fmt(cur.siteId) || key;
+  const removed = (audit?.removedStations || []).find(r => r.station?.key === key)?.station
+    || [...(audit?.stationLog || [])].reverse().find(l => l.key === key && l.action === 'retrait');
+  return removed ? fmt(removed.siteId, ' (retirée)') || `${key} (retirée)` : key;
+}
+/**
+ * Rattachement d'un écart, en clair : sa station (stationLabel) ; écart commun à une tournée de plusieurs stations
+ * (critère commun, alerte ou écart hors critère) : « Tournée (Crique à l’Est, Amont Voltaire) » ; sinon le site.
+ */
+export function deviationPlace(d, { codes = true } = {}) {
+  const audit = d?.auditId ? store.get('audit', d.auditId) : null;
+  if (d?.stationKey) return stationLabel(audit, d.stationKey, { codes }) || d.stationKey;
+  const sites = d?.siteIds?.length ? d.siteIds : (audit?.stations || []).length > 1 ? audit.stations.map(st => st.siteId) : [];
+  if (sites.length > 1) return `Tournée (${sites.map(id => store.get('site', id)?.name || id).join(', ')})`;
+  const s = store.get('site', d?.siteId || sites[0]);
+  return s ? `${s.name}${codes && s.code ? ` (${s.code})` : ''}` : '';
 }
 
 /**
@@ -147,15 +173,18 @@ const sessionStamp = at => ({ at, by: session.user.id, byName: session.user.name
  * des documents applicables (version + empreinte), identification de l'appareil et de l'application.
  * p : {auditType?, stations?: [{siteId, prestationId?, pointId?}] (ordre de passage), providerId?, compartments?,
  *      operatorIds?, campaignId?, kind ('planifie' | 'inopine'), gridId? (défaut : grille de la prestation, sinon
- *      CT-2026 si un type de tournée est donné), samplingTypeId?, matrixId?}
+ *      CT-2026 si un type de tournée est donné), samplingTypeId?, matrixId?, date? (date de la tournée AAAA-MM-JJ,
+ *      aujourd'hui par défaut : audit.date, lue partout par auditDate())}
  * Compatibilité : `prestationId` / `siteId` / `pointId` seuls = une station.
  * Grille à types : type de tournée = `auditType`, sinon déduit de la 1re prestation / station ; compartiments =
  * choix limité aux compartiments du type (biologie : défaut = ceux des stations ou de la prestation ; cours d'eau :
  * organisation + physico ; eaux souterraines : organisation + eso). Les critères `prefill` reçoivent une valeur
- * initiale (sans statut, prefilled: true), ceux des feuilles station avec les données de LEUR station.
+ * initiale (sans statut, prefilled: true), ceux des feuilles station avec les données de LEUR station ; dates
+ * pré-remplies = date de la tournée ; heure d'arrivée pré-remplie seulement pour une tournée du jour.
  */
-export async function createAudit({ prestationId = null, gridId = null, kind = 'planifie', providerId = null, siteId = null, pointId = null, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null, auditType = null, stations = null, campaignId = null } = {}) {
+export async function createAudit({ prestationId = null, gridId = null, kind = 'planifie', providerId = null, siteId = null, pointId = null, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null, auditType = null, stations = null, campaignId = null, date = null } = {}) {
   if (!can('audit.create')) throw new Error('Votre profil ne permet pas de créer un audit.');
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error(`Date de tournée invalide : ${date}`);
   // Stations demandées (compatibilité : prestationId / siteId seuls = une station).
   const req = (Array.isArray(stations) && stations.length ? stations : [{ siteId, prestationId, pointId }]).map(s => {
     const p = s?.prestationId ? store.get('prestation', s.prestationId) : null;
@@ -169,7 +198,8 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
   const site0 = req[0].siteId ? store.get('site', req[0].siteId) : null;
   const type = gridTypes(grid).length ? (auditType || inferAuditType(grid, { site: site0, prestation })) : '';
   const typeDef = gridType(grid, type);
-  const now = nowISO(), today = localDate(), date = new Date(now);
+  const now = nowISO(), today = localDate(new Date(now));
+  const tourDate = date || today;
   // Stations de la tournée (ordre de passage, sans doublon).
   const list = [];
   for (const s of req) {
@@ -206,7 +236,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     documentsSnapshot,
     protocolVersion: documentsSnapshot.find(d => d.type === 'PROTOCOLE')?.version || null,
     cctpVersion: documentsSnapshot.find(d => d.type === 'CCTP')?.version || null,
-    startedAt: now, endedAt: null, status: 'en_cours',
+    date: tourDate, startedAt: now, endedAt: null, status: 'en_cours',
     compartments: [], sheets: {},
     responses: {}, gps: [], samples: [], equipmentChecks: [], dismissedAlerts: [],
     signatures: {}, lock: null, amendments: [], reports: [], conclusions: { strengths: '', vigilance: '', comment: '', preconisations: '' },
@@ -227,11 +257,12 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
   } else if (Array.isArray(compartments)) audit.compartments = [...compartments];
   const provider = store.get('provider', audit.providerId);
   const eff = expandGrid(gridSnapshot, list, sites, { provider });
-  const time = localTime(date);
+  // Tournée saisie après coup (date passée) : pas d'heure d'arrivée pré-remplie avec l'heure actuelle.
+  const time = tourDate === today ? localTime(new Date(now)) : '';
   audit.responses = prefillResponses(eff, {
     site: site0, auditor: { name: session.user.name }, provider, prestation,
     operators: audit.operatorIds.map(id => store.get('operator', id)).filter(Boolean),
-    date: localDate(date), time, kind, stationCount: list.length, compartments: audit.compartments, auditType: type,
+    date: tourDate, time, kind, stationCount: list.length, compartments: audit.compartments, auditType: type,
     // Heure d'arrivée pré-remplie pour la 1re station seulement (les suivantes : à l'arrivée sur place).
     stations: list.map((st, i) => ({ key: st.key, site: sites[st.siteId], prestation: req.find(r => r.siteId === st.siteId)?.prestation || null, time: i === 0 ? time : '' })),
     ...sessionStamp(now)
@@ -242,8 +273,8 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
 }
 
 /**
- * Ajoute une station à la tournée (fin de l'ordre de passage) : pré-remplit ses critères (date, heure d'arrivée,
- * données de la station), met à jour le « Programme journalier (nombre de stations) » s'il est encore pré-rempli,
+ * Ajoute une station à la tournée (fin de l'ordre de passage) : pré-remplit ses critères (date de la tournée —
+ * auditDate() —, heure d'arrivée si la tournée est du jour, données de la station), met à jour le « Programme journalier (nombre de stations) » s'il est encore pré-rempli,
  * historise (audit.stationLog, journal, historique de la prestation). Refus : station déjà présente, audit
  * verrouillé ou abandonné, grille sans feuilles.
  */
@@ -258,6 +289,7 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
   const site = siteId ? store.get('site', siteId) : null;
   if (!site) throw new Error('Station introuvable.');
   const now = nowISO(), d = new Date(now);
+  const tourDate = auditDate(cur) || localDate(d);
   const st = makeStation({ siteId, pointId: pointId || prestation?.pointIds?.[0] || defaultPointId(siteId), prestationId: prestation?.id || null }, now);
   if ((cur.stations || []).some(s => s.key === st.key)) throw new Error('Cette station fait déjà partie de la tournée.');
   const stations = [...(cur.stations || []), st];
@@ -266,7 +298,7 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
   const pre = prefillResponses(eff, {
     onlyStation: st.key, site, prestation, auditor: { name: cur.auditorName }, provider,
     operators: (cur.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean),
-    date: localDate(d), time: localTime(d), kind: cur.kind, compartments: cur.compartments, auditType: auditTypeOf(cur), ...sessionStamp(now)
+    date: tourDate, time: tourDate === localDate(d) ? localTime(d) : '', kind: cur.kind, compartments: cur.compartments, auditType: auditTypeOf(cur), ...sessionStamp(now)
   });
   const countIds = allItems(eff).filter(i => i.prefill === 'tournee.stationCount').map(i => i.id);
   await updateAudit(cur, a => {
@@ -284,9 +316,11 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
 /**
  * Retire une station de la tournée. Sans saisie de l'auditeur pour cette station (hors pré-remplissage, encadrés,
  * médias, écarts) : retrait simple. Sinon `reason` est OBLIGATOIRE (erreur `needsReason`) et les saisies retirées sont
- * conservées dans audit.removedStations (traçabilité). Refus : audit verrouillé, dernière station de la tournée.
+ * conservées dans audit.removedStations (traçabilité). Écarts OUVERTS de la station : retrait refusé (erreur
+ * `needsCancel`, e.openDeviations) sauf `cancelDeviations: true` — ils sont alors annulés avec le même motif (statut
+ * « annulé », historique de l'écart). Refus : audit verrouillé, dernière station de la tournée.
  */
-export async function removeStation(audit, key, { reason = null } = {}) {
+export async function removeStation(audit, key, { reason = null, cancelDeviations = false } = {}) {
   const cur = store.get('audit', audit.id);
   if (cur.lock?.lockedAt) throw new Error('Audit signé et verrouillé : impossible de retirer une station.');
   const st = (cur.stations || []).find(s => s.key === key);
@@ -294,13 +328,24 @@ export async function removeStation(audit, key, { reason = null } = {}) {
   if ((cur.stations || []).length <= 1) throw new Error('Une tournée compte au moins une station.');
   const entries = stationEntries(cur, key);
   const media = auditMedia(cur.id).filter(m => parseItemId(m.link?.itemId).stationKey === key || m.link?.stationKey === key).length;
-  const devs = auditDeviations(cur.id).filter(dv => dv.status !== 'annule' && dv.stationKey === key).length;
+  const stationDevs = auditDeviations(cur.id).filter(dv => dv.status !== 'annule' && dv.stationKey === key);
+  const openDevs = stationDevs.filter(dv => OPEN_DEVIATION.includes(dv.status));
+  const devs = stationDevs.length;
   const hasData = entries.responses.length + entries.sheets.length + media + devs > 0;
+  const openList = openDevs.map(dv => ({ id: dv.id, number: dv.number }));
   if (hasData && !String(reason || '').trim()) {
     const e = new Error('Des constats ont déjà été saisis pour cette station : un motif est obligatoire pour la retirer de la tournée.');
-    e.needsReason = true; e.entries = { ...entries, media, deviations: devs };
+    e.needsReason = true; e.entries = { ...entries, media, deviations: devs, openDeviations: openList.length };
+    e.openDeviations = openList;
     throw e;
   }
+  // Un écart ouvert ne reste pas rattaché à une station qui ne fait plus partie de la tournée.
+  if (openDevs.length && !cancelDeviations) {
+    const e = new Error(`La station a ${openDevs.length} écart(s) ouvert(s) (${openDevs.map(dv => dv.number).join(', ')}) : annulez-les (avec le motif du retrait) pour la retirer de la tournée.`);
+    e.needsCancel = true; e.openDeviations = openList;
+    throw e;
+  }
+  if (openDevs.length && !(can('deviation.manage') || can('deviation.close'))) throw new Error('Votre profil ne permet pas d’annuler les écarts ouverts de cette station.');
   const now = nowISO();
   const site = store.get('site', st.siteId);
   const suffix = '@' + key;
@@ -317,8 +362,12 @@ export async function removeStation(audit, key, { reason = null } = {}) {
     a.prestationIds = [...new Set(a.stations.map(s => s.prestationId).filter(Boolean))];
     for (const id of countIds) { const r = a.responses?.[id]; if (r?.prefilled && !r.status) a.responses[id] = { ...r, value: a.stations.length }; }
   }, { reason: reason || `Retrait de la station ${site?.name || key} de la tournée (aucune saisie)` });
+  for (const dv of openDevs) {
+    await updateDeviation(dv, { status: 'annule', closedAt: nowISO(), closedBy: session.user.name, closureNote: `Station ${site?.name || key} retirée de la tournée — ${reason}` },
+      { reason, event: 'Annulation : station retirée de la tournée' });
+  }
   const p = st.prestationId ? store.get('prestation', st.prestationId) : null;
-  if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : station retirée de la tournée`, reason: reason || null });
+  if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : station retirée de la tournée${openDevs.length ? ` (${openDevs.length} écart(s) annulé(s))` : ''}`, reason: reason || null });
   return store.get('audit', cur.id);
 }
 
@@ -425,7 +474,9 @@ export function defaultDueDate(criticalityCode) {
  * Enregistre un écart (jamais automatiquement : décision de l'auditeur). Depuis un critère : `itemId` effectif ;
  * criticité par défaut selon la réponse (P ⇒ OBS « Observation / piste d'amélioration », NC ⇒ MIN). L'écart
  * mémorise la station (`stationKey`, déduite de l'identifiant du critère à défaut) et en reprend site, point et
- * prestation ; écart de tournée (critère commun ou sans critère) : stationKey null, 1re station.
+ * prestation ; écart de TOURNÉE (critère commun à la tournée, alerte ou écart sans critère) : stationKey null,
+ * rattaché à toute la tournée — siteIds / prestationIds = ceux de toutes les stations ; siteId, pointId et
+ * prestationId = ceux de la station seulement si la tournée n'en compte qu'une (sinon null).
  */
 export async function createDeviation(audit, data) {
   if (!can('deviation.manage')) throw new Error('Votre profil ne permet pas d’enregistrer un écart.');
@@ -435,9 +486,18 @@ export async function createDeviation(audit, data) {
   const station = stationKey ? (cur.stations || []).find(s => s.key === stationKey) : null;
   const responseStatus = data.itemId ? cur.responses?.[data.itemId]?.status || null : null;
   const criticalityCode = data.criticalityCode || (responseStatus ? defaultCriticality(responseStatus) : 'MIN');
+  const stations = cur.stations || [];
+  // Écart de tournée : toutes les stations (un seul site seulement pour une tournée d'une station ou une grille historique).
+  const one = station || (stations.length === 1 ? stations[0] : null);
+  const tour = !station ? {
+    siteIds: stations.length ? [...new Set(stations.map(s => s.siteId))] : [cur.siteId].filter(Boolean),
+    prestationIds: stations.length ? [...new Set(stations.map(s => s.prestationId).filter(Boolean))] : [cur.prestationId].filter(Boolean)
+  } : {};
   const dev = {
     id: uuid(), number: nextDeviationNumber(cur), auditId: cur.id, auditNumber: cur.number,
-    providerId: cur.providerId, siteId: station?.siteId || cur.siteId, pointId: station?.pointId || cur.pointId, prestationId: station ? station.prestationId || null : cur.prestationId,
+    providerId: cur.providerId,
+    siteId: one ? one.siteId : stations.length ? null : cur.siteId, pointId: one ? one.pointId || null : stations.length ? null : cur.pointId,
+    prestationId: one ? one.prestationId || null : stations.length ? null : cur.prestationId, ...tour,
     stationKey: station?.key || null, responseStatus,
     date: localDate(now), time: now.toTimeString().slice(0, 5),
     itemId: data.itemId || null, itemCode: data.itemCode || null, requirement: data.requirement || '', docRefs: data.docRefs || [],

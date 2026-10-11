@@ -7,9 +7,10 @@ import { session } from '../core/session.js';
 import { can, isTeamMode } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast } from '../ui/dom.js';
-import { pageTitle, prestationBadge, kindBadge, auditBadge, options, empty, siteName } from '../ui/components.js';
+import { pageTitle, prestationBadge, kindBadge, auditBadge, options, empty, siteName, tourStationsLabel } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
-import { PRESTATION_STATUS } from '../domain/model.js';
+import { PRESTATION_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
+import { isPrestationLate } from '../domain/summary.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { prestationType } from './station-sheet.js';
 
@@ -18,11 +19,14 @@ const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
 const longDate = d => { const x = new Date(d + 'T12:00:00'); return `${DAYS[x.getDay()]} ${x.getDate()} ${MONTHS[x.getMonth()]} ${x.getFullYear()}`; };
 
 /** Audits (tournées) non abandonnés couvrant une prestation : prestation principale ou l'une des prestations de la tournée. */
-export function auditsOf(prestationId) { return sortBy(store.filter('audit', a => a.status !== 'abandonne' && (a.prestationId === prestationId || (a.prestationIds || []).includes(prestationId))), '-startedAt'); }
+export function auditsOf(prestationId) { return store.filter('audit', a => a.status !== 'abandonne' && (a.prestationId === prestationId || (a.prestationIds || []).includes(prestationId))).sort(byAuditDateDesc); }
 /** Sélection de prestations pour démarrer une tournée (cases à cocher du planning). */
 const picked = new Set();
 const CLOSED = ['annulee', 'auditee', 'non_realisee'];
-export function isLate(p, today = localDate()) { return p.plannedDate && p.plannedDate < today && p.status === 'prevue' && !auditsOf(p.id).length; }
+/** Prestation en retard : échéance passée (date indicative : fin de campagne, à défaut fin du mois), prévue, non auditée. */
+export function isLate(p, today = localDate()) {
+  return isPrestationLate(p, { today, campaign: p.campaignId ? store.get('campaign', p.campaignId) : null, audited: auditsOf(p.id).length > 0 });
+}
 
 function filterList(q) {
   const today = localDate();
@@ -110,7 +114,7 @@ export default {
         ${can('audit.create') ? html`<a class="btn primary" href="#/nouvel-audit"><span class="ic">${icon('plus')}</span>Nouvelle tournée</a><a class="btn accent" href="#/nouvel-audit?kind=inopine"><span class="ic">${icon('warning')}</span>Audit inopiné</a>` : ''}
         <button class="btn ghost" data-act="prepare" title="Synchroniser et télécharger les documents pour le terrain"><span class="ic">🧳</span>Préparer le terrain</button>
         ${can('planning.manage') ? html`<button class="btn ghost" data-act="newPrestation"><span class="ic">＋</span>Prestation</button>` : ''}`)}
-      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${(a.stations || []).length > 1 ? `${a.stations.length} stations : ${a.stations.map(s => store.get('site', s.siteId)?.name || s.key).join(', ')}` : siteName(a.siteId)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · démarré le ${fmtDate(a.startedAt)}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
+      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
       <div class="chips" style="margin-bottom:10px">${chips.map(([k, l, n]) => html`<button class="chip ${period === k ? 'sel' : ''}" data-act="q" data-k="periode" data-v="${k}">${l}${n !== undefined ? html`<span class="count">${n}</span>` : ''}</button>`)}
         <button class="chip ${q.mode === 'calendrier' ? 'sel' : ''}" data-act="q" data-k="mode" data-v="${q.mode === 'calendrier' ? '' : 'calendrier'}">🗓️ Calendrier</button></div>
       <details class="card" ${q.prestataire || q.campagne || q.statut || q.q ? 'open' : ''}><summary>Filtres${q.prestataire || q.campagne || q.statut || q.q ? ' (actifs)' : ''}</summary>

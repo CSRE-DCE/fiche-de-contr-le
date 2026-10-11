@@ -14,8 +14,8 @@ import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
-import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, allItems, isSheetGrid } from '../domain/grids.js';
-import { createAudit, gridsFor, effectiveGrid, updateAudit } from '../app/audits.js';
+import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
+import { createAudit, gridsFor } from '../app/audits.js';
 import { getPosition } from '../ui/gps.js';
 import { pref } from '../app/settings.js';
 import { TYPE_STYLES } from '../ui/map.js';
@@ -179,15 +179,6 @@ function tourForm(q) {
     </form>`;
 }
 
-/** Date de tournée différente du jour : les dates pré-remplies (sans constat) prennent la date choisie. */
-async function applyTourDate(audit, date) {
-  const ids = allItems(effectiveGrid(audit)).filter(i => i.prefill === 'audit.date').map(i => i.id);
-  if (!ids.length) return audit;
-  return updateAudit(audit, a => {
-    for (const id of ids) { const r = a.responses?.[id]; if (r?.prefilled && !r.status) a.responses[id] = { ...r, value: date }; }
-  }, { reason: `Date de la tournée : ${fmtDate(date)}` });
-}
-
 /* ---------- Formulaire historique : audit sur une grille générale (un seul site) ---------- */
 function legacyForm(q) {
   if (q.prestation && legacy.prestationId !== q.prestation) {
@@ -291,9 +282,10 @@ export default {
       const a = await createAudit({
         auditType: d.type, gridId: grid.id || CT_GRID, providerId: d.providerId, kind: d.kind,
         stations: d.stations.map(s => ({ siteId: s.siteId, prestationId: s.prestationId || null })),
-        compartments: chosenCompartments(grid, d), operatorIds: d.operatorIds || []
+        compartments: chosenCompartments(grid, d), operatorIds: d.operatorIds || [],
+        // Date de la tournée enregistrée sur l'audit (audit.date) : dates pré-remplies, listes, alertes et PDF.
+        date: d.date || localDate()
       });
-      if (d.date && d.date !== localDate()) await applyTourDate(a, d.date);
       draft = null;
       toast(`Tournée ${a.number} créée (${d.stations.length} station${d.stations.length > 1 ? 's' : ''})`, 'ok');
       navigate('/audit/' + a.id);

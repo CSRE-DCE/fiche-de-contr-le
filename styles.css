@@ -298,7 +298,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 .module>h3{margin-top:0}
 .audit-footer{position:sticky;bottom:calc(var(--bottom-h) + var(--safe-b));z-index:20;background:linear-gradient(transparent,var(--paper) 30%);padding:14px 0 8px;display:flex;gap:10px}
 @media(min-width:1000px){.audit-footer{bottom:0}}
-.audit-footer .btn{flex:1}
+/* Boutons du pied à parts égales : min-width:0 laisse le sous-titre (nowrap) se tronquer au lieu d'élargir la page */
+.audit-footer .btn{flex:1;min-width:0}
 .save-state{font-size:12.5px;color:var(--ok);font-weight:700}
 .save-state.saving{color:var(--warn)}
 .locked-banner{display:flex;gap:10px;align-items:center}

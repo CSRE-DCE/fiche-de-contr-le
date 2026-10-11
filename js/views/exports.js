@@ -6,6 +6,7 @@ import { session } from '../core/session.js';
 import { can, isTeamMode } from '../core/auth.js';
 import { toast, downloadBlob, promptDialog, readFileAsText, confirmDialog } from '../ui/dom.js';
 import { pageTitle, options, field } from '../ui/components.js';
+import { auditDate } from '../domain/model.js';
 import { table, csvOf, responsesRows, exportWorkbook, planningICS, buildPackage, protectPackage, readPackage, importPackage } from '../app/exports.js';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -14,7 +15,7 @@ let filters = { du: '', au: '', prestataire: '' };
 function select(kind) {
   const inP = d => (!filters.du || String(d).slice(0, 10) >= filters.du) && (!filters.au || String(d).slice(0, 10) <= filters.au);
   const prov = x => !filters.prestataire || x.providerId === filters.prestataire;
-  if (kind === 'audits') return sortBy(store.filter('audit', a => a.status !== 'abandonne' && inP(a.startedAt) && prov(a)), 'startedAt');
+  if (kind === 'audits') return sortBy(store.filter('audit', a => a.status !== 'abandonne' && inP(auditDate(a)) && prov(a)), auditDate, 'startedAt');
   if (kind === 'deviations') return sortBy(store.filter('deviation', d => inP(d.date) && prov(d)), 'number');
   if (kind === 'prestations') return sortBy(store.filter('prestation', p => inP(p.plannedDate) && prov(p)), 'plannedDate');
   if (kind === 'trail') return sortBy(store.filter('trail', t => inP(t.at)), 'at');

@@ -9,7 +9,7 @@ import { navigate } from '../ui/router.js';
 import { toast, openModal, formValues, promptDialog, confirmDialog } from '../ui/dom.js';
 import { pageTitle, kv, badge, docBadge, empty, options, field, auditBadge } from '../ui/components.js';
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
-import { DOC_TYPES, DOC_STATUS } from '../domain/model.js';
+import { DOC_TYPES, DOC_STATUS, auditDate } from '../domain/model.js';
 import { versionsOf, docInForce, documentHash } from '../app/documents.js';
 
 export default {
@@ -94,7 +94,7 @@ export const detailView = {
         </div></div>
       <div class="card"><h2>Articles / exigences (${(d.articles || []).length})</h2>${(d.articles || []).length ? d.articles.map(a => html`<div class="doc-article"><h4>${a.number} — ${a.title}</h4><p>${a.text}</p></div>`) : html`<p class="note">Aucun article saisi.</p>`}</div>
       <div class="card"><h2>Historique des versions</h2><div class="list">${versions.map(v => html`<a class="li ${v.id === d.id ? 'stripe-info' : ''}" href="#/document/${v.id}"><div class="li-main"><div class="li-title">v${v.version}</div><div class="li-sub">${fmtDate(v.applicableFrom)}${v.applicableTo ? ' → ' + fmtDate(v.applicableTo) : ''} · créé par ${v.createdByName || '—'} le ${fmtDate(v.createdAt)}</div></div>${docBadge(v.status)}</a>`)}</div></div>
-      <div class="card"><h2>Audits ayant utilisé cette version (${usedBy.length})</h2>${usedBy.length ? html`<div class="list">${usedBy.map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(a.startedAt)}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit.</p>`}</div>`;
+      <div class="card"><h2>Audits ayant utilisé cette version (${usedBy.length})</h2>${usedBy.length ? html`<div class="list">${usedBy.map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(auditDate(a))}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit.</p>`}</div>`;
   },
   handlers: {
     async 'open-file'(el) { await viewMedia(el.dataset.id, { readOnly: true }); },

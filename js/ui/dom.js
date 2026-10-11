@@ -4,17 +4,57 @@ import { html, raw, esc } from '../core/util.js';
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/* ---------- Saisies en cours : gestionnaires en attente, enregistrement différé ---------- */
+/** Gestionnaires d'actions en cours d'exécution (toutes les vues et fenêtres) : voir settleInput(). */
+const pending = new Set();
+/** Enregistrements différés programmés (champs data-autosave) : fonctions qui les exécutent immédiatement. */
+const autosaveFlushers = new Set();
+/** Délai de l'enregistrement différé d'un champ data-autosave pendant la frappe (ms). */
+export const AUTOSAVE_DELAY = 1000;
+/** Champ dont la saisie n'est enregistrée qu'à la sortie (« change ») : zones de texte, listes, champs texte / nombre / date. */
+const isField = el => !!el && (/^(TEXTAREA|SELECT)$/.test(el.tagName) || (el.tagName === 'INPUT' && !['file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image'].includes(el.type)));
+
+/**
+ * Valide la saisie en cours avant un verrouillage, une mise en arrière-plan ou une fermeture : le champ actif perd le
+ * focus (son événement « change » déclenche l'enregistrement habituel), les enregistrements différés programmés
+ * sont exécutés, puis on attend la fin des gestionnaires en cours (au plus `timeout` ms : un gestionnaire qui attend
+ * une réponse dans une fenêtre ne bloque pas). blur: false ne retire pas le focus.
+ */
+export async function settleInput({ timeout = 4000, blur = true } = {}) {
+  const a = document.activeElement;
+  if (blur && isField(a)) a.blur();
+  for (const flush of [...autosaveFlushers]) flush();
+  const deadline = Date.now() + timeout;
+  while (pending.size && Date.now() < deadline) {
+    let timer;
+    await Promise.race([Promise.allSettled([...pending]), new Promise(r => { timer = setTimeout(r, Math.max(0, deadline - Date.now())); })]);
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Délégation d'événements : tout élément portant data-act="nom" déclenche handlers.nom(el, ev) au clic ;
  * data-change / data-input pour les événements change / input ; data-submit pour les formulaires.
+ * Champ portant aussi data-autosave : son gestionnaire data-change est en plus appelé pendant la frappe, après
+ * AUTOSAVE_DELAY ms sans saisie (zones d'observation : rien n'est perdu si l'appareil se verrouille ou si le
+ * navigateur est fermé avant que le champ ne soit quitté).
  */
 export function bindActions(root, handlers, ctx = {}) {
-  const run = async (name, el, ev) => {
+  const run = (name, el, ev) => {
     const fn = handlers[name];
-    if (!fn) return;
-    try { await fn.call(ctx, el, ev); }
-    catch (err) { console.error(err); toast(err?.message || String(err), 'err'); }
+    if (!fn) return Promise.resolve();
+    const p = (async () => {
+      try { await fn.call(ctx, el, ev); }
+      catch (err) { console.error(err); toast(err?.message || String(err), 'err'); }
+    })();
+    pending.add(p);
+    p.finally(() => pending.delete(p));
+    return p;
   };
+  const timers = new Map();   // champ data-autosave → minuteur de l'enregistrement différé
+  const fire = el => { const t = timers.get(el); if (t === undefined) return; clearTimeout(t); timers.delete(el); run(el.dataset.change, el, null); };
+  const flushAll = () => { for (const el of [...timers.keys()]) fire(el); };
+  autosaveFlushers.add(flushAll);
   const onClick = ev => {
     const el = ev.target.closest('[data-act]');
     if (!el || !root.contains(el) || el.disabled) return;
@@ -22,14 +62,28 @@ export function bindActions(root, handlers, ctx = {}) {
     if (el.tagName === 'BUTTON' || el.dataset.prevent !== undefined) ev.preventDefault();
     run(el.dataset.act, el, ev);
   };
-  const onChange = ev => { const el = ev.target.closest('[data-change]'); if (el && root.contains(el)) run(el.dataset.change, el, ev); };
-  const onInput = ev => { const el = ev.target.closest('[data-input]'); if (el && root.contains(el)) run(el.dataset.input, el, ev); };
+  const onChange = ev => {
+    const el = ev.target.closest('[data-change]');
+    if (!el || !root.contains(el)) return;
+    if (timers.has(el)) { clearTimeout(timers.get(el)); timers.delete(el); }
+    run(el.dataset.change, el, ev);
+  };
+  const onInput = ev => {
+    const el = ev.target.closest('[data-input]');
+    if (el && root.contains(el)) run(el.dataset.input, el, ev);
+    const auto = ev.target.closest('[data-autosave][data-change]');
+    if (auto && root.contains(auto)) { clearTimeout(timers.get(auto)); timers.set(auto, setTimeout(() => fire(auto), AUTOSAVE_DELAY)); }
+  };
   const onSubmit = ev => { const el = ev.target.closest('form[data-submit]'); if (el) { ev.preventDefault(); run(el.dataset.submit, el, ev); } };
   root.addEventListener('click', onClick);
   root.addEventListener('change', onChange);
   root.addEventListener('input', onInput);
   root.addEventListener('submit', onSubmit);
-  return () => { root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); root.removeEventListener('input', onInput); root.removeEventListener('submit', onSubmit); };
+  return () => {
+    root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); root.removeEventListener('input', onInput); root.removeEventListener('submit', onSubmit);
+    flushAll();   // changement d'écran : les enregistrements différés en attente sont exécutés, pas abandonnés
+    autosaveFlushers.delete(flushAll);
+  };
 }
 
 /* ---------- Notifications ---------- */
