@@ -1089,7 +1089,7 @@ class SheetsRenderer {
       const yn = (label, key, valKey) => {
         d.text(label, x + 6, ly, { font: F.text, size: 6.7, color: INK });
         let bx = x + 8 + d.width(label, F.text, 6.7);
-        for (const o of ['Oui', 'Non']) { this.box(bx, ly + 0.2, 6.2, { checked: v[key] === o, color: o === 'Oui' ? STATUS_OF.C.color : STATUS_OF.NC.color }); d.text(o, bx + 7.6, ly, { font: F.text, size: 6.5, color: INK }); bx += 8 + d.width(o, F.text, 6.5) + 5; }
+        for (const o of (key === 'weekly' && ins.weeklyOptions) || ['Oui', 'Non']) { this.box(bx, ly + 0.2, 6.2, { checked: v[key] === o, color: o === 'Oui' ? STATUS_OF.C.color : STATUS_OF.NC.color }); d.text(o, bx + 7.6, ly, { font: F.text, size: 6.5, color: INK }); bx += 8 + d.width(o, F.text, 6.5) + 5; }
         if (valKey) {
           if (present(v[valKey])) d.text(String(v[valKey]), bx, ly - 0.2, { font: F.semi, size: d.fitSize(String(v[valKey]), F.semi, 7, x + cw - 6 - bx, 4.5), color: NAVY });
           else this.dots(bx, ly + 7, x + cw - 6);

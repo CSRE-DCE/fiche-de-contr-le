@@ -60,10 +60,11 @@ test('CT-2026 : feuilles (ordre, n° stables, portée, thèmes, compartiments, F
   deepEq(G.sheets.find(s => s.no === 4).tourneeData, ['instruments']);
   // Encadrés : conclusions biologiques inchangées, « Bilan » pour cours d'eau / eaux souterraines
   const blocks = no => G.sheets.find(s => s.no === no).blocks;
-  deepEq(blocks(4).filter(b => b.key === 'conclusion').map(b => [b.title, b.showFor]), [['Conclusion générale', ['bio']], ['Bilan – Mesures in situ, étalonnage et flaconnage', ['ce', 'eso']]]);
+  deepEq(blocks(4).filter(b => b.key === 'conclusion').map(b => [b.title, b.showFor]), [['Conclusion générale', ['bio']], ['Bilan – Mesures in situ, étalonnage et flaconnage', ['ce']], ['Bilan – Purge et mesure des paramètres in situ', ['eso']]]);
   deepEq(blocks(3).find(b => b.key === 'conclusion').title, 'Bilan – Localisation et accès au site');
   deepEq(blocks(3).find(b => b.key === 'conclusion').showFor, ['ce', 'eso']);
-  deepEq(blocks(10).find(b => b.key === 'conclusion').options, BILAN_OPTIONS);
+  assert(!blocks(10).some(b => b.key === 'conclusion'), 'F10 : le bilan purge + mesures in situ est porté par F4 (eaux souterraines)');
+  deepEq(blocks(4).find(b => b.showFor?.includes('eso')).options, BILAN_OPTIONS);
   deepEq(BILAN_OPTIONS, [['C', 'Satisfaisant'], ['P', 'Perfectible'], ['NC', 'Non satisfaisant']]);
   deepEq(blocks(5).filter(b => b.key === 'conclusion').map(b => b.title), ['Conclusion du contrôle', 'Bilan – Échantillonnage et identification des échantillons']);
   deepEq(blocks(6).find(b => b.key === 'conclusion').options.map(o => o[0]), ['C', 'NC', 'NA'], 'F6 inchangée');
@@ -121,7 +122,7 @@ test('feuilles affichées par type de tournée et numéro « Feuille X / N »', 
   const counts = sheets => sheets.map(s => s.items.length);
   deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 17, 13]);
   deepEq(counts(ce), [8, 47, 23, 28, 29]);
-  deepEq(counts(eso), [7, 46, 25, 6, 31, 25]);
+  deepEq(counts(eso), [7, 46, 25, 6, 30, 25], 'F4.11 masqué en eaux souterraines (couvert par F4.30)');
   // Variantes (titres, onglets, appareils) et encadrés selon le type
   eq(ce.find(s => s.no === 2).title, 'Organisation, logistique et sécurité de la tournée');
   eq(bio.find(s => s.no === 2).title, 'Organisation, sécurité et déroulé de mission', 'titre biologie inchangé');
@@ -458,6 +459,7 @@ test('traçabilité : chaque point des fiches cours d’eau et eaux souterraines
   const ids = new Set(allItems(G).map(i => i.id));
   const covered = new Set();
   for (const r of rows) {
+    assert((r.target.match(/\(Inclut\)/g) || []).length <= 1, `${r.point} : un seul critère peut inclure ce point (sans doublon)`);
     const refs = [...r.target.matchAll(/(it-F\d+-[A-Z]?[\d.]*\d)( \(Inclut\))?/g)];
     assert(refs.length || /audit\.|site\.|synthèse|encadré|données de l['’]audit|exclue|module|conclusion/.test(r.target), `cible non reconnue : ${r.point}`);
     for (const [, id, inc] of refs) {
@@ -473,7 +475,7 @@ test('traçabilité : chaque point des fiches cours d’eau et eaux souterraines
   for (const id of added) assert(ids.has(id), `critère ajouté manquant : ${id}`);
   for (const id of added) assert(covered.has(id), `critère ajouté sans point source : ${id}`);
   // Les fusions décrites par l'avenant figurent dans l'aide des critères existants
-  for (const id of ['it-F2-2.1', 'it-F2-4.3', 'it-F4-2', 'it-F4-3', 'it-F4-11', 'it-F4-12', 'it-F4-13', 'it-F4-17', 'it-F5-1', 'it-F5-2', 'it-F5-3', 'it-F5-5', 'it-F5-7', 'it-F5-8', 'it-F5-9', 'it-F5-11', 'it-F5-13', 'it-F5-14', 'it-F5-15']) assert(/^Inclut : /.test(item(id).help || ''), `fusion ${id}`);
+  for (const id of ['it-F2-2.1', 'it-F2-4.4', 'it-F4-2', 'it-F4-3', 'it-F4-11', 'it-F4-12', 'it-F4-13', 'it-F4-17', 'it-F5-1', 'it-F5-2', 'it-F5-3', 'it-F5-5', 'it-F5-8', 'it-F5-9', 'it-F5-11', 'it-F5-14', 'it-F5-15', 'it-F4-30']) assert(/^Inclut : /.test(item(id).help || ''), `fusion ${id}`);
   for (const id of ['it-F3-7', 'it-F3-8']) assert(/27–28/.test(item(id).help), `renvoi ${id}`);
   assert(/π × r² × hauteur d’eau/.test(item('it-F10-5').help));
 });

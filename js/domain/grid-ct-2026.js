@@ -55,12 +55,12 @@
  * [CE] Matériel de prélèvement disponible → it-F5-29 (Inclut)
  * [CE] Diversité, adéquation et propreté du matériel de prélèvement (seau inox / plastique, chaîne + corde, canne) → it-F5-29 (Inclut)
  * [CE] État et propreté du matériel de prélèvement → it-F5-30
- * [CE] Mode de conservation / réfrigération des échantillons → it-F5-13 (Inclut) ; it-F5-14 (Inclut)
+ * [CE] Mode de conservation / réfrigération des échantillons → it-F5-14 (Inclut)
  * [CE] État et qualité des glacières → it-F5-11 (Inclut)
  * [CE] Conditionnement des échantillons en glacières (calage…) → it-F5-23
  * [CE] Suivi thermique (enceinte, frigo, échantillons…) → it-F5-15 (Inclut)
  * [CE] Sécurité routière / équipements (triangle, chasuble, cônes…) → it-F2-4.6
- * [CE] Port du gilet de sauvetage selon contexte → it-F2-4.3 (Inclut)
+ * [CE] Port du gilet de sauvetage selon contexte → it-F2-4.4 (Inclut)
  * [CE] Support de notation des données terrain → it-F2-7.1
  * [CE] Support papier disponible → it-F2-7.2
  * [CE] Dépôt / expédition des échantillons le jour même → it-F2-7.3
@@ -92,7 +92,7 @@
  * [CE] Respect de la profondeur de prélèvement → it-F5-5 (Inclut)
  * [CE] Remplissage des flacons avec réactifs → it-F4-13 (Inclut)
  * [CE] Remplissage des flacons (barbotage…) → it-F5-21
- * [CE] Préservation de l'intégrité de l'échantillon (contamination) → it-F5-7 (Inclut) ; it-F5-8 (Inclut)
+ * [CE] Préservation de l'intégrité de l'échantillon (contamination) → it-F5-8 (Inclut) ; it-F5-7 (sources identifiées)
  * [CE] Mesures d'hygiène prises par le préleveur (gants, de longueur adaptée…) → it-F5-2 (Inclut)
  * [CE] Conditions de sécurité prises pendant l'opération → it-F5-22
  * [CE] Remarques auditeur (par station) → encadrés « Observations » des fiches station (audit.sheets['<no>@<station>'])
@@ -112,7 +112,7 @@
  * [ESO] Commentaires sur les échanges entre l'accompagnant et le préleveur → it-F3-33
  * [ESO] Cohérence entre le lieu prévu (bordereau) et le lieu prélevé → it-F3-19 (Inclut)
  * [ESO] Fiche de localisation à jour (vérifiée par le préleveur) → it-F3-22
- * [ESO] Photographies n° 1 et n° 2 (relevé des mesures in situ, remplissage des flacons) → it-F3-16 ; encadré « photos » de F3 ; preuves photographiques des critères (médias)
+ * [ESO] Photographies n° 1 et n° 2 (relevé des mesures in situ, remplissage des flacons) → encadré « photos » de F3 ; preuves photographiques (médias) des critères it-F4-30 et it-F5-21
  * [ESO] Configuration de l'ouvrage (robinet, puits réservoir, émergence, piézomètre, autre) → it-F10-1
  * [ESO] Pompe à demeure (état à l'arrivée ; accès à l'eau si absente ou non fonctionnelle) → it-F10-2
  * [ESO] Pompe installée par le préleveur (branchée sur…, si non pourquoi) → it-F10-3
@@ -135,7 +135,7 @@
  * [ESO] Échantillons étiquetés de manière suffisante (code BSS, date, heure) → it-F5-27
  * [ESO] Données transmises au laboratoire avec les échantillons (bordereau, application, autre) → it-F5-28
  * [ESO] Bilan – Localisation et accès au site → encadré conclusion de F3 (Bilan)
- * [ESO] Bilan – Purge et mesure des paramètres in situ → encadré conclusion de F10 (Bilan)
+ * [ESO] Bilan – Purge et mesure des paramètres in situ → encadré conclusion de F4 (Bilan, après la purge F10 et les mesures in situ)
  * [ESO] Bilan – Échantillonnage → encadré conclusion de F5 (Bilan)
  * [ESO] Bilan – Identification des échantillons → encadré conclusion de F5 (Bilan)
  * [ESO] Commentaires du bilan → conclusion.comments des encadrés « Bilan »
@@ -184,7 +184,7 @@ const OUI_NON_SO = ['Oui', 'Non', 'Sans objet'];
 export const INSTRUMENTS = [
   { key: 'ph', label: 'Sonde pH', badge: 'pH', standards: '4 – 7 – 10' },
   { key: 'o2', label: 'Sonde O₂', badge: 'O₂' },
-  { key: 'cond', label: 'Conductivité', icon: 'list', standards: '500 – 1408 – 1413' },
+  { key: 'cond', label: 'Conductivité', icon: 'list', standards: '500 – 1408 – 1413', weeklyOptions: ['Oui', 'Non', 'Semestre'] },
   { key: 'turb', label: 'Turbidimètre', icon: 'sun' }
 ];
 /** Eaux souterraines : potentiel redox en plus. */
@@ -198,7 +198,7 @@ export const INSTRUMENT_FIELDS = [
 /** Tableau d'étalonnage et de vérification (fiche cours d'eau), par appareil. */
 export const CALIBRATION_FIELDS = [
   { key: 'weekly', label: 'Étalonnage hebdomadaire', type: 'choice', options: [...OUI_NON] },
-  { key: 'standards', label: 'Étalons utilisés', type: 'text', placeholder: 'ex. 4 – 7 – 10' },
+  { key: 'standards', label: 'Étalons utilisés', type: 'text' },
   { key: 'morning', label: 'Vérification du matin', type: 'choice', options: [...OUI_NON] },
   { key: 'morningValue', label: 'Valeur (matin)', type: 'text' },
   { key: 'evening', label: 'Vérification du soir', type: 'choice', options: [...OUI_NON] },
@@ -268,8 +268,7 @@ export const GRID_CT_2026 = {
       ] },
     { no: 10, key: 'eso-ouvrage', tab: 'Ouvrage et purge', title: 'Eau souterraine – ouvrage, pompage et purge', kicker: 'Suivi qualitatif des eaux souterraines de Guyane', theme: 'slate', compartment: 'eso', scope: 'station', layout: 'table', modules: [],
       blocks: [
-        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat' },
-        BILAN('Bilan – Purge et mesure des paramètres in situ', { showFor: ['eso'] })
+        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat' }
       ] },
     { no: 4, key: 'pc-insitu', tab: 'PC in situ', title: 'Physico-chimie, mesures in situ et flaconnage', kicker: '', theme: 'peach', compartment: 'physico', compartments: ['physico', 'eso'], scope: 'station', layout: 'table',
       modules: ['instruments'], tourneeData: ['instruments'], instruments: INSTRUMENTS, instrumentFields: INSTRUMENT_FIELDS, calibrationFields: CALIBRATION_FIELDS,
@@ -280,7 +279,8 @@ export const GRID_CT_2026 = {
       blocks: [
         { key: 'observations', title: 'Observations / non-conformités / actions demandées :', icon: 'chat' },
         { key: 'conclusion', title: 'Conclusion générale', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['AC', 'À compléter']], fields: SIGN, showFor: ['bio'] },
-        BILAN('Bilan – Mesures in situ, étalonnage et flaconnage')
+        BILAN('Bilan – Mesures in situ, étalonnage et flaconnage', { showFor: ['ce'] }),
+        BILAN('Bilan – Purge et mesure des paramètres in situ', { showFor: ['eso'] })
       ] },
     { no: 5, key: 'pc-prelevement', tab: 'PC prélèvement', title: 'Physico-chimie – prélèvement, conditionnement et chaîne du froid', kicker: '', theme: 'orange', compartment: 'physico', compartments: ['physico', 'eso'], scope: 'station', layout: 'table', modules: [], mergeSections: true,
       variants: {
@@ -373,8 +373,8 @@ export const GRID_CT_2026 = {
       items: [
         C(2, '4.1', 'Tenue adaptée', 'Tenue'),
         C(2, '4.2', 'EPI navigation présents', 'EPI nav. présents'),
-        C(2, '4.3', 'Port des EPI navigation', 'EPI nav. portés', { help: inc('port du gilet de sauvetage selon le contexte (fiche cours d’eau).') }),
-        C(2, '4.4', 'Port des EPI prélèvements', 'EPI prél. portés'),
+        C(2, '4.3', 'Port des EPI navigation', 'EPI nav. portés'),
+        C(2, '4.4', 'Port des EPI prélèvements', 'EPI prél. portés', { help: inc('port du gilet de sauvetage selon le contexte : berge, pont, gué… (fiche cours d’eau).') }),
         C(2, '4.5', 'Rappels EPI', 'Rappels'),
         C(2, '4.6', 'Sécurité routière / équipements (triangle, chasuble, cônes…)', 'Séc. routière')
       ]
@@ -430,7 +430,7 @@ export const GRID_CT_2026 = {
         C(3, 13, 'Protocoles utilisés', 'PROTO'),
         C(3, 14, 'Date des prélèvements', 'DATE', { input: { type: 'date' } }),
         C(3, 15, 'Coordonnées GPS des points de prélèvement', 'GPS', { input: xy() }),
-        C(3, 16, 'Prise de photos', 'PHOTO', { help: 'Eaux souterraines : photographies du relevé des mesures in situ et du remplissage des flacons (format paysage), jointes en preuve.' }),
+        C(3, 16, 'Prise de photos', 'PHOTO', { help: 'Le préleveur photographie la station et ses opérations selon le protocole. Les photos du contrôleur se joignent en preuve aux critères ou dans l’encadré « Prise de photos / références / commentaires ».' }),
         C(3, 17, 'Station représentative de la ME', 'REP_ME', { input: select(['Oui', 'Non', 'Partiellement']), condition: FOR('bio') }),
         C(3, 18, 'Code BSS du point', 'BSS', { prefill: 'site.code', condition: FOR('eso') })
       ]
@@ -548,7 +548,7 @@ export const GRID_CT_2026 = {
         C(4, 8, 'Conductivité (in situ)', 'Cond', { input: num({ unit: 'µS/cm', min: 0, step: 0.1 }) }),
         C(4, 9, 'Turbidité (in situ, triplicat)', 'Turb', { input: { type: 'fields', fields: [1, 2, 3].map(n => ({ key: 't' + n, label: 'Mesure ' + n, type: 'number', unit: 'FNU', min: 0, step: 0.01 })) } }),
         C(4, 10, 'Salinité (si applicable)', 'Sal', { input: num({ min: 0, step: 0.01 }) }),
-        C(4, 11, 'Position de mesure', 'Pos', { help: inc('site choisi pour les mesures (fiche cours d’eau).') }),
+        C(4, 11, 'Position de mesure', 'Pos', { help: inc('site choisi pour les mesures (fiche cours d’eau).'), condition: NOT_FOR('eso') }),
         C(4, 12, 'Flaconnage conforme', 'Flac', { help: inc('flaconnage conforme au programme analytique du laboratoire (nombre, type de flacons) (fiche eaux souterraines).') }),
         C(4, 13, 'Présence ou ajout de réactif', 'Réactif', { help: inc('remplissage des flacons avec réactifs (fiche cours d’eau).') }),
         C(4, 14, 'Flaconnage supplémentaire', 'Sup'),
@@ -571,7 +571,7 @@ export const GRID_CT_2026 = {
         C(4, 22, 'Organisme fournisseur du flaconnage', 'Fournisseur', { ...TOURNEE, input: { type: 'text', placeholder: 'Laboratoire / organisme fournisseur' } }),
         C(4, 23, 'Propreté des flacons', 'Propreté', TOURNEE),
         C(4, 24, 'Étiquetage des flacons / descriptif disponible', 'Étiquetage', TOURNEE),
-        C(4, 25, 'Traçabilité vers le laboratoire (scan, fiche…)', 'Trac. labo', TOURNEE)
+        C(4, 25, 'Traçabilité vers le laboratoire (scan, fiche…)', 'Trac. labo', { ...TOURNEE, help: 'Flacons fournis identifiés et rattachés au laboratoire (code-barres scanné, fiche). La transmission des données de terrain avec les échantillons est contrôlée en F5.28.' })
       ]
     },
     {
@@ -590,6 +590,7 @@ export const GRID_CT_2026 = {
         C(4, 29, 'Potentiel redox (in situ)', 'Redox', { input: num({ unit: 'mV', step: 1 }), condition: FOR('eso') }),
         C(4, 30, 'Technique de prise des mesures adaptée au point d’eau', 'Technique', {
           condition: FOR('eso'),
+          help: inc('position de mesure (F4.11 des tournées cours d’eau et biologie).'),
           input: fields([
             yn('emergence', 'Directement dans la ressource, au plus près de l’émergence'),
             yn('seauContinu', 'Dans un seau / récipient en écoulement continu'),
@@ -621,9 +622,9 @@ export const GRID_CT_2026 = {
         C(5, 4, 'Prélèvement face au courant', 'Face courant', { condition: NOT_FOR('eso') }),
         C(5, 5, 'Prélèvement en sub-surface', 'Sub-surface', { condition: NOT_FOR('eso'), help: inc('respect de la profondeur de prélèvement (fiche cours d’eau).') }),
         C(5, 6, 'Distance à la berge', 'Distance', { input: num({ unit: 'm', min: 0, step: 0.1 }), condition: NOT_FOR('eso') }),
-        C(5, 7, 'Sources de contamination', 'Contamination', { help: inc('préservation de l’intégrité de l’échantillon (contamination) (fiche cours d’eau).') }),
-        C(5, 8, 'Moyens d’évitement', 'Évitement', { help: inc('préservation de l’intégrité de l’échantillon (fiche cours d’eau).') }),
-        C(5, 9, 'Rinçage du matériel', 'Rinçage', { help: inc('rinçage du matériel et des bouchons (fiche cours d’eau) ; rinçage des flacons : F4.17.') }),
+        C(5, 7, 'Sources de contamination', 'Contamination', { help: 'Sources de contamination identifiées par le préleveur ; préservation de l’intégrité de l’échantillon : F5.8.' }),
+        C(5, 8, 'Moyens d’évitement', 'Évitement', { help: inc('préservation de l’intégrité de l’échantillon vis-à-vis des contaminations (fiche cours d’eau).') }),
+        C(5, 9, 'Rinçage du matériel', 'Rinçage', { help: inc('rinçage du matériel de prélèvement (fiche cours d’eau) ; rinçage des flacons et des bouchons : F4.17.') }),
         C(5, 10, 'Nombre de flacons', 'Nb flacons', { input: num({ min: 0, step: 1 }) })
       ]
     },
@@ -634,7 +635,7 @@ export const GRID_CT_2026 = {
         C(5, 12, 'Pré-réfrigération', 'Pré-réfrig.', TOURNEE),
         C(5, 13, 'Température de conservation', 'T° conservation', {
           input: num({ unit: '°C', step: 0.1 }),
-          help: inc('mode de conservation / réfrigération des échantillons (fiche cours d’eau).'),
+          help: 'Température relevée pour les échantillons de la station ; mode de conservation / réfrigération : F5.14 (commun à la tournée).',
           alerts: [{ op: 'outside', value: [2, 8], level: 'attention', code: 'TEMP_CONSERVATION', title: 'Température de conservation {value} °C', message: 'Température hors de la plage 5 ± 3 °C (NF EN ISO 5667-3)', requirement: 'Conservation des échantillons à 5 ± 3 °C (NF EN ISO 5667-3)', typeCode: 'TRANSPORT' }]
         }),
         C(5, 14, 'Réfrigérant / glace', 'Réfrigérant', { ...TOURNEE, help: inc('mode de conservation / réfrigération des échantillons (fiche cours d’eau).') }),
@@ -666,6 +667,7 @@ export const GRID_CT_2026 = {
         C(5, 27, 'Étiquetage suffisant des échantillons (à minima code station / BSS, date, heure)', 'Étiquetage'),
         C(5, 28, 'Données transmises au laboratoire avec les échantillons', 'Transmission', {
           domain: 'transport',
+          help: 'Bordereau ou application accompagnant les échantillons de la station ; la traçabilité des flacons fournis est contrôlée en F4.25.',
           input: fields([{ key: 'support', label: 'Support', type: 'choice', options: ['Bordereau papier', 'Application mobile', 'Autre'] }, { key: 'autre', label: 'Autre', type: 'text', showIf: { key: 'support', value: 'Autre' } }])
         })
       ]

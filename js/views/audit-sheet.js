@@ -253,7 +253,7 @@ function instrumentsModule(c, sh) {
   const input = (ins, f) => {
     const val = data[ins.key]?.[f.key] ?? '';
     const id = `ins-${ins.key}-${f.key}`;
-    if (f.type === 'choice') return html`<div class="as-kv is-choice"><span class="as-kv-k">${f.label}&nbsp;:</span><span class="st-choice">${(f.options || []).map(o => { const on = String(val) === String(o); return html`<button type="button" class="${on ? 'sel' : ''}" aria-pressed="${on}" data-act="instr-choice" data-sheet="${key}" data-ins="${ins.key}" data-k="${f.key}" data-value="${o}" ${dis}>${checkSquare({ checked: on })}${o}</button>`; })}</span></div>`;
+    if (f.type === 'choice') return html`<div class="as-kv is-choice"><span class="as-kv-k">${f.label}&nbsp;:</span><span class="st-choice">${((f.key === 'weekly' && ins.weeklyOptions) || f.options || []).map(o => { const on = String(val) === String(o); return html`<button type="button" class="${on ? 'sel' : ''}" aria-pressed="${on}" data-act="instr-choice" data-sheet="${key}" data-ins="${ins.key}" data-k="${f.key}" data-value="${o}" ${dis}>${checkSquare({ checked: on })}${o}</button>`; })}</span></div>`;
     return html`<div class="as-kv"><label class="as-kv-k" for="${id}">${f.label}&nbsp;:</label><input id="${id}" class="st-input" type="${f.type === 'date' ? 'date' : 'text'}" value="${val}" placeholder="${f.key === 'standards' ? ins.standards || f.placeholder || '' : f.placeholder || ''}" data-change="instr" data-sheet="${key}" data-ins="${ins.key}" data-k="${f.key}" autocomplete="off" ${dis}></div>`;
   };
   const cards = (sh.instruments || []).map(ins => {
