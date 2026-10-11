@@ -17,7 +17,7 @@ import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditD
 import { allowedResponses, isAnswered, isAnswerable, needsJustification } from '../domain/grids.js';
 import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
-import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem } from './audit-modules.js';
+import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem, allowClear } from './audit-modules.js';
 import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor } from './audit-sheet.js';
 
 const amendState = new Map();   // « utilisateur:audit » → motif de la modification en cours (audit signé)
@@ -27,17 +27,6 @@ const amendKey = id => `${session.user?.id}:${session.unlockedAt}:${id}`;
 const issueKey = e => `${e.itemId || ''}|${e.field || ''}|${e.message}`;
 const blockingIssues = audit => auditState(audit).validation.filter(v => v.level === 'error');
 
-/**
- * Effacement d'une réponse (nouvel appui sur le statut ou la valeur déjà choisis) pendant une modification motivée
- * d'un audit signé : refusé pour un critère obligatoire, sinon après confirmation explicite. Retourne true si permis.
- */
-async function allowClear(ctx, audit, itemId, label) {
-  if (!ctx.amendReason) return true;
-  const it = findItem(audit, itemId);
-  const code = it?.code || itemId;
-  if (it?.required) { toast(`${code} est obligatoire : sa réponse ne peut pas être effacée dans un audit signé. Choisissez la réponse corrigée.`, 'warn', 6000); return false; }
-  return confirmDialog({ title: 'Effacer la réponse', message: `Effacer la réponse « ${label} » de ${code} ${it?.label ? `(${it.label}) ` : ''}? La modification sera historisée avec la valeur précédente.`, okLabel: 'Effacer', danger: true });
-}
 const STEP_FIXED = { identification: '🪪 Identification', ecarts: '⚠️ Écarts', synthese: '📊 Synthèse', signatures: '✍️ Signatures' };
 
 function stepsOf(st) {
@@ -254,6 +243,8 @@ export default {
       const audit = store.get('audit', this.params.id);
       const cur = audit.responses?.[el.dataset.item]?.value || [];
       const v = el.dataset.value;
+      // Audit signé en cours de modification : la dernière case décochée viderait la réponse (jamais silencieusement).
+      if (cur.length === 1 && cur[0] === v && !(await allowClear(this, audit, el.dataset.item, el.textContent.trim() || v))) return;
       await setResponse(audit, el.dataset.item, { value: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] }, { reason: this.amendReason });
       this.refresh();
     },

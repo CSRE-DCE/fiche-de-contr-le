@@ -25,6 +25,27 @@ export function findItem(audit, id) {
   return allItems(effectiveGrid(audit)).find(i => i.id === id || i.code === id) || null;
 }
 
+/**
+ * Effacement d'une saisie (nouvel appui sur le statut, la valeur ou la case déjà choisis) pendant une modification
+ * motivée d'un audit signé (ctx.amendReason) : jamais silencieux. Réponse d'un critère OBLIGATOIRE vidée
+ * (empties) : refusé — l'audit signé doit rester complet ; sinon après confirmation explicite. Hors modification :
+ * permis. Retourne true si l'effacement est permis.
+ */
+export async function allowClear(ctx, audit, itemId, label, { empties = true, what = 'la réponse' } = {}) {
+  if (!ctx?.amendReason) return true;
+  const it = itemId ? findItem(audit, itemId) : null;
+  const code = it?.code || itemId || '';
+  if (it?.required && empties) {
+    toast(`${code} est obligatoire : sa réponse ne peut pas être effacée dans un audit signé. Choisissez la réponse corrigée.`, 'warn', 6000);
+    return false;
+  }
+  return confirmDialog({
+    title: 'Effacer une saisie de l’audit signé',
+    message: `Effacer ${what} « ${label} »${code ? ` de ${code}` : ''}${it?.label ? ` (${it.label})` : ''} ? La modification sera historisée avec la valeur précédente.`,
+    okLabel: 'Effacer', cancelLabel: 'Conserver', danger: true
+  });
+}
+
 /** Encadré d'alerte (aide à la décision : jamais convertie automatiquement en non-conformité). */
 export function alertBox(a, editable) {
   const ic = a.level === 'critique' ? 'warning' : a.level === 'attention' ? 'warning' : 'info';

@@ -2,7 +2,7 @@
  * utilitaires (js/core/util.js : identifiants, dates, échappement HTML, JSON canonique, différences, distances,
  * base64, empreintes), chiffrement local (js/core/crypto.js : enveloppe de la clé de données, AES-GCM, sauvegarde
  * chiffrée par mot de passe), journal chaîné (js/core/store.js : trailHash / verifyTrail, sans IndexedDB) et
- * projection UTM 22N (js/lib/geo.js). Portage de tests/audit-unit.mjs (fiches-oeg) complété. */
+ * projection UTM 22N (js/lib/geo.js), saisies en cours (js/ui/dom.js : enregistrement différé, settleInput). Portage de tests/audit-unit.mjs (fiches-oeg) complété. */
 import { test, assert, eq, deepEq, throwsAsync } from './harness.js';
 import {
   uuid, localDate, localTime, localDateTime, fmtDate, fmtTime, fmtDateTime, fmtBytes, daysBetween, addDays, esc, html, raw, SafeHTML,
@@ -14,6 +14,7 @@ import {
 } from '../../js/core/crypto.js';
 import { trailHash, verifyTrail, entityLabel, META_FIELDS, LOCAL_ONLY } from '../../js/core/store.js';
 import { utmToLatLon, latLonToUtm, ecartGPS } from '../../js/lib/geo.js';
+import { bindActions, settleInput, AUTOSAVE_DELAY } from '../../js/ui/dom.js';
 
 const near = (a, b, tol, msg) => assert(Math.abs(a - b) <= tol, `${msg || ''} attendu ${b} ± ${tol}, obtenu ${a}`);
 
@@ -206,4 +207,63 @@ test('géographie : UTM 22N ↔ latitude / longitude (station ATHANASE) et écar
   // Cohérence avec la distance orthodromique sur une courte distance
   const [la, lo] = utmToLatLon(356714 + 300, 465112 + 400);
   near(haversine(lat, lon, la, lo), 500, 3, 'UTM vs haversine');
+});
+
+/* ---------- Saisies en cours : enregistrement différé et validation avant verrouillage (js/ui/dom.js) ---------- */
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function sandbox(markup) {
+  const root = document.createElement('div');
+  root.innerHTML = markup;
+  document.body.appendChild(root);
+  return root;
+}
+
+test('saisie en cours : enregistrement différé (data-autosave) pendant la frappe, exécuté au démontage', async () => {
+  const root = sandbox('<textarea data-autosave data-change="save"></textarea><textarea id="u-plain" data-change="save"></textarea>');
+  const calls = [];
+  const unbind = bindActions(root, { save(el) { calls.push(el.value); } });
+  try {
+    const [auto, plain] = root.querySelectorAll('textarea');
+    auto.value = 'Obs'; auto.dispatchEvent(new Event('input', { bubbles: true }));
+    plain.value = 'x'; plain.dispatchEvent(new Event('input', { bubbles: true }));
+    eq(calls.length, 0, 'rien avant le délai');
+    auto.value = 'Observation'; auto.dispatchEvent(new Event('input', { bubbles: true }));   // la frappe reporte l'échéance
+    await wait(AUTOSAVE_DELAY + 300);
+    deepEq(calls, ['Observation'], 'un seul enregistrement après une pause de frappe ; champ ordinaire : à la sortie');
+    auto.value = 'Observation complète'; auto.dispatchEvent(new Event('input', { bubbles: true }));
+    auto.dispatchEvent(new Event('change', { bubbles: true }));                               // sortie du champ
+    await wait(AUTOSAVE_DELAY + 300);
+    deepEq(calls, ['Observation', 'Observation complète'], '« change » annule l’enregistrement différé en attente');
+    auto.value = 'Avant changement d’écran'; auto.dispatchEvent(new Event('input', { bubbles: true }));
+  } finally { unbind(); root.remove(); }
+  eq(calls.at(-1), 'Avant changement d’écran', 'démontage de la vue : enregistrement différé exécuté, pas abandonné');
+});
+
+test('saisie en cours : settleInput valide le champ actif, exécute les enregistrements différés et attend les gestionnaires', async () => {
+  const root = sandbox('<textarea id="u-active" data-change="save"></textarea><textarea id="u-auto" data-autosave data-change="slow"></textarea><button data-act="never">x</button>');
+  const calls = [];
+  const unbind = bindActions(root, {
+    save(el) { calls.push('save:' + el.value); },
+    async slow(el) { await wait(150); calls.push('slow:' + el.value); },
+    never() { return new Promise(() => {}); }   // gestionnaire en attente d'une réponse (fenêtre de confirmation)
+  });
+  try {
+    const auto = root.querySelector('#u-auto');
+    auto.value = 'différé'; auto.dispatchEvent(new Event('input', { bubbles: true }));
+    const active = root.querySelector('#u-active');
+    active.focus();
+    document.execCommand('insertText', false, 'en cours de frappe');   // saisie « utilisateur » : « change » à la perte du focus
+    eq(document.activeElement, active);
+    root.querySelector('[data-act=never]').click();
+    const t0 = performance.now();
+    await settleInput({ timeout: 600 });
+    const ms = performance.now() - t0;
+    assert(document.activeElement !== active, 'champ actif quitté (blur)');
+    assert(calls.includes('save:en cours de frappe'), `champ actif enregistré : ${calls}`);
+    assert(calls.includes('slow:différé'), `enregistrement différé exécuté et attendu : ${calls}`);
+    assert(ms >= 140 && ms < 2000, `attente des gestionnaires bornée par timeout (${Math.round(ms)} ms)`);
+    const n = calls.length;
+    await settleInput({ timeout: 50 });
+    eq(calls.length, n, 'rien à refaire');
+  } finally { unbind(); root.remove(); }
 });

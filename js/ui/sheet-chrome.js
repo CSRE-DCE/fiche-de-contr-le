@@ -175,6 +175,13 @@ export function infoStrip(site, { theme, codeType = '' } = {}) {
 /* ---------- Cartes et encadrés ---------- */
 const icons = (name, size) => String(name || '').split('+').filter(Boolean).map(n => icon(n.trim(), { size }));
 
+/**
+ * Typographie française d'un titre : l'espace avant une ponctuation haute (« : », « ; », « ! », « ? », « » ») et
+ * après « « » devient insécable, pour que la ponctuation ne parte jamais seule à la ligne (« … actions
+ * demandées : »). Les titres déjà en HTML (SafeHTML) sont rendus tels quels.
+ */
+export const nbspPunct = s => (typeof s === 'string' ? s.replace(/[ \t]+([:;!?»])/g, '\u00A0$1').replace(/«[ \t]+/g, '«\u00A0') : s);
+
 /** Carte de section : barre de titre avec pastille numérotée (ou pictogramme) puis corps.
  * Classes utiles (cls) : 'big' (grande pastille A / B de la feuille 8), 'plain' (sans fond de barre). */
 export function sectionCard({ no = '', title = '', icon: ic = '', theme, kicker = '', right = '', body = '', cls = '', id = '' } = {}) {
@@ -182,7 +189,7 @@ export function sectionCard({ no = '', title = '', icon: ic = '', theme, kicker 
   return html`<section ${themed(theme, 'sec-card', cls)}${id ? raw(` id="${String(id).replace(/[^\w:.-]/g, '')}"`) : ''}>
     <header class="sec-head">
       ${pastille}
-      <h3 class="sec-title"><span>${title}</span>${pastille && no !== '' && ic ? html`<span class="sec-title-ic">${icons(ic, 30)}</span>` : ''}</h3>
+      <h3 class="sec-title"><span>${nbspPunct(title)}</span>${pastille && no !== '' && ic ? html`<span class="sec-title-ic">${icons(ic, 30)}</span>` : ''}</h3>
       ${kicker ? html`<span class="sec-kicker">${swoosh('sec-kicker-swoosh')}<span>${kicker}</span></span>` : ''}
       ${right ? html`<div class="sec-right">${H(right)}</div>` : ''}
     </header>
@@ -193,7 +200,7 @@ export function sectionCard({ no = '', title = '', icon: ic = '', theme, kicker 
 /** Encadré (observations, remarques, conclusion, signature…) : pictogramme rond + titre + corps. */
 export function blockCard({ icon: ic = 'chat', title = '', theme, body = '', cls = '' } = {}) {
   return html`<section ${themed(theme, 'block-card', cls)}>
-    <header class="bc-head"><span class="bc-ic">${icons(ic)}</span><h3 class="bc-title">${title}</h3></header>
+    <header class="bc-head"><span class="bc-ic">${icons(ic)}</span><h3 class="bc-title">${nbspPunct(title)}</h3></header>
     <div class="bc-body">${H(body)}</div>
   </section>`;
 }

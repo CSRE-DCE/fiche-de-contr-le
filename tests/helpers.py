@@ -128,7 +128,7 @@ def answer_required(page, audit_id, skip=()):
             switch (input.type) {
               case 'number': return 1;
               case 'boolean': return true;
-              case 'date': return audit.startedAt.slice(0, 10);
+              case 'date': return audit.date || audit.startedAt.slice(0, 10);
               case 'time': return '08:30';
               case 'select': return opt((input.options || [])[0]) ?? 'Autre';
               case 'multiselect': return [opt((input.options || [])[0]) ?? 'Autre'];
@@ -136,7 +136,7 @@ def answer_required(page, audit_id, skip=()):
                 const v = {};
                 for (const f of input.fields || []) {
                   if (f.showIf) continue;
-                  v[f.key] = f.type === 'number' ? 1 : f.type === 'choice' ? opt((f.options || [])[0]) : f.type === 'date' ? audit.startedAt.slice(0, 10) : f.type === 'time' ? '08:30' : 'Vérifié';
+                  v[f.key] = f.type === 'number' ? 1 : f.type === 'choice' ? opt((f.options || [])[0]) : f.type === 'date' ? (audit.date || audit.startedAt.slice(0, 10)) : f.type === 'time' ? '08:30' : 'Vérifié';
                 }
                 return v;
               }

@@ -34,7 +34,7 @@ import {
 } from '../domain/grids.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel } from '../app/audits.js';
-import { alertBox, documentsCard, signaturesStep, deviationChips, findItem } from './audit-modules.js';
+import { alertBox, documentsCard, signaturesStep, deviationChips, findItem, allowClear } from './audit-modules.js';
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const optVal = o => (o && typeof o === 'object' ? o.value : o);
@@ -654,7 +654,11 @@ export const sheetHandlers = {
     const id = el.dataset.item, key = el.dataset.key, val = el.dataset.value;
     const cur = audit.responses?.[id];
     const obj = { ...(isObj(cur?.value) ? cur.value : {}) };
-    if (String(obj[key] ?? '') === val) delete obj[key]; else obj[key] = val;
+    if (String(obj[key] ?? '') === val) {
+      // Case décochée dans un audit signé en cours de modification : confirmation ; réponse obligatoire vidée : refus.
+      if (!(await allowClear(this, audit, id, el.textContent.trim() || val, { empties: Object.keys(obj).length === 1, what: 'la case' }))) return;
+      delete obj[key];
+    } else obj[key] = val;
     await setResponse(audit, id, { value: Object.keys(obj).length ? obj : undefined, status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
     await refreshKeep(this);
   },
@@ -690,6 +694,7 @@ export const sheetHandlers = {
   async 'sheet-concl'(el) {
     const audit = store.get('audit', this.params.id);
     const cur = audit.sheets?.[el.dataset.sheet]?.conclusion?.status;
+    if (cur === el.dataset.value && !(await allowClear(this, audit, null, el.textContent.trim() || cur, { what: 'la conclusion de la feuille' }))) return;
     await updateSheet(audit, el.dataset.sheet, { conclusion: { status: cur === el.dataset.value ? null : el.dataset.value } }, { reason: this.amendReason });
     await refreshKeep(this);
   },

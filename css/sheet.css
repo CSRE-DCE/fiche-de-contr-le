@@ -308,6 +308,10 @@
 .st-field{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 6px;min-width:0;flex:1 1 7.5em}
 .st-field>label,.st-field>.st-k{font-size:.92em;color:var(--th-ink,var(--oeg-navy));min-width:0}
 .st-field>:is(input,select){flex:1 1 4em;min-width:3.5em}
+/* Champ texte d'un groupe (« Nom : …… Fonction : …… ») : longue ligne pointillée comme sur la maquette ; quand la
+ * cellule ne peut pas leur donner 12em chacun, les champs passent l'un sous l'autre au lieu de couper la valeur. */
+.st-fields>.st-field:has(>input[type=text]:not([data-num])){flex:1 1 12em}
+.st-fields>.st-field>input[type=text]:not([data-num]){min-width:6em}
 /* Champ à choix (cases exclusives) précédé de son libellé : occupe toute la ligne */
 .st-field.is-choice{flex-basis:100%}
 .st-field.is-choice>.st-choice{flex:1 1 auto}

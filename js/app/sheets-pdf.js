@@ -3,7 +3,9 @@
  * - generateSheetsPdf({ auditId }) : rapport de TOURNÉE rempli = feuille tournée (F2) une fois puis, pour chaque
  *   station dans l'ordre de passage, ses feuilles (F1 portrait A4, les autres paysage A4), puis la synthèse
  *   (C / P / NC / N/A par station et par feuille, bilan, préconisations, écarts, signatures). Filigrane
- *   « PROVISOIRE » tant que l'audit n'est pas verrouillé ; n° d'audit, empreinte et pagination en pied de page.
+ *   « PROVISOIRE » tant que l'audit n'est pas verrouillé ; n° d'audit, empreinte du contenu imprimé et pagination
+ *   en pied de page. Tournée modifiée après signature : mention « MODIFIÉ APRÈS SIGNATURE » en pied de chaque page,
+ *   empreinte scellée rappelée et récapitulatif des modifications (date, auteur, motif, avant → après) en synthèse.
  * - generateBlankSheetsPdf({ auditType, siteId | siteIds, compartments }) : fiches vierges imprimables d'une
  *   tournée (valeurs du référentiel seulement, cases vides, pointillés).
  * - generateStationSheetPdf({ siteId, auditType }) : fiche station seule (feuille 1).
@@ -35,12 +37,13 @@ import { SAMPLING_KINDS, kindSVG } from '../ui/map.js';
 import { GRID_CT_2026, INSTRUMENTS, INSTRUMENT_FIELDS, CALIBRATION_FIELDS } from '../domain/grid-ct-2026.js';
 import {
   expandGrid, sheetsOf, groupSheets, headerOf, sectionHeaders, sheetStoreKey, prefillResponses, auditCompartments, normalizeCompartments,
-  typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName
+  typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName, allItems
 } from '../domain/grids.js';
-import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS } from '../domain/model.js';
+import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditDate as dateOfAudit } from '../domain/model.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { calibrationStatus } from '../domain/rules.js';
-import { auditState, auditContentHash, auditMedia } from './audits.js';
+import { ROLES } from '../domain/permissions.js';
+import { auditState, auditContentHash, auditMedia, stationLabel, deviationPlace } from './audits.js';
 import { staticMap, scaleBar } from './static-map.js';
 import { stationMapPoints, SLOTS } from '../views/station-sheet.js';
 
@@ -323,8 +326,7 @@ export async function sheetsModelFromAudit(audit) {
   if (!Object.keys(sites).length && audit.siteId) { const s = store.get('site', audit.siteId); if (s) sites[s.id] = s; }
   const provider = store.get('provider', audit.providerId) || null;
   const media = auditMedia(audit.id);
-  const dateItem = Object.keys(audit.responses || {}).find(id => /^it-F2-1\.4$/.test(id));
-  const auditDate = String(audit.responses?.[dateItem]?.value || audit.startedAt || '').slice(0, 10);
+  const auditDate = dateOfAudit(audit);
   const locked = !!audit.lock?.lockedAt;
   // Empreinte du contenu IMPRIMÉ (contenu actuel). Audit verrouillé puis modifié avec motif : c'est celle du dernier
   // amendement (expected) ; l'empreinte scellée à la signature est rappelée dans la synthèse (sealedFingerprint).
@@ -342,6 +344,53 @@ export async function sheetsModelFromAudit(audit) {
     sealedFingerprint: locked ? audit.lock.contentHash : '', amendments, sealOk: !locked || fingerprint === expected,
     summary: st.summary, generatedAt: nowISO()
   };
+}
+
+/**
+ * Lignes lisibles des changements d'une modification après signature (amendement : chemins du journal
+ * « responses.<critère>.<champ> », « sheets.<feuille>.<champ> », « conclusions.<champ> »…) : « F2.2.2 Effectif total
+ * — valeur : 4 → 5 ». Les champs techniques (horodatage, auteur) sont omis ; max lignes au plus, puis « … et N
+ * autre(s) ».
+ */
+export function amendmentChangeLines(amendment, grid, { max = 10 } = {}) {
+  const items = new Map((grid ? allItems(grid) : []).map(i => [i.id, i]));
+  const FIELD = { value: 'valeur', status: 'statut', comment: 'observation', observations: 'observations', notes: 'notes', comments: 'commentaires',
+    conclusion: 'conclusion', instruments: 'appareils de mesure', photos: 'photos', preconisations: 'autres préconisations',
+    strengths: 'points forts', vigilance: 'points de vigilance' };
+  const show = v => {
+    if (v === undefined || v === null || v === '') return '(vide)';
+    const t = typeof v === 'object' ? Object.values(v).filter(x => x !== null && x !== '' && typeof x !== 'object').join(' · ') || JSON.stringify(v) : String(v);
+    return t.length > 60 ? t.slice(0, 59) + '…' : t;
+  };
+  const itemName = id => {
+    const it = items.get(id);
+    if (!it) return id;
+    const label = String(it.label || '');
+    const st = it.station && !it.shared ? ` (${upper(it.station.name || '')})` : '';
+    return `${it.code ? it.code + ' ' : ''}${label.length > 48 ? label.slice(0, 47) + '…' : label}${st}`;
+  };
+  // Réponse ou encadré ajouté ou retiré d'un bloc (« sheets.2 » : {observations…}) : un changement par champ.
+  const changes = (amendment?.changes || []).flatMap(c => (/^(responses|sheets)\.[^]+$/.test(c.path || '') && (isObj(c.before) || isObj(c.after)) && !/\.(value|instruments|conclusion)$/.test(c.path)
+    ? [...new Set([...Object.keys(isObj(c.before) ? c.before : {}), ...Object.keys(isObj(c.after) ? c.after : {})])].map(k => ({ path: `${c.path}.${k}`, before: c.before?.[k], after: c.after?.[k] }))
+    : [c]));
+  const out = [];
+  for (const c of changes) {
+    const path = String(c.path || '');
+    let what = null;
+    let m = path.match(/^responses\.(.+?)(?:\.(value|status|comment|at|by|byName|prefilled|media)(?:\.(.+))?)?$/);
+    if (m) {
+      if (['at', 'by', 'byName', 'prefilled'].includes(m[2])) continue;
+      what = `${itemName(m[1])} — ${m[2] ? FIELD[m[2]] || m[2] : 'réponse'}${m[3] ? ' « ' + m[3] + ' »' : ''}`;
+    } else if ((m = path.match(/^sheets\.([^.]+)\.([^.]+)(?:\.(.+))?$/))) {
+      const [no, key] = m[1].split('@');
+      const sub = m[3] && m[2] === 'conclusion' ? (m[3] === 'status' ? '' : ' (' + (FIELD[m[3]] || m[3]) + ')') : m[3] ? ' « ' + m[3] + ' »' : '';
+      const station = key ? (grid?.stations || []).find(x => x.key === key)?.name || key : '';
+      what = `Feuille ${no}${station ? ' (' + upper(station) + ')' : ''} — ${FIELD[m[2]] || m[2]}${sub}`;
+    } else if ((m = path.match(/^conclusions\.(.+)$/))) what = `Bilan de la tournée — ${FIELD[m[1]] || m[1]}`;
+    else what = path;
+    out.push(`${what} : ${show(c.before)} → ${show(c.after)}`);
+  }
+  return out.length > max ? [...out.slice(0, max - 1), `… et ${out.length - max + 1} autre(s) modification(s) (rapport d’audit détaillé)`] : out;
 }
 
 /* ---------- Moteur de rendu ---------- */
@@ -1601,13 +1650,20 @@ class SheetsRenderer {
     this.y = y;
     // Identification et totaux.
     const provider = m.provider;
+    const amendments = a.lock?.lockedAt ? m.amendments || [] : [];
+    const amended = amendments.length > 0, lastAm = amendments[amendments.length - 1];
+    const amendedText = amended ? `${amendments.length} modification(s), la dernière le ${fmtDateTime(lastAm.at)} par ${lastAm.byName || ''}` : '';
     const ident = [
       ['N° d’audit', m.number], ['Type de tournée', m.typeDef?.label || AUDIT_TYPES[m.auditType] || ''],
       ['Prestataire', provider ? `${providerHeaderName(provider)}${provider.kind && PROVIDER_KINDS[provider.kind] ? ' — ' + PROVIDER_KINDS[provider.kind] : ''}` : '—'],
       ['Date', fmtDate(m.auditDate)], ['Contrôleur OEG', m.auditorName], ['Type d’audit', a.kind === 'inopine' ? 'Inopiné' : 'Avec rendez-vous / planifié'],
       ['Stations', this.stationList.map(s => `${s.index + 1}. ${upper(s.name)} (${s.code})`).join(' · ')],
-      ['Statut', a.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}` : 'PROVISOIRE — tournée non signée ou non verrouillée'],
-      [a.lock?.lockedAt ? 'Empreinte scellée (SHA-256)' : 'Empreinte du contenu (SHA-256)', m.fingerprint]
+      ['Statut', a.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}${amended ? ` — MODIFIÉ APRÈS SIGNATURE : ${amendedText}` : ''}` : 'PROVISOIRE — tournée non signée ou non verrouillée'],
+      // Empreinte du contenu IMPRIMÉ (celle du pied de page) ; tournée modifiée après signature : empreinte scellée à
+      // la signature rappelée à part.
+      [!a.lock?.lockedAt ? 'Empreinte du contenu (SHA-256)' : amended ? 'Empreinte imprimée (SHA-256)' : 'Empreinte scellée (SHA-256)', m.fingerprint],
+      ...(amended ? [['Empreinte à la signature', m.sealedFingerprint || '—']] : []),
+      ...(m.sealOk === false ? [['Intégrité', 'ATTENTION : le contenu ne correspond pas à l’empreinte enregistrée (modification non tracée).']] : [])
     ];
     const lw = 128, iw = (this.W - 2 * M) * 0.6, x0 = M;
     let iy = this.y;
@@ -1618,7 +1674,7 @@ class SheetsRenderer {
       d.rect(x0 + lw, iy, iw - lw, h, { fill: '#ffffff' });
       d.line(x0, iy + h, x0 + iw, iy + h, { color: t.line, width: 0.45 });
       d.text(k, x0 + 6, iy + 3, { font: F.semi, size: 7.6, color: NAVY });
-      ls.forEach((l, i) => d.text(l, x0 + lw + 6, iy + 3 + i * 9.4, { font: k.startsWith('Empreinte') ? F.text : F.semi, size: k.startsWith('Empreinte') ? 6.6 : 8, color: k === 'Statut' && !a.lock?.lockedAt ? OEG.nc : INK }));
+      ls.forEach((l, i) => d.text(l, x0 + lw + 6, iy + 3 + i * 9.4, { font: k.startsWith('Empreinte') ? F.text : F.semi, size: k.startsWith('Empreinte') ? 6.6 : 8, color: (k === 'Statut' && !a.lock?.lockedAt) || k === 'Intégrité' ? OEG.nc : k === 'Statut' && amended ? OEG.warn : INK }));
       iy += h;
     }
     const sum = stationSummary({ audit: a, grid: m.grid, ctx: m.ctx });
@@ -1671,8 +1727,14 @@ class SheetsRenderer {
     if (devs.length) {
       const crit = code => store.all('criticality').find(c => c.code === code);
       await this.simpleTable([{ label: 'N°', w: 92 }, { label: 'Criticité', w: 84, align: 'center' }, { label: 'Station', w: 86 }, { label: 'Exigence', w: W2 * 0.26 }, { label: 'Constat', w: W2 - 92 - 84 - 86 - W2 * 0.26 }],
-        devs.map(dv => [dv.number || '', { text: crit(dv.criticalityCode)?.label || dv.criticalityCode || '', pill: crit(dv.criticalityCode)?.color || t.main }, dv.stationKey ? upper(this.stationList.find(s => s.key === dv.stationKey)?.name || dv.stationKey) : 'Tournée', dv.requirement || dv.itemCode || '', dv.description || '']), t);
+        devs.map(dv => [dv.number || '', { text: crit(dv.criticalityCode)?.label || dv.criticalityCode || '', pill: crit(dv.criticalityCode)?.color || t.main }, dv.stationKey ? upper(stationLabel(m.audit, dv.stationKey)) : deviationPlace(dv, { codes: false }), dv.requirement || dv.itemCode || '', dv.description || '']), t);
     } else { d.text('Aucun écart enregistré.', M + 4, this.y, { font: F.italic, size: 8, color: MUTED }); this.y += 16; }
+    // Modifications après signature : chacune avec sa date, son auteur, son motif et les valeurs avant → après.
+    if (amended) {
+      await this.heading(`Modifications après signature (${amendments.length})`, t, 'history');
+      await this.simpleTable([{ label: 'Date', w: 78, align: 'center' }, { label: 'Auteur', w: 104 }, { label: 'Motif', w: W2 * 0.22 }, { label: 'Modifications (avant → après)', w: W2 - 78 - 104 - W2 * 0.22 }],
+        amendments.map(am => [fmtDateTime(am.at), `${am.byName || ''}${am.role ? ' (' + (ROLES[am.role] || am.role) + ')' : ''}`, am.reason || '—', amendmentChangeLines(am, m.grid).join('\n') || '—']), t);
+    }
     // Bilan et préconisations.
     await this.textCard('Commentaire et bilan de l’auditeur', a.conclusions?.comment || '', t, 'chat');
     await this.textCard('Autres préconisations', a.conclusions?.preconisations || '', t, 'edit');
@@ -1696,7 +1758,16 @@ class SheetsRenderer {
       if (s.contentHash) d.text(`Empreinte à la signature : ${s.contentHash.slice(0, 32)}…`, x + 10, this.y + h - 10, { font: F.text, size: 5.6, color: MUTED });
     }
     this.y += h + 10;
-    if (a.lock?.lockedAt) { d.text(`Tournée verrouillée le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}. Toute modification ultérieure est historisée.`, M, this.y, { font: F.semi, size: 7.6, color: OEG.ok }); this.y += 14; }
+    if (a.lock?.lockedAt) {
+      const ams = this.m.amendments || [], last = ams[ams.length - 1];
+      const txt = `Tournée verrouillée le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}. ` + (ams.length
+        ? `Modifiée après signature : ${ams.length} modification(s), la dernière le ${fmtDateTime(last.at)} par ${last.byName || ''} — motif : ${last.reason || 'non précisé'} (détail dans la rubrique « Modifications après signature » et dans le rapport d’audit détaillé).`
+        : 'Toute modification ultérieure est historisée.');
+      const ls = d.wrap(txt, F.semi, 7.6, this.W - 2 * M);
+      await this.ensure(ls.length * 9.6 + 6);
+      ls.forEach((l, i) => d.text(l, M, this.y + i * 9.6, { font: F.semi, size: 7.6, color: ams.length ? OEG.warn : OEG.ok }));
+      this.y += ls.length * 9.6 + 5;
+    }
   }
 
   /* --- document --- */

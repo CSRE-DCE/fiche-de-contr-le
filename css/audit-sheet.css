@@ -52,12 +52,18 @@
 .sheet>.as-hd-compact{margin-top:0}
 @media(max-width:899px){.as-hd-full{display:none}}
 @media(min-width:900px){.as-hd-compact{display:none}}
-/* Feuille de largeur moyenne (tablette, portable avec menu latéral) : le slogan cède sa place au pavé « Station »
- * pour que les titres OEG ne soient pas comprimés par un nom de station long. */
+/* Feuille de largeur moyenne (portable avec menu latéral, 1000 à 1180 px) : le slogan des maquettes reste entre les
+ * titres OEG et le pavé « Station », en plus petit ; plus étroite (tablette), il cède sa place au pavé pour que les
+ * titres OEG ne soient pas comprimés par un nom de station long. */
 @container assheet (max-width:1180px){
+  .as-hd-full .oh-st-name{font-size:clamp(22px,3.4cqi,42px)}
+}
+@container assheet (min-width:1000px) and (max-width:1180px){
+  .as-hd-full .oeg-header.has-station .oh-tagline{max-width:11em;font-size:10.5px;letter-spacing:.1em}
+}
+@container assheet (max-width:999px){
   .as-hd-full .oeg-header.has-station{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"logo titles station" "title title title"}
   .as-hd-full .oeg-header.has-station .oh-tagline{display:none}
-  .as-hd-full .oh-st-name{font-size:clamp(22px,3.4cqi,42px)}
 }
 /* Fiche station (feuille 1) imbriquée sans son propre cadre */
 .as-frame .ss-sheet-wrap>.sheet{padding:0;margin:0;box-shadow:none;border-radius:0;background:transparent;overflow:visible}
@@ -73,9 +79,25 @@
 @container assheet (min-width:1500px){.as-cols2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.as-cols2>.as-span{grid-column:1 / -1}}
 .as-stack>*+*{margin-top:clamp(8px,1vw,14px)}
 .as-split .sec-card.big .sec-body{padding-top:0}
-/* Feuille 8 : parties A et B côte à côte seulement si la feuille est assez large pour deux tableaux complets */
+/* Feuille 8 : parties A et B côte à côte dès que la feuille fait 1100 px (maquette, SPEC § 6.3), empilées en deçà.
+ * Côte à côte, les tableaux sont compactés pour tenir chacun dans sa moitié sans défilement horizontal (largeur
+ * minimale du tableau A ≈ 516 px pour 525 px disponibles à 1100 px) : colonnes C / P / NC / N/A de 30 px, marges
+ * de cellule réduites, champ heure de 5,5em, observations sans largeur minimale propre (la zone de saisie suit la
+ * colonne) et outils de preuve empilés. */
 .as-frame .sheet-split{grid-template-columns:minmax(0,1fr)}
-@container assheet (min-width:1200px){.as-frame .sheet-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@container assheet (min-width:1100px){
+  .as-frame .sheet-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .as-split .st-table :is(.c-c,.c-p,.c-nc,.c-na){width:30px;min-width:30px}
+  .as-split .st-table thead th{padding-left:4px;padding-right:4px}
+  .as-split .st-table tbody td:is(.c-label,.c-value,.c-obs){padding-left:6px;padding-right:6px}
+  .as-split .st-table td.c-label:has(>.st-ic){padding-left:36px}
+  .as-split .st-table td.c-label>.st-ic{left:6px}
+  .as-frame .as-split .st-table .c-value{min-width:6.5em}
+  .as-split .st-table .c-obs{min-width:5.5em}
+  .as-frame .as-split .st-table .as-inline>input[type]{flex:1 1 5.5em;width:5.5em}
+  .as-frame .as-split .st-table .as-obs-cell>textarea{width:0;min-width:2.5em}
+  .as-split .as-obs-cell .as-tools{flex-direction:column}
+}
 .as-group{margin:6px 2px 0;font-family:var(--font-cond);font-weight:800;text-transform:uppercase;letter-spacing:.03em;font-size:15px;color:var(--th-dark)}
 .as-frame .st-table tr.is-group>td{font-size:.95em;letter-spacing:.01em;padding:6px 10px}
 
@@ -90,6 +112,11 @@
 .as-frame .st-table .st-field.is-num>input{max-width:7.5em}
 /* Libellé et valeur sur la même ligne d'écriture (« Volume : ……… ») */
 .as-frame .st-field:not(.is-choice){align-items:baseline}
+/* Mesure avec unité : l'unité suit la valeur sur la même ligne (« Mesure 1 : 3,1 FNU ») ; plusieurs mesures à unité
+ * dans la même cellule (turbidité en triplicat de F4.9…) : une mesure par ligne. Le libellé peut passer sur deux
+ * lignes si la cellule est étroite, jamais l'unité. */
+.as-frame .st-field.is-num:has(>.st-unit){flex-wrap:nowrap}
+.as-frame .st-fields:has(>.st-field.is-num + .st-field.is-num)>.st-field.is-num:has(>.st-unit){flex-basis:100%}
 .as-frame .st-table select:disabled,.as-frame .st-table input:disabled{opacity:1;cursor:default}
 .as-novalue{display:block;min-height:22px}
 .as-inline{display:flex;align-items:center;gap:6px;min-width:0}
