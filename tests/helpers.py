@@ -33,7 +33,9 @@ def setup_standalone(page, app_url, *, org=ORG, device='Tablette test', device_n
     déverrouillée. demo : None = choix par défaut de l'écran, True / False = case cochée / décochée."""
     page.goto(app_url + 'index.html')
     page.wait_for_selector('#setupBtn')
-    page.click('[data-act=mode][data-value=standalone]')
+    standalone = page.locator('[data-act=mode][data-value=standalone]')   # mode autonome : affiché d'office
+    if standalone.count():
+        standalone.click()
     values = dict(orgName=org, deviceName=device, deviceNumber=str(device_no), name=name, username=username,
                   password=password, password2=password)
     for k, v in values.items():

@@ -35,6 +35,7 @@ import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
 } from '../domain/grids.js';
 import { calibrationStatus } from '../domain/rules.js';
+import { agentInitials } from '../domain/permissions.js';
 import {
   addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel, tourControllers, tourAgents, entriesByAgent, canJoinAudit,
   isAuditController, joinTour, addController, removeController
@@ -179,6 +180,8 @@ function obsField(c, it, r, pfx) {
   const dis = c.editable ? '' : raw('disabled');
   return html`<textarea ${autosave(c)} id="${pfx}-o-${it.id}" class="as-obs${empty ? ' need' : ''}" rows="${pfx === 't' ? 1 : 2}" data-change="comment" data-item="${it.id}" data-need="${need ? '1' : ''}" aria-label="Observations — ${it.label}" placeholder="${need ? 'Observation obligatoire (constat factuel)' : pfx === 't' ? '' : 'Constat, précision…'}" ${dis}>${r?.comment || ''}</textarea>`;
 }
+/** « Attendu » : ce que le prestataire doit faire ou présenter, vérification et cotation (grille CT-2026, js/views/attendus.js). */
+const attenduButton = it => /^it-F\d+-/.test(it.id) ? html`<button type="button" class="as-help as-attendu" data-act="item-attendu" data-item="${it.id}" title="Attendu du prestataire et cotation C / P / NC / N/A" aria-label="Attendu du prestataire : ${it.label}">${icon('clipboard', { size: 17 })}</button>` : '';
 const helpButton = it => (it.help || it.refs?.length) ? html`<button type="button" class="as-help" data-act="item-help" data-item="${it.id}" title="${it.help || 'Références'}" aria-label="Aide : ${it.label}">${icon('info', { size: 17 })}</button>` : '';
 function rowClass(c, it, r) {
   const s = r?.status;
@@ -201,7 +204,7 @@ function tableRow(c, it, o) {
   const sub = alerts.length || media.length || devs.length ? html`<tr class="as-sub"><td colspan="${o.cols}"><div class="as-sub-in">${alerts.map(a => alertBox(a, c.editable))}${thumbs(media)}${devs.length ? deviationChips(c.audit, it.id, devs) : ''}</div></td></tr>` : '';
   return html`<tr id="row-${it.id}" class="${rowClass(c, it, r)}">
     ${o.noCol ? html`<td class="c-no">${o.pills ? html`<span class="st-no">${it.no}</span>` : it.no}</td>` : ''}
-    <td class="c-label">${it.icon ? html`<span class="st-ic">${icon(it.icon)}</span>` : ''}<span class="as-lbl">${it.label}</span>${it.shared ? sharedBadge() : ''}${helpButton(it)}</td>
+    <td class="c-label">${it.icon ? html`<span class="st-ic">${icon(it.icon)}</span>` : ''}<span class="as-lbl">${it.label}</span>${it.shared ? sharedBadge() : ''}${helpButton(it)}${attenduButton(it)}</td>
     ${o.hasShort ? html`<td class="c-short">${it.short || ''}</td>` : ''}
     <td class="c-value">${valueControl(c, it, 't')}</td>
     ${o.full ? STATUS_SCALE.map(s => html`<td class="c-${s.cls}">${conf && allowed.includes(s.code) ? statusButton(c, it, s, r?.status, 't') : ''}</td>`) : ''}
@@ -220,7 +223,7 @@ function itemCard(c, it, o) {
   const need = needsJustification(it, r);
   const hd = o.headers;
   return html`<article id="card-${it.id}" class="st-row-card ${rowClass(c, it, r)}">
-    <div class="st-rc-head"><span class="st-rc-no">${it.no}</span>${it.icon ? html`<span class="st-rc-ic">${icon(it.icon)}</span>` : ''}<span class="st-rc-label">${it.label}${it.required && conf ? html` <span class="req" title="obligatoire">*</span>` : ''}${it.shared ? html`<br>${sharedBadge()}` : ''}</span>${it.short && it.short !== it.no ? html`<span class="st-rc-short">${it.short}</span>` : ''}${helpButton(it)}</div>
+    <div class="st-rc-head"><span class="st-rc-no">${it.no}</span>${it.icon ? html`<span class="st-rc-ic">${icon(it.icon)}</span>` : ''}<span class="st-rc-label">${it.label}${it.required && conf ? html` <span class="req" title="obligatoire">*</span>` : ''}${it.shared ? html`<br>${sharedBadge()}` : ''}</span>${it.short && it.short !== it.no ? html`<span class="st-rc-short">${it.short}</span>` : ''}${helpButton(it)}${attenduButton(it)}</div>
     ${itemInput(it) ? html`<div class="st-rc-value"><span class="st-rc-k">${hd.value}</span>${valueControl(c, it, 'k')}</div>` : ''}
     ${conf ? html`<div class="st-rc-status" role="group" aria-label="Statut — ${it.label}">${STATUS_SCALE.filter(s => allowed.includes(s.code)).map(s => statusButton(c, it, s, r?.status, 'k'))}</div>` : ''}
     ${o.full ? html`<div class="st-rc-obs"><label class="st-rc-k" for="k-o-${it.id}">Observations${need ? html` <span class="req">(obligatoire)</span>` : ''}</label><div class="input-wrap">${obsField(c, it, r, 'k')}${c.editable ? voiceBtn('k-o-' + it.id) : ''}</div></div>` : ''}
@@ -481,7 +484,6 @@ function infosView(c) {
       <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. La tournée peut être reprise à tout moment depuis l’accueil ou le planning ; sur une tablette partagée, « Changer d’agent » (en-tête) laisse la tournée sur la tablette pour le collègue qui se connecte ensuite.</p></div>` : ''}`;
 }
 
-const initialsOf = n => String(n || '?').split(/\s+/).filter(Boolean).map(x => x[0]).slice(0, 2).join('').toUpperCase();
 /** « A. Dupont », « A. Dupont et B. Martin », « A, B et C ». */
 export function namesList(names) {
   const l = names.filter(Boolean);
@@ -503,7 +505,7 @@ function controllersCard(c) {
   return html`<div class="card" id="tourControllers"><h2>Contrôleurs OEG de la tournée (${ctrls.length})</h2>
     <div class="list">${ctrls.map(x => {
       const n = byAgent.find(r => r.id === x.id)?.responses || 0;
-      return html`<div class="li as-ctrl" data-ctrl="${x.id}"><span class="avatar">${initialsOf(x.name)}</span><div class="li-main"><div class="li-title">${x.name || 'Agent'} ${x.id === session.user?.id ? badge('vous', 'info') : ''} ${x.id === audit.auditorId ? badge('a créé la tournée', 'outline') : ''}</div>
+      return html`<div class="li as-ctrl" data-ctrl="${x.id}"><span class="avatar">${agentInitials(store.get('user', x.id) || x)}</span><div class="li-main"><div class="li-title">${x.name || 'Agent'} ${x.id === session.user?.id ? badge('vous', 'info') : ''} ${x.id === audit.auditorId ? badge('a créé la tournée', 'outline') : ''}</div>
         <div class="li-sub">${n} réponse${n > 1 ? 's' : ''} saisie${n > 1 ? 's' : ''}</div></div>
         ${canManage && ctrls.length > 1 ? html`<button type="button" class="btn danger-ghost sm" data-act="ctrl-remove" data-id="${x.id}">Retirer</button>` : ''}</div>`;
     })}</div>
@@ -763,6 +765,8 @@ export const sheetHandlers = {
     await updateSheet(audit, key, { instruments: { [el.dataset.ins]: { [el.dataset.k]: cur === el.dataset.value ? null : el.dataset.value } } }, { reason: this.amendReason });
     await refreshKeep(this);
   },
+  /** Attendu du prestataire pour ce critère (fenêtre de js/views/attendus.js ; identifiant effectif accepté). */
+  async 'item-attendu'(el) { (await import('./attendus.js')).openAttendu(el.dataset.item); },
   /** Aide d'un critère (« Inclut : … », références documentaires, critère commun). */
   'item-help'(el) {
     const audit = store.get('audit', this.params.id);

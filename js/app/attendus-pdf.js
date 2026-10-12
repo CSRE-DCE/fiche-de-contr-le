@@ -28,12 +28,14 @@ export const ATTENDUS_URL = asset('data/attendus-ct-2026.json');
 export const TOUR_TYPES = ['bio', 'ce', 'eso'];
 /** Couleurs des types de tournée (mêmes thèmes que TYPE_STYLES de js/ui/map.js). */
 export const TYPE_THEMES = { bio: 'green', ce: 'ocean', eso: 'slate' };
+/** Pictogrammes des feuilles (js/ui/icons.js) ; à défaut, celui du compartiment de la feuille. */
+export const SHEET_ICONS = { 1: 'station', 2: 'clipboard', 3: 'compass', 10: 'well', 4: 'gauge', 5: 'bottles', 6: 'bug', 7: 'diatom', 8: 'fish', 9: 'algae' };
 /** Échelle de cotation (couleurs OEG de js/ui/themes.js). */
 export const SCALE = [
   { code: 'C', short: 'C', label: 'Conforme / satisfaisant', color: OEG.ok, bg: '#e8f5ec' },
   { code: 'P', short: 'P', label: 'Perfectible', color: OEG.perf, bg: '#fff4e2' },
   { code: 'NC', short: 'NC', label: 'Non conforme', color: OEG.nc, bg: '#fdecea' },
-  { code: 'NA', short: 'N/A', label: 'Sans objet', color: OEG.na, bg: '#eef1f4' }
+  { code: 'NA', short: 'N/A', label: 'Non applicable', color: OEG.na, bg: '#eef1f4' }
 ];
 
 let cache = null;
@@ -120,7 +122,7 @@ const sectionTheme = (sec, sheet) => sec.theme || sheet.theme || 'ocean';
 /**
  * Modèle du document pour un type de tournée (null : tous les types) :
  * {type, typeLabel, data, echelle, avertissement, preparation: [{key, label, groups}], sheets: [{no, code, title, tab,
- *  theme, scope, types, intro, documents, sections: [{id, title, theme, items}], items, values, count}], count}.
+ *  theme, scope, icon, types, intro, documents, sections: [{id, no, title, icon, theme, items}], items, values, count}], count}.
  * Critère : {id, code, no, label, kind, shared, types, conditional, value (critère sans cotation), theme, entry}.
  * Les feuilles et critères sont ceux AFFICHÉS pour le type (tous les types : réunion, titres de base des feuilles).
  */
@@ -143,12 +145,13 @@ export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = 
         types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), help: it.help || '',
         theme: sectionTheme(s, base), entry: data?.criteres?.[it.id] || null
       }));
-      if (items.length) secs.push({ id: s.id, no: s.no || '', title: s.title, theme: sectionTheme(s, base), items });
+      if (items.length) secs.push({ id: s.id, no: s.no || '', title: s.title, icon: s.icon || '', theme: sectionTheme(s, base), items });
     }
     const items = secs.flatMap(s => s.items);
     if (!items.length) continue;
     sheets.push({
       no: base.no, code: 'F' + base.no, title: sh.title, tab: sh.tab, kicker: sh.kicker || '', theme: base.theme, scope: base.scope,
+      icon: SHEET_ICONS[base.no] || (grid.compartments || []).find(c => c.key === base.compartment)?.icon || '',
       types: TOUR_TYPES.filter(t => vis.types[t]?.sheets.some(x => String(x.no) === no)),
       intro: fe.intro || '', documents: fe.documents || [], sections: secs, items,
       count: items.filter(i => !i.value).length, values: items.filter(i => i.value).length
@@ -547,7 +550,8 @@ export async function buildAttendusPdf(data, { auditType = null, preparationOnly
     drawScale(flow, model);
     drawPreparation(flow, model);
     for (const sh of model.sheets) {
-      flow.page();
+      // Une feuille commence en haut de page, sauf s'il reste plus de la moitié de la page (feuille courte, F1).
+      if (flow.room() < (flow.bottom - TOP) * 0.5) flow.page(); else flow.doc.y += 10;
       drawSheetHead(flow, model, sh);
       drawValues(flow, sh.items.filter(i => i.value), sh.theme);
       for (const sec of sh.sections) {

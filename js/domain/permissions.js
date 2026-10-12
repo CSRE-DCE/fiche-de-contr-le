@@ -74,6 +74,26 @@ export function canJoinAudit(audit, user) {
   return !isAuditController(audit, user.id);
 }
 
+/* ---------- Identité des agents (profils « user ») ---------- */
+const plain = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+/** Initiales d'un agent : celles du profil, à défaut prénom + nom, à défaut les deux premiers mots du nom. */
+export function agentInitials(u) {
+  const own = String(u?.initials || '').trim();
+  if (own) return own.toUpperCase().slice(0, 4);
+  const first = s => plain(s).replace(/[^A-Za-z]/g, '').charAt(0);
+  if (u?.firstName || u?.lastName) return (first(u.firstName) + first(u.lastName)).toUpperCase() || '?';
+  const words = String(u?.name || u?.username || '').split(/[\s-]+/).filter(Boolean);
+  return words.map(w => first(w)).join('').slice(0, 2).toUpperCase() || '?';
+}
+/** Nom affiché d'un agent : « Prénom Nom ». */
+export const agentFullName = (firstName, lastName) => [firstName, lastName].map(s => String(s || '').trim()).filter(Boolean).join(' ');
+/** Identifiant proposé pour un nouvel agent : initiale du prénom + nom, sans accents ni espaces (« Chloé Petit » → cpetit). */
+export function suggestUsername(firstName, lastName) {
+  const f = plain(firstName).toLowerCase().replace(/[^a-z0-9]/g, '').charAt(0);
+  const l = plain(lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (f + l) || l || f;
+}
+
 export const REFERENTIAL_TYPES = ['provider', 'operator', 'site', 'point', 'equipment', 'samplingType', 'matrix', 'method', 'unit', 'criticality', 'deviationType', 'container', 'campaign', 'document', 'grid'];
 
 /** Droit requis pour enregistrer un objet d'un type donné (null = refusé, '*' = tout profil). */

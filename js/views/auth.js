@@ -1,10 +1,12 @@
-/* Écrans hors session : première configuration de l'appareil (mode autonome ou « Rejoindre une équipe »
- * par un dépôt GitHub privé de données : compte de l'administrateur qui configure la tablette, avec le jeton de
- * la tablette ; deuxième tablette : il y retrouve son profil), ouverture de session « Qui utilise la tablette ? »
- * (tuiles des agents de la tablette, aide si un agent n'y figure pas), messages. */
+/* Écrans hors session : première configuration de la tablette (mode autonome, celui de l'OEG : données chiffrées
+ * sur la tablette, un compte par agent, échanges entre tablettes par fichier ; option avancée repliée « Rejoindre
+ * une équipe » par un dépôt GitHub privé de données — nécessite un jeton GitHub, non utilisée à l'OEG),
+ * ouverture de session « Qui utilise la tablette ? » (tuiles des agents de la tablette, aide si un agent n'y
+ * figure pas), messages. */
 import { html } from '../core/util.js';
 import { session } from '../core/session.js';
 import * as auth from '../core/auth.js';
+import { agentInitials } from '../domain/permissions.js';
 import { bindActions, toast, formValues } from '../ui/dom.js';
 import { seedAll } from '../app/bootstrap.js';
 import { saveOrgSettings } from '../app/settings.js';
@@ -66,20 +68,16 @@ export function renderSetup(root, { onDone }) {
   const draw = () => {
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
       <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
-      <h1>Configuration de l’appareil</h1>
-      <p class="sub">Audit terrain des prestations de prélèvement — première utilisation sur cet appareil.</p>
-      <div class="seg" style="margin-bottom:14px">
-        <button type="button" data-act="mode" data-value="standalone" class="${mode === 'standalone' ? 'sel brand' : ''}">Mode autonome<small>données sur cet appareil</small></button>
-        <button type="button" data-act="mode" data-value="team" class="${mode === 'team' ? 'sel brand' : ''}">Rejoindre une équipe<small>dépôt GitHub privé</small></button>
-      </div>
+      <h1>Configuration de la tablette</h1>
+      <p class="sub">Fiches de contrôle terrain — première utilisation sur cette tablette.</p>
       ${mode === 'standalone' ? html`<form data-submit="standalone" autocomplete="off">
-        <div class="banner info">Les données restent chiffrées sur cet appareil. L’appareil pourra être rattaché plus tard au dépôt GitHub d’une équipe ; en attendant, les échanges entre appareils se font par export/import de paquets de données.</div>
+        <div class="banner info">Les données restent chiffrées sur cette tablette, sans connexion nécessaire. Chaque agent y aura son compte et son mot de passe (Administration › Agents de cette tablette) ; les échanges avec l’autre tablette se font par fichier.</div>
         <div class="field"><label>Organisme</label><input name="orgName" value="Office de l’Eau de Guyane" required></div>
         <div class="grid2">
-          <div class="field"><label>Nom de l’appareil</label><input name="deviceName" value="${auth.defaultDeviceName()}" required></div>
-          <div class="field"><label>N° de l’appareil (1 à 99)</label><input name="deviceNumber" type="number" min="1" max="99" value="1" required><div class="hint">Unique par appareil : garantit des numéros d’audit uniques.</div></div>
+          <div class="field"><label>Nom de la tablette</label><input name="deviceName" value="${auth.defaultDeviceName()}" required placeholder="ex. Tablette 1"></div>
+          <div class="field"><label>N° de la tablette (1 à 99)</label><input name="deviceNumber" type="number" min="1" max="99" value="1" required><div class="hint">Différent sur chaque tablette (1, 2…) : garantit des numéros d’audit uniques.</div></div>
         </div>
-        <h3>Compte administrateur</h3>
+        <h3>Votre compte (administrateur de la tablette)</h3>
         <div class="field"><label>Nom et prénom</label><input name="name" required autocomplete="name"></div>
         <div class="grid2">
           <div class="field"><label>Identifiant</label><input name="username" required autocapitalize="none" autocomplete="username"></div>
@@ -90,7 +88,12 @@ export function renderSetup(root, { onDone }) {
         <label class="check" style="margin-top:8px"><input type="checkbox" name="demo"> Ajouter des données de démonstration fictives (prestataire « DÉMO », 3 prestations, documents « EXEMPLE »)</label>
         <p class="hint" id="setupErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="setupBtn">Créer et ouvrir la session</button>
-      </form>` : html`<form data-submit="team" autocomplete="off" id="teamForm">
+      </form>
+      <details class="setup-adv" id="setupAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
+        <p class="note">Synchronisation par un dépôt GitHub privé de données. L’OEG ne l’utilise pas : les tablettes échangent leurs données par fichier.</p>
+        <button type="button" class="btn ghost" data-act="mode" data-value="team">Rejoindre une équipe (dépôt GitHub privé)</button></details>` : html`<button type="button" class="btn ghost sm" data-act="mode" data-value="standalone" style="margin-bottom:10px">← Revenir au mode autonome (celui de l’OEG)</button>
+      <form data-submit="team" autocomplete="off" id="teamForm">
+        <div class="banner warn">Mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG.</div>
         <div class="banner info">Les données de l’équipe sont partagées par un dépôt GitHub <b>privé</b>, lu et écrit directement depuis cette tablette avec <b>le jeton d’accès de la tablette</b>, créé par l’administrateur (aucun serveur ; les agents n’ont pas besoin de compte GitHub). Sur la tablette, les données restent chiffrées et la session s’ouvre ensuite hors connexion.</div>
         <h3>Dépôt de données de l’équipe</h3>
         <div class="field"><label>Dépôt GitHub (propriétaire/nom) <span class="req">*</span></label><input name="repoSpec" required placeholder="CSRE-DCE/fiche-de-controle-donnees" autocapitalize="none" spellcheck="false"></div>
@@ -233,11 +236,11 @@ export async function renderLogin(root, { message = '', onUnlocked, pick = 'last
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
       <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
       <h1>Qui utilise la tablette ?</h1>
-      <p class="sub">Fiches de contrôle terrain — ${navigator.onLine ? 'touchez votre nom puis saisissez votre mot de passe' : 'hors connexion : ouverture de session locale'}</p>
+      <p class="sub">${navigator.onLine ? 'Fiches de contrôle terrain' : 'Hors connexion — ouverture de session locale'} : touchez votre nom puis saisissez votre mot de passe</p>
       ${message ? html`<div class="banner info" id="loginMsg">${message}</div>` : ''}
       <form data-submit="login" autocomplete="off">
         <div class="user-tiles" role="group" aria-label="Agents de cette tablette">${users.map(u => html`<button type="button" class="user-tile ${u.username === selected ? 'sel' : ''}" data-act="pick" data-u="${u.username}" aria-pressed="${u.username === selected}">
-          <span class="avatar">${(u.name || u.username).split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase()}</span>
+          <span class="avatar">${agentInitials(u)}</span>
           <span><b>${u.name}</b><br><span class="tiny muted">${auth.ROLES[u.role] || u.role} · ${u.username}${u.disabled ? ' · désactivé' : ''}</span></span></button>`)}</div>
         <div class="field"><label for="loginPw">Mot de passe${users.length > 1 ? html` <b id="loginWho">${selected ? '— ' + (users.find(u => u.username === selected)?.name || '') : '(touchez d’abord votre nom)'}</b>` : ''}</label><input id="loginPw" name="password" type="password" required autocomplete="current-password" autofocus></div>
         <p class="hint" id="loginErr" style="color:var(--nc)"></p>

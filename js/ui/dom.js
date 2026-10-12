@@ -99,6 +99,9 @@ export function toast(message, kind = '', ms = 3200) {
 
 /* ---------- Modales ---------- */
 let modalDepth = 0;
+const openModals = new Set();
+/** Ferme toutes les fenêtres ouvertes (fermeture de session : rien ne reste affiché pour l'agent suivant). */
+export function closeAllModals() { for (const m of [...openModals]) m.close(undefined); }
 /**
  * Ouvre une fenêtre modale. Retourne {root, close(value), result:Promise}.
  * opts : {title, body:SafeHTML, actions:[{label, cls, act}], handlers, wide, urgent, onMount, dismissable}
@@ -123,6 +126,7 @@ export function openModal(opts) {
     root: dialog,
     close(value) {
       if (!back.isConnected) return;
+      openModals.delete(api);
       unbind(); back.remove(); modalDepth--;
       document.removeEventListener('keydown', onKey);
       opts.onClose?.(value);
@@ -132,6 +136,7 @@ export function openModal(opts) {
     setBody(safe) { dialog.querySelector('.modal-body').innerHTML = String(safe); },
     result
   };
+  openModals.add(api);
   const unbind = bindActions(dialog, { __close: () => api.close(undefined), ...(opts.handlers || {}) }, api);
   const onKey = e => { if (e.key === 'Escape' && opts.dismissable !== false) api.close(undefined); };
   document.addEventListener('keydown', onKey);

@@ -100,7 +100,7 @@ def devices(gh_browser, gh_app_url):
         page.on('console', lambda m: page.errors.append(m.text) if m.type == 'error' and not EXPECTED_CONSOLE.search(m.text) else None)
         page.on('pageerror', lambda e: page.errors.append(f'pageerror: {e}'))
         page.goto(gh_app_url + 'index.html')
-        page.wait_for_selector('[data-act=mode]')
+        page.wait_for_selector('#setupBtn')
         made.append((ctx, page))
         return page
     yield make
@@ -114,6 +114,7 @@ def devices(gh_browser, gh_app_url):
 
 def join_team(page, fake, token, name, username, *, repo='oeg/donnees', device=None, expect_init=None):
     """« Rejoindre une équipe » depuis l'écran de première configuration, jusqu'à l'application ouverte et synchronisée."""
+    page.click('#setupAdvanced > summary')     # option avancée repliée (mode équipe : non utilisé à l'OEG)
     page.click('[data-act=mode][data-value=team]')
     page.fill('[name=repoSpec]', repo)
     page.fill('[name=token]', token)
@@ -350,7 +351,7 @@ def test_revocation_efface_appareil(devices, fake):
     assert not fake.read(f"donnees/entites/audit/{audit['id']}.json"), 'rien n’est envoyé par un appareil révoqué'
     # Rechargement : appareil vierge (première configuration)
     b.reload()
-    b.wait_for_selector('[data-act=mode]')
+    b.wait_for_selector('#setupBtn')
 
 
 def test_numeros_sans_doublon(devices, fake):
@@ -399,6 +400,7 @@ def test_rattachement_et_detachement(devices, fake):
     local = create_audit(c)
     assert local['number'] == f'AUD-{YEAR}-070001'
     c.evaluate("location.hash = '#/synchronisation'")
+    c.click('#teamAdvanced > summary')     # option avancée repliée (mode équipe : non utilisé à l'OEG)
     c.click('[data-act=attach]')
     c.fill('#af [name=repoSpec]', 'oeg/donnees')
     c.fill('#af [name=token]', 'tok-audit')
@@ -435,6 +437,7 @@ def test_rattachement_et_detachement(devices, fake):
 
 def test_erreurs_claires(devices, fake):
     p = devices('X')
+    p.click('#setupAdvanced > summary')
     p.click('[data-act=mode][data-value=team]')
     p.fill('[name=repoSpec]', 'oeg/donnees')
     p.fill('[name=token]', 'jeton-invalide')
@@ -476,5 +479,5 @@ def test_mode_autonome_inchange(devices, fake, gh_app_url):
     p.wait_for_selector('#view')
     assert p.evaluate(f"!!window.AuditApp.store.get('audit', '{tour['id']}')")
     p.evaluate("location.hash = '#/synchronisation'")
-    p.wait_for_selector('[data-act=attach]')
+    p.wait_for_selector('#teamAdvanced [data-act=attach]', state='attached')   # option avancée repliée
     assert fake.stats['requests'] == 0, 'aucun appel à GitHub en mode autonome'

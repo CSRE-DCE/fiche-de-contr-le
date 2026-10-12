@@ -5,7 +5,7 @@ import { store } from './core/store.js';
 import * as auth from './core/auth.js';
 import { revokeAllURLs } from './core/media.js';
 import { route, startRouter, stopRouter, refresh } from './ui/router.js';
-import { toast, settleInput } from './ui/dom.js';
+import { toast, settleInput, closeAllModals } from './ui/dom.js';
 import { initSync, stopSync, runSync } from './app/sync.js';
 import { applyDisplayPrefs, orgSettings } from './app/settings.js';
 import { renderSetup, renderLogin, renderMessage, teardownAuth } from './views/auth.js';
@@ -30,6 +30,7 @@ route('prestataire/:id', () => import('./views/providers.js').then(m => ({ defau
 route('carte', () => import('./views/map.js'));
 route('tableau-de-bord', () => import('./views/dashboard.js'));
 route('documents', () => import('./views/documents.js'));
+route('attendus', () => import('./views/attendus.js'));
 route('document/:id', () => import('./views/documents.js').then(m => ({ default: m.detailView })));
 route('grilles', () => import('./views/grids.js'));
 route('grille/:id', () => import('./views/grids.js').then(m => ({ default: m.detailView })));
@@ -78,18 +79,24 @@ function watchActivity() {
 }
 
 let locking = null;
+// « Changer d'agent » : agent dont la session vient d'être fermée (écran d'arrivée de l'agent suivant).
+let switchedFrom = null;
 export function lockApp(reason = 'manuel') {
   // Un seul verrouillage à la fois (minuteur d'inactivité et cadenas peuvent se croiser pendant l'enregistrement).
   if (!locking) locking = doLock(reason).finally(() => { locking = null; });
   return locking;
 }
 async function doLock(reason) {
-  const who = session.user?.name || '';
+  const who = session.user?.name || '', whoId = session.user?.id || null;
   // Saisie en cours (observation commencée, champ non quitté) enregistrée AVANT la fermeture de la session.
   await saveInput();
   stopSync(); stopRouter(); revokeAllURLs();
   await auth.lock(reason);
   document.body.classList.remove('in-audit');
+  // Rien de la session précédente ne reste à l'écran : messages et fenêtres ouvertes (verrouillage par inactivité).
+  closeAllModals();
+  document.querySelectorAll('.toast').forEach(el => el.remove());
+  switchedFrom = reason === 'changement d’agent' ? whoId : null;
   showLogin(reason === 'inactivité' ? 'Session verrouillée après inactivité. Vos saisies sont enregistrées sur l’appareil.'
     : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).'
     : reason === 'changement d’agent' ? `${who} : session fermée. Les saisies sont enregistrées sur la tablette et la tournée en cours y reste pour l’agent suivant.` : '',
@@ -116,7 +123,10 @@ async function enterApp() {
   document.body.classList.remove('auth-mode');
   teardownAuth();
   auth.restoreToken();
-  // « Changer d'agent » (tablette partagée) : saisie enregistrée, retour à « Qui utilise la tablette ? ».
+  // « Changer d'agent » (tablette partagée) : saisie enregistrée, retour à « Qui utilise la tablette ? ». L'agent
+  // suivant arrive sur la tournée affichée par le précédent (binôme) ; sur tout autre écran, sur l'accueil.
+  if (switchedFrom && switchedFrom !== session.user?.id && !/^#\/audit\//.test(location.hash)) history.replaceState(null, '', '#/');
+  switchedFrom = null;
   renderShell(app, { lock: () => lockApp('changement d’agent') });
   watchActivity();
   watchBackground();

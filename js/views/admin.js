@@ -10,7 +10,8 @@ import { html, raw, fmtDateTime, fmtBytes, sortBy, uuid } from '../core/util.js'
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { meta, destroyDB, storageEstimate } from '../core/db.js';
-import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, updateDevice, isTeamMode, teamLabel, linkGithubLogin, enrollAgent, removeAgentFromDevice } from '../core/auth.js';
+import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, updateDevice, isTeamMode, teamLabel, linkGithubLogin, enrollAgent, removeAgentFromDevice, assertAdminRemains, normUsername } from '../core/auth.js';
+import { agentInitials, agentFullName, suggestUsername } from '../domain/permissions.js';
 import { toast, openModal, formValues, promptDialog, confirmDialog } from '../ui/dom.js';
 import { pageTitle, kv, badge, empty, options, field } from '../ui/components.js';
 import { orgSettings, saveOrgSettings, pref, setPref, applyDisplayPrefs } from '../app/settings.js';
@@ -26,28 +27,57 @@ const SETTINGS = [
 const ROLE_OPTIONS = () => Object.entries(ROLES).map(([id, label]) => ({ id, label }));
 const errText = e => e?.message === 'Failed to fetch' ? 'GitHub injoignable : vérifiez la connexion réseau.' : (e?.message || String(e));
 
-/** Agent de la tablette (les deux modes ; en mode équipe, rattachement facultatif à un login GitHub). */
-function userForm(u = null, { team = false, enrolled = true } = {}) {
+/**
+ * Agent de la tablette (les deux modes) : « Ajouter un agent » = NOUVEAU profil (nom, prénom, initiales, profil,
+ * identifiant proposé, mot de passe choisi et saisi deux fois par l'agent) ; modification d'un profil (nom, prénom,
+ * initiales, profil, actif ; nouveau mot de passe sur cette tablette). Profil antérieur sans prénom ni nom séparés :
+ * nom découpé au premier espace (prénom puis nom). Mode équipe : login GitHub facultatif (option avancée).
+ * taken : identifiants déjà utilisés (trousseau et profils), pour proposer un identifiant libre.
+ */
+function userForm(u = null, { team = false, enrolled = true, taken = new Set() } = {}) {
   const isNew = !u;
   u = u || { username: '', name: '', role: 'auditeur', active: true };
+  const words = String(u.name || '').trim().split(/\s+/).filter(Boolean);
+  const firstName = u.firstName ?? (u.lastName ? '' : words[0] || '');
+  const lastName = u.lastName ?? (u.firstName ? '' : words.slice(1).join(' '));
+  let manualIni = !!u.initials, manualUser = !isNew;
+  const freeUsername = base => { if (!base || !taken.has(base)) return base; let i = 2; while (taken.has(base + i)) i++; return base + i; };
   const m = openModal({
-    title: isNew ? 'Nouvel agent sur cette tablette' : 'Agent ' + u.name,
-    body: html`<form id="uf">${field('Nom et prénom', html`<input name="name" value="${u.name}" required>`, { required: true })}
-      ${field('Identifiant', html`<input name="username" value="${u.username}" required autocapitalize="none" ${isNew ? '' : raw('readonly')}>`, { required: true })}
-      ${field('Profil local', html`<select name="role">${options(ROLE_OPTIONS(), u.role, { placeholder: null })}</select>`, { hint: team ? 'Remplacé par le profil d’équipe si le compte est rattaché à un login GitHub déclaré dans l’équipe.' : '' })}
-      ${team ? field('Login GitHub (facultatif)', html`<input name="githubLogin" value="${u.githubLogin || ''}" autocapitalize="none" spellcheck="false" placeholder="ex. jdupont-oeg">`, { hint: 'À laisser vide pour un agent sans compte GitHub (cas normal : un jeton par tablette). Renseigné, le profil de l’agent suit config/utilisateurs.json — n’y mettez jamais le login du propriétaire du jeton de la tablette pour un autre agent.' }) : ''}
-      ${enrolled ? html`${field(isNew ? 'Mot de passe (choisi et saisi par l’agent, 8 caractères min.)' : 'Nouveau mot de passe sur cette tablette (laisser vide pour ne pas changer)', html`<input name="password" type="password" ${isNew ? raw('required minlength="8"') : ''} autocomplete="new-password">`)}
-      ${field(isNew ? 'Confirmation du mot de passe' : 'Confirmation du nouveau mot de passe', html`<input name="password2" type="password" ${isNew ? raw('required') : ''} autocomplete="new-password">`)}` : html`<p class="note">Agent pas encore sur cette tablette : pour qu’il puisse s’y connecter, utilisez « Ajouter sur cette tablette » (il choisira son mot de passe).</p>`}
-      <label class="check"><input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Compte actif${team ? ' (désactivé : sur toutes les tablettes, après synchronisation)' : ''}</label>
-      <p class="note">${isNew ? 'L’agent pourra ouvrir une session sur cette tablette. Pour l’autre tablette : Administration › « Agents de l’équipe pas encore sur cette tablette » › Ajouter sur cette tablette (même profil). ' : ''}Ses données sont chiffrées avec la clé de la tablette${team ? ' ; les synchronisations utilisent le jeton GitHub de la tablette (aucun compte GitHub n’est nécessaire pour l’agent)' : ''}.</p>
+    title: isNew ? 'Ajouter un agent' : 'Agent ' + u.name,
+    body: html`<form id="uf"><div class="grid2">
+        ${field('Nom', html`<input name="lastName" value="${lastName}" required autocomplete="off" autocapitalize="words" data-input="uf-name">`, { required: true })}
+        ${field('Prénom', html`<input name="firstName" value="${firstName}" required autocomplete="off" autocapitalize="words" data-input="uf-name">`, { required: true })}
+        ${field('Initiales', html`<input name="initials" value="${agentInitials({ ...u, firstName, lastName })}" required maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" data-input="uf-ini">`, { required: true, hint: 'Affichées sur l’écran « Qui utilise la tablette ? ».' })}
+        ${field('Profil', html`<select name="role">${options(ROLE_OPTIONS(), u.role, { placeholder: null })}</select>`, { hint: team ? 'Remplacé par le profil d’équipe si l’agent est rattaché à un login GitHub déclaré dans l’équipe.' : 'Auditeur : réalise ses tournées ; Administrateur : gère aussi les agents de la tablette.' })}
+      </div>
+      ${field('Identifiant', html`<input name="username" value="${u.username}" required autocapitalize="none" spellcheck="false" data-input="uf-user" ${isNew ? '' : raw('readonly')}>`, { required: true, hint: isNew ? 'Proposé à partir du prénom et du nom ; le même sur toutes les tablettes.' : 'Le même sur toutes les tablettes (non modifiable).' })}
+      ${team ? html`<details><summary>Option avancée : login GitHub (mode équipe)</summary>${field('Login GitHub (facultatif)', html`<input name="githubLogin" value="${u.githubLogin || ''}" autocapitalize="none" spellcheck="false" placeholder="ex. jdupont-oeg">`, { hint: 'À laisser vide en général. Renseigné, le profil de l’agent suit config/utilisateurs.json du dépôt de l’équipe.' })}</details>` : ''}
+      ${enrolled ? html`${field(isNew ? 'Mot de passe (choisi et saisi par l’agent, 8 caractères min.)' : 'Nouveau mot de passe sur cette tablette (laisser vide pour ne pas changer)', html`<input name="password" type="password" ${isNew ? raw('required minlength="8"') : ''} autocomplete="new-password">`, { required: isNew })}
+      ${field(isNew ? 'Confirmation du mot de passe' : 'Confirmation du nouveau mot de passe', html`<input name="password2" type="password" ${isNew ? raw('required') : ''} autocomplete="new-password">`, { required: isNew })}` : html`<p class="note">Agent pas encore sur cette tablette : pour qu’il puisse s’y connecter, utilisez « Ajouter sur cette tablette » (il choisira son mot de passe).</p>`}
+      <label class="check"><input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Compte actif${team ? ' (désactivé : sur toutes les tablettes, après synchronisation)' : ' (désactivé : l’agent ne peut plus ouvrir de session)'}</label>
+      <p class="note">${isNew ? 'À faire avec l’agent : c’est lui qui choisit et saisit son mot de passe. Il pourra ouvrir une session sur cette tablette ; pour l’autre tablette, une fois les données de celle-ci reçues : Administration › « Agents pas encore sur cette tablette » › Ajouter sur cette tablette (même profil). ' : ''}Ses données sont chiffrées avec la clé de la tablette.</p>
       <p class="hint" id="ufErr" style="color:var(--nc)"></p></form>`,
-    actions: [{ label: 'Annuler' }, { label: 'Enregistrer', act: 'ok', cls: 'primary' }],
-    handlers: { ok() {
-      const f = this.root.querySelector('#uf'); if (!f.reportValidity()) return;
-      const v = formValues(f);
-      if ((v.password || v.password2) && v.password !== v.password2) { this.root.querySelector('#ufErr').textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
-      this.close(v);
-    } }
+    actions: [{ label: 'Annuler' }, { label: isNew ? 'Ajouter l’agent' : 'Enregistrer', act: 'ok', cls: 'primary' }],
+    handlers: {
+      /** Nom ou prénom saisi : initiales et identifiant proposés (tant qu'ils n'ont pas été modifiés à la main). */
+      'uf-name'() {
+        const f = this.root.querySelector('#uf');
+        const fn = f.querySelector('[name=firstName]').value, ln = f.querySelector('[name=lastName]').value;
+        if (!manualIni) f.querySelector('[name=initials]').value = fn || ln ? agentInitials({ firstName: fn, lastName: ln }) : '';
+        if (!manualUser) f.querySelector('[name=username]').value = freeUsername(suggestUsername(fn, ln));
+      },
+      'uf-ini'(el) { manualIni = !!el.value; },
+      'uf-user'(el) { manualUser = !!el.value; },
+      ok() {
+        const f = this.root.querySelector('#uf'), err = this.root.querySelector('#ufErr'); if (!f.reportValidity()) return;
+        const v = formValues(f);
+        v.firstName = v.firstName.trim(); v.lastName = v.lastName.trim(); v.initials = v.initials.trim().toUpperCase();
+        v.name = agentFullName(v.firstName, v.lastName);
+        if ((v.password || v.password2) && v.password !== v.password2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+        if (isNew && taken.has(String(v.username || '').trim().toLowerCase())) { err.textContent = `L’identifiant « ${v.username} » est déjà utilisé : choisissez-en un autre.`; return; }
+        this.close(v);
+      }
+    }
   });
   return m.result;
 }
@@ -64,7 +94,7 @@ function enrollForm(u) {
       ${kv([['Agent', u.name], ['Identifiant', u.username], ['Profil', ROLES[u.role] || u.role]])}
       ${field('Mot de passe de l’agent', html`<input name="p1" type="password" required minlength="8" autocomplete="new-password">`, { required: true })}
       ${field('Confirmation du mot de passe', html`<input name="p2" type="password" required autocomplete="new-password">`, { required: true })}
-      <p class="note">Même profil que sur les autres tablettes : ses tournées et ses saisies restent les siennes. Aucun compte GitHub n’est nécessaire.</p>
+      <p class="note">Même profil que sur l’autre tablette : ses tournées et ses saisies restent les siennes.</p>
       <p class="hint" id="efErr" style="color:var(--nc)"></p></form>`,
     actions: [{ label: 'Annuler' }, { label: 'Ajouter sur cette tablette', act: 'ok', cls: 'primary' }],
     handlers: { async ok() {
@@ -84,15 +114,15 @@ async function agentsCards(team) {
   const agents = sortBy(local.map(e => ({ entry: e, u: store.get('user', e.userId) })), x => x.u?.name || x.entry.name);
   const others = sortBy(store.all('user').filter(u => !here.has(u.id)), u => u.active === false ? 1 : 0, 'name');
   const roleOf = x => x.u?.role || x.entry.role;
-  return html`<div class="card" id="tabletAgents"><h2>Agents de cette tablette (${agents.length}) <button class="btn primary sm" data-act="user-new">＋ Nouvel agent</button></h2>
+  return html`<div class="card" id="tabletAgents"><h2>Agents de cette tablette (${agents.length}) <button class="btn primary sm" data-act="user-new">＋ Ajouter un agent</button></h2>
       <p class="note">Ils peuvent ouvrir une session ici (écran « Qui utilise la tablette ? »), chacun avec son mot de passe ; les tournées en cours restent sur la tablette d’un agent à l’autre (« Changer d’agent »).</p>
-      <div class="list">${agents.map(x => { const u = x.u, e = x.entry, off = u?.active === false || e.disabled; return html`<div class="li ${off ? '' : 'stripe-info'}" data-agent="${e.userId}"><span class="avatar">${initials(u?.name || e.name)}</span><div class="li-main"><div class="li-title">${u?.name || e.name} ${e.userId === session.user.id ? badge('vous', 'info') : ''}</div><div class="li-sub">${e.username} · ${ROLES[roleOf(x)] || roleOf(x)}${u?.githubLogin ? ' · @' + u.githubLogin : ''} · ${e.lastLogin ? 'dernière session ici le ' + fmtDateTime(e.lastLogin) : 'jamais connecté ici'}</div></div>
+      <div class="list">${agents.map(x => { const u = x.u, e = x.entry, off = u?.active === false || e.disabled; return html`<div class="li ${off ? '' : 'stripe-info'}" data-agent="${e.userId}"><span class="avatar">${agentInitials(u || e)}</span><div class="li-main"><div class="li-title">${u?.name || e.name} ${e.userId === session.user.id ? badge('vous', 'info') : ''}</div><div class="li-sub">${e.username} · ${ROLES[roleOf(x)] || roleOf(x)}${u?.githubLogin ? ' · @' + u.githubLogin : ''} · ${e.lastLogin ? 'dernière session ici le ' + fmtDateTime(e.lastLogin) : 'jamais connecté ici'}</div></div>
         ${off ? badge('Désactivé', 'na') : ''}
         <div class="btn-row">${u ? html`<button class="btn ghost sm" data-act="user-edit" data-id="${u.id}">Modifier</button>` : ''}${e.userId === session.user.id ? '' : html`<button class="btn danger-ghost sm" data-act="agent-remove" data-id="${e.userId}">Retirer de cette tablette</button>`}</div></div>`; })}</div>
       <details style="margin-top:10px"><summary>Droits par profil</summary><div class="table-wrap"><table class="tbl"><thead><tr><th>Droit</th>${Object.values(ROLES).map(r => html`<th>${r}</th>`)}</tr></thead><tbody>${Object.entries(PERMISSIONS).map(([p, roles]) => html`<tr><td>${PERM_LABELS[p] || p}</td>${Object.keys(ROLES).map(r => html`<td>${roles.includes(r) ? '✓' : ''}</td>`)}</tr>`)}</tbody></table></div></details></div>
-    ${team || others.length ? html`<div class="card" id="teamAgents"><h2>Agents de l’équipe pas encore sur cette tablette (${others.filter(u => u.active !== false).length})</h2>
-      <p class="note">${team ? 'Profils reçus des autres tablettes par la synchronisation de l’équipe' : 'Profils reçus d’un autre appareil (paquet de données)'}. « Ajouter sur cette tablette » permet à l’agent d’ouvrir une session ici avec le MÊME profil (ses tournées et saisies restent les siennes) ; il choisit et saisit lui-même son mot de passe.</p>
-      ${others.length ? html`<div class="list">${others.map(u => html`<div class="li ${u.active === false ? '' : 'stripe-warn'}" data-agent="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="li-main"><div class="li-title">${u.name}</div><div class="li-sub">${u.username || '—'} · ${ROLES[u.role] || u.role}${u.githubLogin ? ' · @' + u.githubLogin : ''}</div></div>
+    ${team || others.length ? html`<div class="card" id="teamAgents"><h2>Agents pas encore sur cette tablette (${others.filter(u => u.active !== false).length})</h2>
+      <p class="note">${team ? 'Profils reçus des autres tablettes par la synchronisation de l’équipe' : 'Profils reçus de l’autre tablette avec ses données, ou agents retirés de celle-ci'}. « Ajouter sur cette tablette » permet à l’agent d’ouvrir une session ici avec le MÊME profil (ses tournées et saisies restent les siennes) ; il choisit et saisit lui-même son mot de passe.</p>
+      ${others.length ? html`<div class="list">${others.map(u => html`<div class="li ${u.active === false ? '' : 'stripe-warn'}" data-agent="${u.id}"><span class="avatar">${agentInitials(u)}</span><div class="li-main"><div class="li-title">${u.name}</div><div class="li-sub">${u.username || '—'} · ${ROLES[u.role] || u.role}${u.githubLogin ? ' · @' + u.githubLogin : ''}</div></div>
           <div class="btn-row"><button class="btn ghost sm" data-act="user-edit" data-id="${u.id}">Modifier</button>${u.active === false ? badge('Désactivé', 'na') : html`<button class="btn primary sm" data-act="agent-enroll" data-id="${u.id}">Ajouter sur cette tablette</button>`}</div></div>`)}</div>`
         : html`<p class="note">Tous les agents connus sont sur cette tablette.${team ? ' Un agent créé sur une autre tablette apparaît ici après synchronisation.' : ''}</p>`}</div>` : ''}`;
 }
@@ -151,7 +181,7 @@ export default {
     return html`${pageTitle('Administration', team ? `Mode équipe — dépôt ${teamLabel()}` : 'Mode autonome')}
       ${can('users.manage') ? await agentsCards(team) : ''}
       ${team ? await teamCards() : ''}
-      ${can('devices.manage') && !team ? html`<div class="card"><h2>Appareils</h2>${kv([['Cet appareil', `${session.device.name} — n° ${session.device.number}`], ['Identifiant', session.device.id]])}<p class="note">En mode autonome, la désactivation à distance d’un appareil perdu nécessite le mode équipe (dépôt GitHub). Les données restent protégées par le chiffrement et les mots de passe.</p></div>` : ''}
+      ${can('devices.manage') && !team ? html`<div class="card"><h2>Cette tablette</h2>${kv([['Tablette', `${session.device.name} — n° ${session.device.number}`], ['Identifiant', session.device.id]])}<p class="note">Tablette perdue ou volée : ses données restent protégées par le chiffrement et les mots de passe des agents.</p></div>` : ''}
       ${can('settings.manage') ? html`<div class="card"><h2>Paramètres de l’organisation</h2><form id="setf"><div class="grid2">${SETTINGS.map(([key, l, t]) => field(l, html`<input name="${key}" type="${t === 'number' ? 'number' : 'text'}" value="${org[key] ?? ''}">`))}</div>
         <button class="btn primary" type="button" data-act="save-settings">Enregistrer les paramètres</button></form></div>` : ''}
       <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
@@ -160,12 +190,15 @@ export default {
       ${can('settings.manage') ? html`<div class="card" style="border-color:var(--nc)"><h2>Zone sensible</h2><p class="note">Efface toutes les données de cet appareil (base chiffrée, comptes locaux, cartes). Les données non synchronisées ou non exportées seront perdues.</p><button class="btn danger" data-act="wipe">Effacer les données de cet appareil</button></div>` : ''}`;
   },
   handlers: {
+    /** « Ajouter un agent » : NOUVEAU profil et entrée du trousseau de cette tablette (mot de passe saisi par l'agent). */
     async 'user-new'() {
       const team = isTeamMode();
-      const v = await userForm(null, { team }); if (!v) return;
+      const taken = new Set([...(await knownUsers()).map(e => e.username), ...store.all('user').map(u => normUsername(u.username))].filter(Boolean));
+      const v = await userForm(null, { team, taken }); if (!v) return;
+      const githubLogin = team ? String(v.githubLogin || '').trim().replace(/^@/, '') || null : undefined;
       try {
-        const id = await addLocalAccount({ username: v.username, name: v.name, role: v.role, password: v.password, extra: team ? { githubLogin: String(v.githubLogin || '').trim().replace(/^@/, '') || null } : {} });
-        if (team && v.githubLogin) await linkGithubLogin(id, String(v.githubLogin).trim().replace(/^@/, ''));
+        const id = await addLocalAccount({ username: v.username, name: v.name, role: v.role, password: v.password, extra: { firstName: v.firstName, lastName: v.lastName, initials: v.initials, ...(team ? { githubLogin } : {}) } });
+        if (githubLogin) await linkGithubLogin(id, githubLogin);
         // Agent créé désactivé (case décochée) : profil et entrée de la tablette bloqués.
         if (v.active === false) { await store.put('user', { ...store.get('user', id), active: false }, { reason: 'Compte créé désactivé' }); await setLocalAccountDisabled(v.username, true); }
         toast(`${v.name} peut ouvrir une session sur cette tablette`, 'ok'); this.refresh();
@@ -195,12 +228,13 @@ export default {
       const enrolled = (await knownUsers()).some(e => e.userId === u.id);
       const v = await userForm(u, { team, enrolled }); if (!v) return;
       try {
-        const otherAdmins = store.filter('user', x => x.role === 'admin' && x.active !== false && x.id !== u.id).length;
-        if (u.role === 'admin' && (v.role !== 'admin' || v.active === false) && !otherAdmins) { toast('Il doit rester au moins un administrateur actif.', 'err'); return; }
+        // Jamais le dernier administrateur (de cette tablette, et de l'ensemble des profils).
+        await assertAdminRemains(u.id, { role: v.role, active: v.active });
         const githubLogin = team ? (String(v.githubLogin || '').trim().replace(/^@/, '') || null) : u.githubLogin;
-        await store.put('user', { ...u, name: v.name, role: v.role, active: v.active, ...(team ? { githubLogin } : {}) }, { reason: 'Modification du compte' });
-        if (v.password && enrolled) await addLocalAccount({ id: u.id, username: u.username, name: v.name, role: v.role, password: v.password, source: 'kept', extra: team ? { githubLogin } : {} });
-        await syncKeyringProfile({ username: u.username, name: v.name, role: v.role, active: v.active, ...(team ? { githubLogin } : {}) });
+        const ident = { name: v.name, firstName: v.firstName, lastName: v.lastName, initials: v.initials };
+        await store.put('user', { ...u, ...ident, role: v.role, active: v.active, ...(team ? { githubLogin } : {}) }, { reason: 'Modification du compte' });
+        if (v.password && enrolled) await addLocalAccount({ id: u.id, username: u.username, name: v.name, role: v.role, password: v.password, source: 'kept', extra: { initials: v.initials, ...(team ? { githubLogin } : {}) } });
+        await syncKeyringProfile({ username: u.username, name: v.name, role: v.role, active: v.active, initials: v.initials, ...(team ? { githubLogin } : {}) });
         await setLocalAccountDisabled(u.username, v.active === false);
         if (u.id === session.user.id) Object.assign(session.user, { name: v.name, role: v.role });
         toast('Compte mis à jour', 'ok'); this.refresh();

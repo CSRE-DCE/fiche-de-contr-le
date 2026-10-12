@@ -45,7 +45,7 @@ export async function isSetUp() { const k = await getKeyring(); return Object.ke
 /** Agents de cette tablette (entrées du trousseau), derniers connectés en premier. */
 export async function knownUsers() {
   const k = await getKeyring();
-  return Object.entries(k.users).map(([username, e]) => ({ username, userId: e.userId, name: e.name, role: e.role, lastLogin: e.lastLogin, disabled: !!e.disabled, githubLogin: e.githubLogin || null }))
+  return Object.entries(k.users).map(([username, e]) => ({ username, userId: e.userId, name: e.name, initials: e.initials || null, role: e.role, lastLogin: e.lastLogin, disabled: !!e.disabled, githubLogin: e.githubLogin || null }))
     .sort((a, b) => String(b.lastLogin || '').localeCompare(String(a.lastLogin || '')));
 }
 
@@ -119,7 +119,7 @@ export async function unlock(username, password) {
   if (profile) {
     if (profile.active === false) { await lock('compte désactivé'); return { ok: false, error: 'Ce compte a été désactivé.' }; }
     session.user = { id: profile.id, username, name: profile.name, role: profile.role };
-    if (profile.role !== entry.role || profile.name !== entry.name) { entry.role = profile.role; entry.name = profile.name; await saveKeyring(k); }
+    if (profile.role !== entry.role || profile.name !== entry.name || (profile.initials || null) !== (entry.initials || null)) { entry.role = profile.role; entry.name = profile.name; entry.initials = profile.initials || null; await saveKeyring(k); }
   }
   await store.log('login', { entityType: 'user', entityId: session.user.id, entityLabel: session.user.name });
   return { ok: true, user: session.user, password };
@@ -133,15 +133,22 @@ export async function lock(reason = 'manuel') {
   clearSession();
 }
 
-/** Crée un compte local (les deux modes ; extra : champs du profil, ex. { githubLogin }). */
+/**
+ * Crée ou met à jour l'entrée d'un agent dans le trousseau de cette tablette (les deux modes) ; source 'local' :
+ * crée aussi son profil. extra : champs du profil (ex. { firstName, lastName, initials }, { githubLogin }) ; les
+ * initiales et le login GitHub sont aussi gardés dans le trousseau (écran « Qui utilise la tablette ? »).
+ */
 export async function addLocalAccount({ id, username, name, role, password, source = 'local', extra = {} }) {
   if (!session.dekRaw) throw new Error('Session fermée');
   validatePassword(password);
   username = normUsername(username);
   const k = await getKeyring();
   if (k.users[username] && k.users[username].userId !== id) throw new Error('Identifiant déjà utilisé sur cet appareil.');
+  // Nouveau profil : identifiant libre aussi parmi les profils reçus de l'autre tablette (même identifiant partout).
+  const homonym = !id ? store.find('user', x => normUsername(x.username) === username) : null;
+  if (homonym) throw new Error(`Identifiant « ${username} » déjà utilisé par ${homonym.name}.`);
   const userId = id || uuid();
-  k.users[username] = { ...(k.users[username] || {}), userId, name, role, wrap: await wrapDEK(session.dekRaw, password), lastLogin: k.users[username]?.lastLogin || null, ...(extra.githubLogin !== undefined ? { githubLogin: extra.githubLogin || null } : {}) };
+  k.users[username] = { ...(k.users[username] || {}), userId, name, role, wrap: await wrapDEK(session.dekRaw, password), lastLogin: k.users[username]?.lastLogin || null, ...(extra.githubLogin !== undefined ? { githubLogin: extra.githubLogin || null } : {}), ...(extra.initials !== undefined ? { initials: extra.initials || null } : {}) };
   await saveKeyring(k);
   if (source === 'local') {
     const existing = store.get('user', userId);
@@ -164,14 +171,14 @@ export async function enrollAgent(userId, password) {
   if (!session.dekRaw) throw new Error('Session fermée');
   if (!can('users.manage')) throw new Error('Seul un administrateur peut ajouter un agent sur cette tablette.');
   const u = store.get('user', userId);
-  if (!u) throw new Error('Profil inconnu sur cette tablette : synchronisez d’abord.');
+  if (!u) throw new Error('Profil inconnu sur cette tablette : recevez d’abord les données de l’autre tablette.');
   if (u.active === false) throw new Error(`Le compte de ${u.name} est désactivé.`);
   const k = await getKeyring();
   if (Object.values(k.users).some(e => e.userId === userId)) throw new Error(`${u.name} est déjà sur cette tablette.`);
   const username = normUsername(u.username);
   if (!username) throw new Error(`Le profil de ${u.name} n’a pas d’identifiant.`);
   if (k.users[username]) throw new Error(`L’identifiant « ${username} » est déjà utilisé sur cette tablette par ${k.users[username].name}.`);
-  await addLocalAccount({ id: u.id, username, name: u.name, role: u.role, password, source: 'kept' });
+  await addLocalAccount({ id: u.id, username, name: u.name, role: u.role, password, source: 'kept', extra: { initials: u.initials || null } });
   await store.log('account-enroll', { entityType: 'user', entityId: u.id, entityLabel: u.name, details: { identifiant: username, appareil: session.device?.name || '' } });
   return u;
 }
@@ -196,6 +203,21 @@ export async function removeAgentFromDevice(userId) {
   await saveKeyring(k);
   await store.log('account-remove', { entityType: 'user', entityId: userId, entityLabel: name, details: { identifiant: names.join(', '), appareil: session.device?.name || '' } });
 }
+/**
+ * Garde-fou « dernier administrateur » avant de modifier un profil (`next` : { role, active }) : un administrateur
+ * ne perd son profil (changement de profil, désactivation) que s'il reste un autre administrateur actif sur cette
+ * tablette (s'il y est) et dans l'ensemble des profils.
+ */
+export async function assertAdminRemains(userId, next = {}) {
+  const u = store.get('user', userId);
+  if (!u || u.role !== 'admin' || ((next.role ?? u.role) === 'admin' && next.active !== false)) return;
+  const k = await getKeyring();
+  const activeAdmin = e => { const prof = store.get('user', e.userId); return (prof?.role || e.role) === 'admin' && !e.disabled && prof?.active !== false; };
+  if (Object.values(k.users).some(e => e.userId === userId) && !Object.values(k.users).some(e => e.userId !== userId && activeAdmin(e))) {
+    throw new Error(`${u.name} est le dernier administrateur de cette tablette : ajoutez d’abord un autre administrateur.`);
+  }
+  if (!store.filter('user', x => x.id !== userId && x.role === 'admin' && x.active !== false).length) throw new Error('Il doit rester au moins un administrateur actif.');
+}
 export async function setLocalAccountDisabled(username, disabled) {
   const k = await getKeyring(); const e = k.users[normUsername(username)];
   if (e) { e.disabled = !!disabled; await saveKeyring(k); }
@@ -205,6 +227,7 @@ export async function syncKeyringProfile(user) {
   if (e) {
     e.name = user.name; e.role = user.role; e.disabled = user.active === false;
     if (user.githubLogin !== undefined) e.githubLogin = user.githubLogin || null;
+    if (user.initials !== undefined) e.initials = user.initials || null;
     await saveKeyring(k);
   }
 }

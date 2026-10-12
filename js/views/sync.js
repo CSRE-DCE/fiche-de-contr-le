@@ -1,6 +1,7 @@
-/* Synchronisation : mode équipe (dépôt GitHub privé de données, un jeton par tablette) ou autonome, configuration
- * et test de la connexion, aide pas à pas, état, file d'envoi, conflits et résolution, journal, échanges par
- * paquets. */
+/* Synchronisation : mode autonome (celui de l'OEG : échanges entre tablettes par paquets de données ; le mode équipe
+ * n'y apparaît qu'en option avancée repliée, « nécessite un jeton GitHub — non utilisé à l'OEG ») ou mode équipe
+ * (dépôt GitHub privé de données) : configuration et test de la connexion, aide pas à pas, état, file d'envoi,
+ * conflits et résolution, journal, échanges par paquets. */
 import { html, raw, fmtDateTime, sortBy, compactValue, clone, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -124,10 +125,12 @@ export default {
           ${syncState.initialized === false && admin ? html`<button class="btn warn" data-act="init">Initialiser le dépôt</button>` : ''}
           ${admin ? html`<button class="btn danger-ghost" data-act="detach">Détacher cet appareil de l’équipe</button>` : ''}
         </div><div id="testResult">${lastTest && Date.now() - lastTest.at < 600000 ? testResult(lastTest) : ''}</div>`
-      : html`${kv([['Mode', 'Autonome — données uniquement sur cet appareil'], ['Connexion', navigator.onLine ? 'En ligne' : 'Hors connexion'], ['Appareil', `${session.device.name} (n° ${session.device.number}) — ${session.device.id}`], ['Modifications non partagées', String(out.length)]])}
-        <p class="note">Sans dépôt d’équipe, les échanges entre appareils se font par paquets de données (ci-dessous). Toutes les modifications restent en file : elles seront envoyées si l’appareil est rattaché à une équipe.</p>
-        ${admin ? html`<button class="btn primary" data-act="attach">Rejoindre une équipe (dépôt GitHub)</button>` : html`<p class="note">Le rattachement à une équipe est réservé à l’administrateur de l’appareil.</p>`}`}</div>
-      ${helpCard(!team)}
+      : html`${kv([['Mode', 'Autonome — données sur cette tablette'], ['Connexion', navigator.onLine ? 'En ligne' : 'Hors connexion'], ['Tablette', `${session.device.name} (n° ${session.device.number}) — ${session.device.id}`], ['Modifications non partagées', String(out.length)]])}
+        <p class="note">Les échanges avec l’autre tablette se font par fichier : paquets de données (ci-dessous), fusionnés champ par champ.</p>`}</div>
+      ${team ? helpCard(false) : html`<details class="card" id="teamAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
+        <p class="note">Synchronisation automatique par un dépôt GitHub privé de données. L’OEG ne l’utilise pas.</p>
+        ${admin ? html`<button class="btn ghost" data-act="attach">Rejoindre une équipe (dépôt GitHub)</button>` : html`<p class="note">Le rattachement à une équipe est réservé à l’administrateur de la tablette.</p>`}
+        ${helpCard(false)}</details>`}
       <div class="card"><h2>File d’envoi</h2>${out.length ? html`<div class="row" style="gap:6px">${Object.entries(byType).map(([t, n]) => badge(`${TYPE_LABELS[t] || t} : ${n}`, 'outline'))}</div>` : html`<p class="note">Aucune modification en attente.</p>`}
         ${rejected.length ? html`<div class="banner nc" style="margin-top:10px">${rejected.length} modification(s) non envoyée(s).</div><div class="list">${rejected.map(e => html`<div class="li stripe-nc"><div class="li-main"><div class="li-title">${TYPE_LABELS[e.type] || e.type} — ${store.getRaw(e.type === '__bin' ? 'media' : e.type, e.id)?.number || store.getRaw('media', e.id)?.name || e.id}</div><div class="li-sub">${e.error}</div></div><button class="btn ghost sm" data-act="drop" data-key="${e.key}">Retirer</button></div>`)}</div><button class="btn ghost sm" data-act="retry">Réessayer</button>` : ''}</div>
       <div class="card"><h2>Conflits (${conflicts.filter(c => !c.resolved).length} à examiner)</h2>

@@ -26,6 +26,7 @@ const NAV = [
   { key: 'prestataires', href: '#/prestataires', ic: 'building', label: 'Prestataires', group: 'Suivi' },
   { key: 'historique', href: '#/audits?vue=historique', ic: 'history', label: 'Historique et comparaison', group: 'Suivi' },
   { key: 'documents', href: '#/documents', ic: 'book', label: 'Documents', group: 'Gestion' },
+  { key: 'attendus', href: '#/attendus', ic: 'check-circle', label: 'Attendus des prestataires', group: 'Gestion' },
   { key: 'grilles', href: '#/grilles', ic: 'puzzle', label: 'Grilles d’audit', group: 'Gestion' },
   { key: 'referentiels', href: '#/referentiels', ic: 'database', label: 'Référentiels', group: 'Gestion' },
   { key: 'import', href: '#/import', ic: 'download', label: 'Import', group: 'Gestion' },

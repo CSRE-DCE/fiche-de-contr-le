@@ -10,7 +10,7 @@
 import { html, sortBy, localDate, addDays, haversine, fmtDistance, fmtDate, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
-import { can, ROLES } from '../core/auth.js';
+import { can, ROLES, knownUsers } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -116,14 +116,19 @@ function selectedHTML(d) {
   })}</ol>`;
 }
 
-/** Contrôleurs OEG de la tournée : agents connus autorisés à auditer ; l'agent connecté est coché et obligatoire. */
+// Agents de cette tablette (trousseau) : relus à chaque affichage de l'écran de création.
+let tabletIds = new Set();
+/**
+ * Contrôleurs OEG de la tournée : agents connus autorisés à auditer (ceux de cette tablette d'abord, les autres
+ * signalés « autre tablette ») ; l'agent connecté est coché et obligatoire.
+ */
 function controllersHTML(d) {
   const me = session.user?.id;
-  const agents = tourAgents();
+  const agents = [...tourAgents()].sort((a, b) => (tabletIds.has(a.id) ? 0 : 1) - (tabletIds.has(b.id) ? 0 : 1));
   const ids = new Set([me, ...(d.controllerIds || [])]);
   return html`<div class="checks an-ctrls">${agents.map(u => {
       const on = ids.has(u.id), mine = u.id === me;
-      return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${u.id}" data-change="setCtrl" ${on ? 'checked' : ''} ${mine ? 'disabled' : ''}> ${icon('user', { size: 20 })} ${u.name}${mine ? html` <small class="muted">(vous)</small>` : html` <small class="muted">${ROLES[u.role] || u.role}</small>`}</label>`;
+      return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${u.id}" data-change="setCtrl" ${on ? 'checked' : ''} ${mine ? 'disabled' : ''}> ${icon('user', { size: 20 })} ${u.name}${mine ? html` <small class="muted">(vous)</small>` : html` <small class="muted">${ROLES[u.role] || u.role}${tabletIds.size && !tabletIds.has(u.id) ? ' · autre tablette' : ''}</small>`}</label>`;
     })}</div>
     <p class="note">${agents.length > 1 ? 'Cochez le ou les collègues qui contrôlent avec vous : chacun pourra saisir dans la tournée en se connectant sur la tablette (« Changer d’agent »), et chaque saisie reste attribuée à son auteur.' : html`Vous êtes le seul agent connu sur cet appareil. Les collègues s’ajoutent dans <a href="#/administration">Administration › Agents de cette tablette</a> ; ils pourront aussi « Rejoindre la tournée » plus tard.`}</p>`;
 }
@@ -241,6 +246,7 @@ export default {
     if (!can('audit.create')) return html`<div class="card">${empty(icon('lock', { size: 44 }), 'Votre profil ne permet pas de créer une tournée de contrôle.')}</div>`;
     if (q.mode === 'general') return legacyForm(q);
     if (!gridTypes(ctGrid()).length) return html`<div class="card">${empty(icon('warning', { size: 44 }), 'La grille CT-2026 n’est pas installée sur cet appareil.', html`<a class="btn ghost" href="#/nouvel-audit?mode=general">Audit sur grille historique</a>`)}</div>`;
+    tabletIds = new Set((await knownUsers().catch(() => [])).map(u => u.userId));
     return tourForm(q);
   },
   handlers: {
