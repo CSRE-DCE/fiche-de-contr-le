@@ -85,6 +85,7 @@ export default {
         ${can('audit.create') ? html`<a class="btn ${open.length ? 'ghost' : 'primary lg'}" href="${startHref}"><span class="ic">${icon('plus')}</span>Démarrer une tournée</a>` : ''}
         <button class="btn ghost" data-act="blankPdf" title="Fiches de contrôle vierges à imprimer pour cette station"><span class="ic">${icon('print')}</span>Fiches vierges (PDF)</button>
         <button class="btn ghost" data-act="stationPdf"><span class="ic">${icon('pdf')}</span>Fiche station (PDF)</button>
+        <a class="btn ghost" href="#/attendus?type=${type}" title="Ce qui est attendu du prestataire pour ce type de tournée"><span class="ic">${icon('check-circle')}</span>Attendus des prestataires</a>
         <a class="btn ghost" href="#/carte?site=${encodeURIComponent(site.id)}"><span class="ic">${icon('map')}</span>Carte</a>
         ${can('ref.manage') ? html`<a class="btn ghost" href="#/station/${encodeURIComponent(site.id)}/modifier"><span class="ic">${icon('edit')}</span>Modifier la station</a>` : ''}
       </div>
