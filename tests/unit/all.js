@@ -8,7 +8,8 @@ export const FILES = [
   './grid-ct-2026.test.js',
   './pdf-sheets.test.js',
   './github.test.js',
-  './attendus.test.js'
+  './attendus.test.js',
+  './exchange.test.js'
 ];
 
 export async function runAll({ files = FILES, onResult } = {}) {

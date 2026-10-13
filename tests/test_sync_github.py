@@ -100,7 +100,7 @@ def devices(gh_browser, gh_app_url):
         page.on('console', lambda m: page.errors.append(m.text) if m.type == 'error' and not EXPECTED_CONSOLE.search(m.text) else None)
         page.on('pageerror', lambda e: page.errors.append(f'pageerror: {e}'))
         page.goto(gh_app_url + 'index.html')
-        page.wait_for_selector('#setupBtn')
+        page.wait_for_selector('#setupFirst')     # mise en service : deux choix (le mode équipe est une option avancée)
         made.append((ctx, page))
         return page
     yield make
@@ -143,7 +143,9 @@ def quiet(page):
 
 
 def setup_standalone(page, device_no=7):
-    for k, v in dict(deviceName='Tablette autonome', deviceNumber=str(device_no), name='Admin Autonome', username='admin', password=PASSWORD, password2=PASSWORD).items():
+    page.click('#setupFirst')                     # « Première tablette de l'équipe »
+    for k, v in dict(deviceName='Tablette autonome', deviceNumber=str(device_no), lastName='Autonome', firstName='Admin', username='admin', password=PASSWORD, password2=PASSWORD,
+                     exchangePassword='echange-equipe-test', exchangePassword2='echange-equipe-test').items():
         page.fill(f'[name={k}]', v)
     page.click('#setupBtn')
     page.wait_for_selector('#view', timeout=60000)
@@ -351,7 +353,7 @@ def test_revocation_efface_appareil(devices, fake):
     assert not fake.read(f"donnees/entites/audit/{audit['id']}.json"), 'rien n’est envoyé par un appareil révoqué'
     # Rechargement : appareil vierge (première configuration)
     b.reload()
-    b.wait_for_selector('#setupBtn')
+    b.wait_for_selector('#setupFirst')
 
 
 def test_numeros_sans_doublon(devices, fake):

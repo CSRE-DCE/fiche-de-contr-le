@@ -17,8 +17,8 @@ Les libellés des boutons de GitHub sont donnés **en anglais, tels qu’ils app
 9. [Avant chaque envoi : la version de l’application](#9-avant-chaque-envoi--la-version-de-lapplication)
 10. [Activer GitHub Pages](#10-activer-github-pages)
 11. [Consulter l’onglet Actions (vérifications)](#11-consulter-longlet-actions-vérifications)
-12. [Créer le dépôt privé de données](#12-créer-le-dépôt-privé-de-données)
-13. [Créer un jeton d’accès « fine-grained » (un par tablette)](#13-créer-un-jeton-daccès--fine-grained--un-par-tablette)
+12. [Créer le dépôt privé de données (option avancée, non utilisée à l’OEG)](#12-créer-le-dépôt-privé-de-données-option-avancée-non-utilisée-à-loeg)
+13. [Créer un jeton d’accès « fine-grained » (option avancée, non utilisée à l’OEG)](#13-créer-un-jeton-daccès--fine-grained--option-avancée-non-utilisée-à-loeg)
 14. [Inviter un collègue](#14-inviter-un-collègue)
 15. [Bonnes pratiques](#15-bonnes-pratiques)
 16. [En cas de problème](#16-en-cas-de-problème)
@@ -40,7 +40,7 @@ Les libellés des boutons de GitHub sont donnés **en anglais, tels qu’ils app
 Deux dépôts sont utilisés :
 
 - **`CSRE-DCE/fiche-de-contr-le`** — PUBLIC : le code de l’application, publié sur <https://csre-dce.github.io/fiche-de-contr-le/>. **Aucune donnée ici.**
-- **`CSRE-DCE/fiche-de-controle-donnees`** (nom proposé) — PRIVÉ : les données partagées par les appareils en mode équipe. Les tablettes y accèdent chacune avec **son jeton**, créé par l’administrateur ; les agents de terrain n’ont pas besoin de compte GitHub (seules les personnes qui modifient l’application ou administrent le dépôt en ont un).
+- **`CSRE-DCE/fiche-de-controle-donnees`** (nom proposé) — PRIVÉ : réservé au mode équipe GitHub, **non utilisé à l’OEG** (sections 12 et 13, option avancée). Les données de contrôle de l’OEG restent chiffrées sur les tablettes et passent de l’une à l’autre par fichier ; les agents de terrain n’ont ni compte GitHub ni jeton.
 
 ---
 
@@ -222,9 +222,11 @@ La même coche ou croix apparaît à côté de chaque validation dans la liste d
 
 ---
 
-## 12. Créer le dépôt privé de données
+## 12. Créer le dépôt privé de données (option avancée, non utilisée à l’OEG)
 
-À faire une seule fois, par l’administrateur de l’équipe (voir aussi le README, section « Synchroniser plusieurs appareils »).
+> **Option avancée — mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG.** Les tablettes de l’OEG échangent leurs données **par fichier** (README, section « Deux tablettes pour quatre agents ») : le dépôt privé ne sert plus à l’application et aucun agent n’a à créer de jeton. Cette section ne sert qu’à une organisation qui choisirait le mode équipe.
+
+À faire une seule fois, par l’administrateur de l’équipe (voir aussi le README, section « Option avancée : mode équipe GitHub »).
 
 1. En haut à droite de GitHub : **+** › **New repository** (Nouveau dépôt).
 2. **Owner** (Propriétaire) : `CSRE-DCE`. **Repository name** (Nom du dépôt) : `fiche-de-controle-donnees`.
@@ -232,7 +234,7 @@ La même coche ou croix apparaît à côté de chaque validation dans la liste d
 4. Visibilité : **Private** (Privé) — impératif.
 5. Laissez le dépôt vide, ou activez **Add a README file** (Ajouter un fichier README).
 6. Cliquez sur **Create repository** (Créer le dépôt).
-7. Les agents de terrain n’ont **pas** besoin d’accès à ce dépôt ni de compte GitHub : l’application y accède avec le jeton de chaque tablette ([section 13](#13-créer-un-jeton-daccès--fine-grained--un-par-tablette)). N’invitez ([section 14](#14-inviter-un-collègue)) qu’un éventuel administrateur suppléant, avec le rôle **Write**.
+7. Les agents de terrain n’ont **pas** besoin d’accès à ce dépôt ni de compte GitHub : l’application y accède avec le jeton de chaque tablette ([section 13](#13-créer-un-jeton-daccès--fine-grained--option-avancée-non-utilisée-à-loeg)). N’invitez ([section 14](#14-inviter-un-collègue)) qu’un éventuel administrateur suppléant, avec le rôle **Write**.
 
 Vérification : la page du dépôt affiche le badge **Private**. Ne le passez jamais en public (**Settings › General › Danger Zone › Change repository visibility**). L’application refuse d’ailleurs un dépôt de données public.
 
@@ -240,9 +242,11 @@ Le premier appareil configuré avec « Rejoindre une équipe » initialise ce d�
 
 ---
 
-## 13. Créer un jeton d’accès « fine-grained » (un par tablette)
+## 13. Créer un jeton d’accès « fine-grained » (option avancée, non utilisée à l’OEG)
 
-L’**administrateur** crée, depuis **son** compte GitHub, **un jeton par tablette**, limité au dépôt de données (par exemple « Tablette 1 » et « Tablette 2 » pour les deux tablettes de l’OEG). Les agents n’ont pas besoin de compte GitHub : ils ouvrent leur session sur la tablette avec leur mot de passe (voir le README, section « Deux tablettes pour quatre agents »). Refaites les étapes ci-dessous pour chaque tablette.
+> **Option avancée — mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG.** Les tablettes de l’OEG échangent leurs données **par fichier** (README, section « Deux tablettes pour quatre agents ») : le dépôt privé ne sert plus à l’application et aucun agent n’a à créer de jeton. Cette section ne sert qu’à une organisation qui choisirait le mode équipe.
+
+En mode équipe, l’**administrateur** crée, depuis **son** compte GitHub, **un jeton par tablette**, limité au dépôt de données (par exemple « Tablette 1 » et « Tablette 2 »). Les agents n’ont pas besoin de compte GitHub : ils ouvrent leur session sur la tablette avec leur mot de passe. Refaites les étapes ci-dessous pour chaque tablette.
 
 1. Cliquez sur votre photo de profil (en haut à droite) › **Settings** (Paramètres).
 2. Tout en bas du menu de gauche : **Developer settings** (Paramètres de développeur).
@@ -272,10 +276,10 @@ Il faut être administrateur du dépôt.
 3. Recherchez le nom d’utilisateur GitHub ou l’adresse électronique du collègue.
 4. Choisissez le rôle :
    - dépôt de l’application : **Write** (écriture) pour les personnes qui le modifient, **Read** (lecture) sinon ;
-   - dépôt de données : **Write**, uniquement pour un administrateur suppléant qui créera lui-même des jetons de tablette (les agents de terrain n’y sont pas invités : l’application utilise le jeton de la tablette).
+   - dépôt de données (mode équipe uniquement, non utilisé à l’OEG) : **Write**, uniquement pour un administrateur suppléant qui créerait lui-même des jetons de tablette.
 5. Cliquez sur **Add … to this repository** (Ajouter … à ce dépôt). Le collègue accepte l’invitation reçue par courriel.
 
-Dans l’application, l’administrateur déclare ensuite le login GitHub de ce suppléant et son profil : **Administration › Membres de l’équipe › « ＋ Membre »**. Les agents de terrain, eux, sont ajoutés sur chaque tablette : **Administration › Agents de cette tablette › « ＋ Nouvel agent »** (ou « Ajouter sur cette tablette » s’ils existent déjà sur l’autre tablette).
+En mode équipe, l’administrateur déclare ensuite dans l’application le login GitHub de ce suppléant et son profil : **Administration › Membres de l’équipe › « ＋ Membre »**. Les agents de terrain n’ont jamais besoin de GitHub : ils sont ajoutés sur chaque tablette dans l’application, **Administration › Agents de cette tablette › « ＋ Ajouter un agent »** (ou « Ajouter sur cette tablette » s’ils existent déjà sur l’autre tablette).
 
 Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 
@@ -283,10 +287,9 @@ Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 
 ## 15. Bonnes pratiques
 
-- **Jamais de données personnelles ni de données de contrôle dans le dépôt public** : pas d’audits, de paquets de données exportés, de PDF de tournées, de signatures, de photos de personnes, de listes de noms ou de numéros de téléphone.
+- **Jamais de données personnelles ni de données de contrôle dans le dépôt public** : pas d’audits, de fichiers d’échange entre tablettes (`OEG-echange_….oegct`), de paquets de données exportés, de PDF de tournées, de signatures, de photos de personnes, de listes de noms ou de numéros de téléphone. Les tablettes de l’OEG échangent leurs données par fichier, directement de l’une à l’autre (Quick Share, Bluetooth, e-mail, Teams, clé USB) : GitHub n’intervient pas.
 - **Jamais de jeton** (`github_pat_…`) dans un fichier, un message de validation, un courriel ou une conversation. Si un jeton a été publié par erreur : supprimez-le immédiatement sur GitHub (**Developer settings › Fine-grained tokens › Delete**) puis créez-en un autre ; supprimer le fichier ne suffit pas, l’historique le conserve.
-- Le dépôt de données reste **privé** ; **un jeton par tablette** (nommé d’après la tablette), limité à ce dépôt et à « Contents », avec une expiration courte ; tenez un registre « tablette → nom du jeton → date d’expiration ».
-- Tablette perdue : désactivez-la dans l’application (**Administration › Appareils de l’équipe › « Désactiver (perdu) »**) **et** supprimez le jeton de cette tablette sur GitHub.
+- Mode équipe seulement (non utilisé à l’OEG) : le dépôt de données reste **privé** ; un jeton par tablette (nommé d’après la tablette), limité à ce dépôt et à « Contents », avec une expiration courte ; tablette perdue : « Désactiver (perdu) » dans l’application **et** suppression du jeton de cette tablette sur GitHub.
 - Activez la double authentification sur le compte GitHub de l’administrateur (et de son suppléant).
 - Les fiches d’évaluation des Agences de l’eau / Aquascop et autres documents de tiers ne doivent pas être déposés dans le dépôt public.
 - Un message de validation par modification, clair et en français (« Correction du libellé F4.12 », « Ajout des photos de la station X »).
@@ -303,7 +306,8 @@ Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 | Conflit lors d’un **Pull** (le même fichier a été modifié des deux côtés) | GitHub Desktop liste les fichiers en conflit : ouvrez-les (bouton **Open in Visual Studio Code**), choisissez pour chaque bloc **Accept Current Change** / **Accept Incoming Change** (Garder ma modification / Garder la modification reçue), enregistrez, puis **Continue merge** / **Commit merge** (Valider la fusion). |
 | Le site publié ne change pas | Vérifiez l’onglet **Actions** (publication terminée ?) puis rechargez la page ; dans l’application : **Mon compte › « Rechercher une mise à jour »**. Avez-vous incrémenté `version.js` ? |
 | Croix rouge dans **Actions** | Ouvrez l’exécution, lisez le message d’erreur ([section 11](#11-consulter-longlet-actions-vérifications)), corrigez, renvoyez. |
-| L’application indique « Jeton GitHub refusé (invalide, expiré ou révoqué) » | L’administrateur régénère le jeton de cette tablette ([section 13](#13-créer-un-jeton-daccès--fine-grained--un-par-tablette)), puis, sur la tablette, Synchronisation › « Renouveler le jeton ». |
-| L’application indique « Accès refusé par GitHub » ou « Introuvable sur GitHub » | Vérifiez le nom du dépôt (`CSRE-DCE/fiche-de-controle-donnees`), que le compte de l’administrateur (propriétaire du jeton) y a le rôle **Write**, et que le jeton vise ce dépôt avec « Contents : Read and write ». |
-| Un agent n’apparaît pas à l’écran « Qui utilise la tablette ? » | Un administrateur l’ajoute : Administration › Agents de cette tablette › « ＋ Nouvel agent », ou « Ajouter sur cette tablette » s’il existe déjà sur l’autre tablette (même profil). |
-| L’application indique que le dépôt de données est public | Repassez-le en privé (**Settings › General › Danger Zone › Change repository visibility**) et prévenez l’administrateur. |
+| (Mode équipe, non utilisé à l’OEG) L’application indique « Jeton GitHub refusé (invalide, expiré ou révoqué) » | L’administrateur régénère le jeton de cette tablette ([section 13](#13-créer-un-jeton-daccès--fine-grained--option-avancée-non-utilisée-à-loeg)), puis, sur la tablette, Synchronisation › « Renouveler le jeton ». |
+| (Mode équipe, non utilisé à l’OEG) L’application indique « Accès refusé par GitHub » ou « Introuvable sur GitHub » | Vérifiez le nom du dépôt (`CSRE-DCE/fiche-de-controle-donnees`), que le compte de l’administrateur (propriétaire du jeton) y a le rôle **Write**, et que le jeton vise ce dépôt avec « Contents : Read and write ». |
+| Un agent n’apparaît pas à l’écran « Qui utilise la tablette ? » | Un administrateur l’ajoute : Administration › Agents de cette tablette › « ＋ Ajouter un agent », ou « Ajouter sur cette tablette » s’il existe déjà sur l’autre tablette (même profil, après réception d’un fichier de celle-ci : Échanges entre tablettes › « Recevoir un fichier »). |
+| Un fichier d’échange ne s’ouvre pas (« autre mot de passe d’échange ») | Le mot de passe d’échange n’est pas le même sur les deux tablettes : saisissez celui de la tablette qui a envoyé le fichier (demandez-le à un administrateur), puis harmonisez-le (Administration › Échanges entre tablettes). Voir le README, section « Deux tablettes pour quatre agents ». |
+| (Mode équipe, non utilisé à l’OEG) L’application indique que le dépôt de données est public | Repassez-le en privé (**Settings › General › Danger Zone › Change repository visibility**) et prévenez l’administrateur. |

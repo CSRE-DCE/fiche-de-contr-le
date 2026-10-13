@@ -1,4 +1,5 @@
-/* Structure de l'application : en-tête aux couleurs OEG (logo rond, réseau, synchronisation,
+/* Structure de l'application : en-tête aux couleurs OEG (logo rond, réseau, synchronisation — mode autonome :
+ * modifications à envoyer à l'autre tablette, « n à envoyer » —,
  * utilisateur, « Changer d'agent » — tablette partagée : saisie enregistrée puis écran « Qui utilise la
  * tablette ? », la tournée en cours restant sur la tablette pour l'agent suivant), navigation latérale (tablette paysage / ordinateur), barre de navigation basse
  * (téléphone : Stations, Planning, Audits, Écarts, Menu), boutons Urgence et Observation toujours
@@ -10,6 +11,7 @@ import { ROLES, can, isTeamMode } from '../core/auth.js';
 import { bindActions } from '../ui/dom.js';
 import { navigate } from '../ui/router.js';
 import { syncState, onSyncState, runSync } from '../app/sync.js';
+import { exchangeState, onExchangeState, watchExchange } from '../app/exchange.js';
 import { orgSettings } from '../app/settings.js';
 import { OPEN_DEVIATION } from '../domain/model.js';
 import { icon } from '../ui/icons.js';
@@ -40,7 +42,11 @@ const NAV = [
 const WIDE = [/^\/$/, /^\/station\//, /^\/audit\//, /^\/carte/];
 let unbinds = [];
 
-export function navItems() { return NAV.filter(n => !n.mobileOnly && (!n.perm || can(n.perm))); }
+/** Entrées de navigation permises ; « Synchronisation » s'appelle « Échanges entre tablettes » en mode autonome. */
+export function navItems() {
+  return NAV.filter(n => !n.mobileOnly && (!n.perm || can(n.perm)))
+    .map(n => n.key === 'sync' && !isTeamMode() ? { ...n, label: 'Échanges entre tablettes' } : n);
+}
 
 export function renderShell(root, { lock }) {
   unbinds.forEach(u => u()); unbinds = [];
@@ -78,6 +84,7 @@ export function renderShell(root, { lock }) {
   };
   for (const id of ['appTop', 'fabs']) unbinds.push(bindActions(document.getElementById(id), handlers));
   unbinds.push(onSyncState(updateNet));
+  if (!isTeamMode()) { unbinds.push(onExchangeState(updateNet)); watchExchange(); }
   unbinds.push(store.subscribe(type => { if (type === 'deviation' || type === '*') updateBadges(); }));
   window.addEventListener('online', updateNet); window.addEventListener('offline', updateNet);
   updateNet(); updateBadges();
@@ -90,7 +97,14 @@ function updateNet() {
   pill.classList.toggle('offline', !online);
   pill.classList.toggle('pending', online && isTeamMode() && syncState.pending > 0);
   let text = online ? 'En ligne' : 'Hors connexion';
-  if (!isTeamMode()) text = online ? 'Mode autonome' : 'Hors connexion';
+  if (!isTeamMode()) {
+    // Mode autonome : la connexion est sans objet ; ce qui compte, c'est ce qui reste à envoyer à l'autre tablette.
+    const n = exchangeState.pending;
+    pill.classList.toggle('pending', n > 0);
+    lbl.textContent = [online ? '' : 'Hors connexion', n ? `${n} à envoyer` : online ? 'Mode autonome' : ''].filter(Boolean).join(' · ');
+    pill.title = n ? `Échanges entre tablettes : ${n} modification${n > 1 ? 's' : ''} à envoyer à l’autre tablette (${exchangeState.label})` : 'Échanges entre tablettes : rien à envoyer';
+    return;
+  }
   if (syncState.running) text = 'Synchronisation…';
   else if (syncState.pending && isTeamMode()) text += ` · ${syncState.pending} en attente`;
   if (syncState.needsLogin) text = 'Reconnexion requise';

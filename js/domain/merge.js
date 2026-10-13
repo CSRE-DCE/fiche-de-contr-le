@@ -2,7 +2,8 @@
  *
  * base   : dernière version commune (celle reçue/acceptée lors de la dernière synchronisation)
  * local  : version modifiée sur cet appareil
- * remote : version modifiée ailleurs (serveur)
+ * remote : version modifiée ailleurs (dépôt de l'équipe, ou autre tablette : échange par fichier)
+ * Sans version commune connue : presumedBase (ce qui est identique des deux côtés).
  *
  * Règles :
  *  - un champ modifié d'un seul côté prend la valeur modifiée ;
@@ -12,12 +13,13 @@
  *    plus récente (horodatage) est retenue et l'autre valeur est conservée dans le rapport de conflit,
  *    consultable et restaurable par l'utilisateur ;
  *  - les objets immuables (journal, médias, alertes) ne sont jamais fusionnés.
- *  - un audit verrouillé (signé) d'un côté reste verrouillé.
+ *  - un audit verrouillé (signé) d'un côté reste verrouillé ;
+ *  - métadonnées (révision, versions `_vv`, dernière modification) : jamais fusionnées champ par champ.
  */
 import { deepEqual, clone } from '../core/util.js';
 
 export const IMMUTABLE_TYPES = new Set(['trail', 'media', 'alert']);
-const META = new Set(['_rev', '_lv', 'updatedAt', 'updatedBy', 'updatedByName', '_conflict']);
+const META = new Set(['_rev', '_lv', '_vv', 'updatedAt', 'updatedBy', 'updatedByName', '_conflict']);
 
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const isIdArray = v => Array.isArray(v) && v.length > 0 && v.every(x => isObj(x) && x.id);
@@ -89,4 +91,22 @@ export function stripMeta(e) {
   const out = {};
   for (const [k, v] of Object.entries(e)) if (!META.has(k)) out[k] = v;
   return out;
+}
+
+/**
+ * Version commune présumée quand aucune base n'est connue (même donnée créée des deux côtés, ex. référentiel
+ * initial d'un appareil autonome rattaché à l'équipe) : ce qui est identique des deux côtés, préfixe commun
+ * des listes (un ajout en fin de liste n'est pas un conflit), métadonnées de création reçues retenues.
+ * Une valeur différente des deux côtés reste un conflit tracé.
+ */
+export function presumedBase(local, remote) {
+  const walk = (l, r) => {
+    if (deepEqual(l, r)) return clone(l);
+    if (Array.isArray(l) && Array.isArray(r)) { const out = []; for (let i = 0; i < Math.min(l.length, r.length) && deepEqual(l[i], r[i]); i++) out.push(clone(l[i])); return out; }
+    if (isObj(l) && isObj(r)) { const out = {}; for (const k of Object.keys(l)) if (k in r) { const b = walk(l[k], r[k]); if (b !== undefined) out[k] = b; } return out; }
+    return undefined;
+  };
+  const base = walk(local, remote) || {};
+  for (const k of ['createdAt', 'createdBy', 'createdByName']) if (local?.[k] !== undefined) base[k] = local[k];
+  return base;
 }

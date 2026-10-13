@@ -11,22 +11,27 @@
      dernier.
   3. Profil reçu d'une autre tablette (paquet de données) : présent dans le magasin mais pas dans le trousseau
      local → « Agents pas encore sur cette tablette » › « Ajouter sur cette tablette » (mot de passe saisi deux fois
-     par l'agent) → l'agent se connecte avec le MÊME identifiant de profil et retrouve sa tournée ; « Retirer de cette
-     tablette » ; jamais le dernier administrateur de la tablette.
-  4. « Ajouter un agent » (nom, prénom, initiales, profil, mot de passe saisi deux fois) et « Changer d'agent » :
-     libellé visible sur tablette, icône + entrée du Menu sur téléphone ; l'agent suivant arrive sur l'accueil.
+     par l'agent) → l'agent se connecte avec le MÊME identifiant de profil et retrouve sa tournée ; identifiant déjà
+     pris sur la tablette par un autre profil : refus expliqué, ajout possible après retrait du compte local ;
+     « Retirer de cette tablette » ; jamais le dernier administrateur de la tablette.
+  4. Écran de configuration (mode autonome d'office, mode équipe replié ; compte de l'administrateur : nom, prénom,
+     initiales et identifiant proposés), « Ajouter un agent » (nom, prénom, initiales, profil, mot de passe saisi deux
+     fois) et « Changer d'agent » : libellé visible sur tablette, icône + entrée du Menu sur téléphone ; l'agent
+     suivant arrive sur l'accueil (aussi après un verrouillage par inactivité, sauf s'il s'agit du même agent).
 """
 import re
 
 import pytest
 
-from helpers import PASSWORD, answer_required, create_tour, goto_hash, js, response, setup_standalone, unlock
+from helpers import PASSWORD, answer_required, create_tour, goto_hash, js, open_setup, response, setup_standalone, unlock
 
 SAKOURA = 'site-09281718'
-PW = {'bmartin': 'bruno-mdp-2026', 'cpetit': 'chloe-mdp-2026', 'ddurand': 'dora-mdp-2026', 'eleroy': 'eric-mdp-2026'}
+PW = {'bmartin': 'bruno-mdp-2026', 'cpetit': 'chloe-mdp-2026', 'ddurand': 'dora-mdp-2026', 'eleroy': 'eric-mdp-2026', 'adupont': 'alice-t2-mdp-2026'}
 TABLET = {'width': 1280, 'height': 900}
 TABLET_PORTRAIT = {'width': 800, 'height': 1280}
 PHONE = {'width': 390, 'height': 844}
+# « Créer le jeton », « créez un jeton »… : aucun écran affiché ne doit le demander (le mode équipe est replié).
+CREATE_TOKEN = re.compile(r'cr[ée]e[rz]?\s+(le|un|son|votre)\s+jeton|jeton\s+d.acc[eè]s', re.I)
 
 
 def attr(value):
@@ -282,6 +287,7 @@ def test_ajouter_sur_cette_tablette_profil_recu(make_page, app_url):
     # Tablette 1 : l'administratrice crée l'agent Dora et une tournée dont Dora est contrôleuse
     t1 = make_page(label='tablette 1')
     setup_standalone(t1, app_url, device='Tablette 1', device_no=1, name='Alice Dupont', username='adupont')
+    alice = me(t1)
     dora = add_agent(t1, 'Durand', 'Dora', 'ddurand')
     tour = create_tour(t1, 'ce', [SAKOURA], 'prov-TL1', controllerIds=[dora])
     package = js(t1, """const { buildPackage } = await import('./js/app/exports.js');
@@ -291,6 +297,9 @@ def test_ajouter_sur_cette_tablette_profil_recu(make_page, app_url):
     t2 = make_page(label='tablette 2')
     setup_standalone(t2, app_url, device='Tablette 2', device_no=2, name='Eric Leroy', username='eleroy')
     admin2 = me(t2)
+    # Avant la réception : un compte « adupont » créé sur la tablette 2 (autre profil que celui de la tablette 1)
+    alice2 = add_agent(t2, 'Dupont', 'Alice', 'adupont')
+    assert alice2 != alice
     res = js(t2, """const X = await import('./js/app/exports.js');
         return X.importPackage(await X.readPackage(arg));""", package)
     assert res['added'] > 0
@@ -346,9 +355,51 @@ def test_ajouter_sur_cette_tablette_profil_recu(make_page, app_url):
     assert js(t2, "return store.get('user', session.user.id).role;") == 'admin'
     assert js(t2, 'return session.user.role;') == 'admin'
 
+    # Même identifiant, autre profil : refus expliqué ; après « Retirer de cette tablette » du compte local, ajout possible
+    t2.click(f'#teamAgents [data-act=agent-enroll][data-id="{alice}"]')
+    t2.wait_for_selector('#ef')
+    t2.fill('#ef [name=p1]', PASSWORD)
+    t2.fill('#ef [name=p2]', PASSWORD)
+    t2.click('.modal [data-act=ok]')
+    t2.wait_for_function("() => document.querySelector('#efErr')?.textContent.includes('déjà utilisé sur cette tablette')")
+    assert 'retirez d’abord Alice Dupont de cette tablette' in t2.text_content('#efErr')
+    t2.click('.modal [data-act=__close]')
+    t2.wait_for_selector('#ef', state='detached')
+    t2.click(f'#tabletAgents [data-act=agent-remove][data-id="{alice2}"]')
+    t2.click('.modal [data-act=yes]')
+    t2.wait_for_selector(f'#teamAgents [data-agent="{alice2}"]')
+    t2.click(f'#teamAgents [data-act=agent-enroll][data-id="{alice}"]')
+    t2.wait_for_selector('#ef')
+    t2.fill('#ef [name=p1]', PASSWORD)
+    t2.fill('#ef [name=p2]', PASSWORD)
+    t2.click('.modal [data-act=ok]')
+    t2.wait_for_selector(f'#tabletAgents [data-agent="{alice}"]')
+    assert keyring(t2)['adupont'] == alice, 'identifiant « adupont » : désormais le profil de la tablette 1'
+    # Un autre administrateur est désormais sur la tablette : Eric peut changer de profil
+    t2.click(f'#tabletAgents [data-act=user-edit][data-id="{admin2}"]')
+    t2.wait_for_selector('#uf')
+    t2.select_option('#uf [name=role]', 'auditeur')
+    t2.click('.modal [data-act=ok]')
+    t2.wait_for_function("() => window.AuditApp.session.user.role === 'auditeur'")
+    assert js(t2, "return store.get('user', session.user.id).role;") == 'auditeur'
+
 
 def test_ajouter_un_agent_et_changer_d_agent_sur_telephone(page, app_url):
+    # Configuration : mode autonome d'office ; le mode équipe GitHub n'est qu'une option avancée repliée
+    open_setup(page, app_url)
+    assert 'nécessite un jeton GitHub — non utilisé à l’OEG' in page.inner_text('#setupAdvanced > summary')
+    assert not page.locator('[data-act=mode][data-value=team]').is_visible()
+    assert not CREATE_TOKEN.search(page.inner_text('#app'))
+    # Compte de l'administrateur : comme « Ajouter un agent » (nom, prénom, initiales et identifiant proposés)
+    page.click('#setupFirst')
+    page.fill('#app [name=lastName]', 'Dupont')
+    page.fill('#app [name=firstName]', 'Alice')
+    assert page.input_value('#app [name=initials]') == 'AD' and page.input_value('#app [name=username]') == 'adupont'
     setup_standalone(page, app_url, name='Alice Dupont', username='adupont')
+    profile = js(page, "return store.get('user', session.user.id);")
+    assert (profile['firstName'], profile['lastName'], profile['initials'], profile['role']) == ('Alice', 'Dupont', 'AD', 'admin'), profile
+    goto_hash(page, '#/synchronisation')
+    assert not CREATE_TOKEN.search(page.inner_text('#view')), 'aucun écran ne demande de créer un jeton'
     bruno = add_agent(page, 'Martin', 'Bruno', 'bmartin', initials='BMA')
     # Identifiant déjà pris : un autre identifiant est proposé
     goto_hash(page, '#/administration')
@@ -373,3 +424,21 @@ def test_ajouter_un_agent_et_changer_d_agent_sur_telephone(page, app_url):
     login(page, 'bmartin')
     assert js(page, 'return session.user.id;') == bruno
     assert page.evaluate('location.hash') in ('#/', ''), 'agent suivant : accueil (pas le Menu de l’agent précédent)'
+
+    # Mon compte : mot de passe propre à cette tablette ; le nom de la tablette n'est modifiable que par un administrateur
+    goto_hash(page, '#/compte')
+    assert 'Changer mon mot de passe sur cette tablette' in page.inner_text('#view')
+    assert page.locator('#view [data-act=rename]').count() == 0 and page.locator('#view [data-act=switch-agent]').count() == 1
+
+    # Verrouillage par inactivité : le même agent reprend son écran ; un autre arrive sur l'accueil
+    goto_hash(page, '#/planning')
+    page.evaluate("window.AuditApp.lockApp('inactivité')")
+    page.wait_for_selector('#loginBtn')
+    assert 'Bruno Martin : session verrouillée après inactivité' in page.inner_text('#loginMsg')
+    assert page.locator('.user-tile.sel').get_attribute('data-u') == 'bmartin', 'dernier agent présélectionné'
+    login(page, 'bmartin')
+    assert page.evaluate('location.hash') == '#/planning'
+    page.evaluate("window.AuditApp.lockApp('inactivité')")
+    page.wait_for_selector('#loginBtn')
+    login(page, 'adupont', PASSWORD)
+    assert page.evaluate('location.hash') in ('#/', ''), 'autre agent après inactivité : accueil'

@@ -26,7 +26,7 @@ import { session, appVersion } from '../core/session.js';
 import { decryptBytes } from '../core/crypto.js';
 import { ROLES, can, isTeamMode, teamLabel, getKeyring, syncKeyringProfile, normUsername, updateDevice, attachTeam, detachTeam, saveTeamToken, linkGithubLogin, tokenInfo } from '../core/auth.js';
 import { setRemoteFetcher, storeRemoteBytes } from '../core/media.js';
-import { mergeEntity, stripMeta } from '../domain/merge.js';
+import { mergeEntity, stripMeta, presumedBase } from '../domain/merge.js';
 import { availableNumbers, addBlock, BLOCK_SIZE, BLOCK_LOW } from './numbering.js';
 import {
   createGitHub, teamSettings, dataPaths, parseDataPath, stableJSON, gitBlobSha, utf8, fromUtf8, mapLimit, trailDay,
@@ -61,7 +61,7 @@ export async function refreshPending() {
 
 /* ---------- Contexte : client, chemins, mémoire locale des empreintes ---------- */
 
-export { isTeamMode };
+export { isTeamMode, presumedBase };
 const team = () => session.team;
 const client = (t = team(), token = session.token) => createGitHub({ token, owner: t.owner, repo: t.repo, apiUrl: t.apiUrl });
 const paths = (t = team()) => dataPaths(t.prefix);
@@ -307,25 +307,6 @@ async function pull(ctx, head, { full = false } = {}) {
 }
 
 const isRevoked = config => !!(config.appareils?.devices || []).find(d => d.id === session.device?.id && d.revoked);
-
-const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-/**
- * Version commune présumée quand aucune base n'est connue (même donnée créée des deux côtés, ex. référentiel
- * initial d'un appareil autonome rattaché à l'équipe) : ce qui est identique des deux côtés, préfixe commun
- * des listes (un ajout en fin de liste n'est pas un conflit), métadonnées de création reçues retenues.
- * Une valeur différente des deux côtés reste un conflit tracé.
- */
-export function presumedBase(local, remote) {
-  const walk = (l, r) => {
-    if (deepEqual(l, r)) return clone(l);
-    if (Array.isArray(l) && Array.isArray(r)) { const out = []; for (let i = 0; i < Math.min(l.length, r.length) && deepEqual(l[i], r[i]); i++) out.push(clone(l[i])); return out; }
-    if (isObj(l) && isObj(r)) { const out = {}; for (const k of Object.keys(l)) if (k in r) { const b = walk(l[k], r[k]); if (b !== undefined) out[k] = b; } return out; }
-    return undefined;
-  };
-  const base = walk(local, remote) || {};
-  for (const k of ['createdAt', 'createdBy', 'createdByName']) if (local?.[k] !== undefined) base[k] = local[k];
-  return base;
-}
 
 /** Fusion à trois versions et rapport de conflit. */
 async function resolveConflict(type, id, remote, log) {

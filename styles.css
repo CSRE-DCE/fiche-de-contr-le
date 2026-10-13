@@ -389,6 +389,20 @@ button.kpi{font:inherit;cursor:pointer}
 .setup-adv{margin-top:18px;border-top:1px solid var(--line);padding-top:10px;font-size:13.5px;color:var(--muted)}
 .setup-adv summary{cursor:pointer;font-weight:600}
 .setup-adv .btn{margin-top:4px}
+/* Mise en service : deux choix (première tablette / tablette supplémentaire) */
+.setup-choices{display:grid;gap:12px;margin:6px 0 4px}
+.setup-choice{display:flex;align-items:flex-start;gap:14px;width:100%;min-height:96px;padding:14px 16px;border:2px solid var(--line);border-radius:16px;background:#fff;text-align:left;color:var(--ink);cursor:pointer;font:inherit}
+.setup-choice:hover,.setup-choice:focus-visible{border-color:var(--brand);background:var(--soft2)}
+.setup-choice b{display:block;font-size:17px;color:var(--brand);line-height:1.2}
+.setup-choice-sub{display:block;margin-top:4px;font-size:14px;color:var(--muted);line-height:1.35}
+.setup-choice-ic{flex:none;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:var(--soft);color:var(--brand)}
+/* Échanges entre tablettes (fichier .oegct) */
+.xch-file{display:flex;align-items:center;gap:12px;padding:12px;border:1px dashed var(--sky);border-radius:14px;background:var(--soft2);margin-bottom:12px;overflow-wrap:anywhere}
+.xch-file-ic{flex:none;display:flex;width:44px;height:44px;border-radius:50%;align-items:center;justify-content:center;background:#fff;color:var(--brand)}
+.xch-send-row{margin:12px 0 4px}
+.xch-list,.xch-report{margin:4px 0 10px;padding-left:20px;font-size:14.5px}
+.xch-list li,.xch-report li{margin:3px 0}
+.xch-pending{font-size:15.5px;margin:0 0 10px}
 .user-tiles{display:grid;gap:8px;margin-bottom:12px}
 .user-tile{display:flex;align-items:center;gap:12px;min-height:60px;border:2px solid var(--line);border-radius:14px;padding:8px 12px;background:#fff;text-align:left;color:var(--ink)}
 .user-tile.sel{border-color:var(--brand);background:var(--soft2)}

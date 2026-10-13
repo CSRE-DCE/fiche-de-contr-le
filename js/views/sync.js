@@ -1,7 +1,9 @@
-/* Synchronisation : mode autonome (celui de l'OEG : échanges entre tablettes par paquets de données ; le mode équipe
- * n'y apparaît qu'en option avancée repliée, « nécessite un jeton GitHub — non utilisé à l'OEG ») ou mode équipe
- * (dépôt GitHub privé de données) : configuration et test de la connexion, aide pas à pas, état, file d'envoi,
- * conflits et résolution, journal, échanges par paquets. */
+/* « Échanges entre tablettes » (mode autonome, celui de l'OEG) : « Envoyer à l'autre tablette » (modifications
+ * depuis le dernier envoi, ou tout), « Recevoir un fichier », historique des envois et réceptions, tablettes
+ * connues, conflits et résolution (js/views/exchange.js, js/app/exchange.js). Le mode équipe n'y apparaît qu'en
+ * option avancée repliée, « nécessite un jeton GitHub — non utilisé à l'OEG ».
+ * « Synchronisation » (mode équipe, dépôt GitHub privé de données) : configuration et test de la connexion, aide pas
+ * à pas, état, file d'envoi, conflits et résolution, journal, échanges par paquets. */
 import { html, raw, fmtDateTime, sortBy, compactValue, clone, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -15,6 +17,8 @@ import {
 import { reservedBlocks, fmtNumber } from '../app/numbering.js';
 import { parseRepoSpec } from '../app/github.js';
 import { tokenHelp, probeSummary } from './auth.js';
+import { exchangeCard, historyCard, sendDialog, receiveFile, passwordDialog } from './exchange.js';
+import { knownDevices } from '../app/exchange.js';
 
 const TYPE_LABELS = { audit: 'Audits', deviation: 'Écarts', media: 'Médias (métadonnées)', __bin: 'Fichiers (photos, documents)', trail: 'Journal d’audit', prestation: 'Prestations', observation: 'Observations', alert: 'Alertes d’urgence', document: 'Documents', grid: 'Grilles', site: 'Stations', user: 'Utilisateurs' };
 const show = v => { const c = compactValue(v, 160); return c === undefined || c === null ? '—' : typeof c === 'string' ? c : JSON.stringify(c); };
@@ -66,8 +70,8 @@ function helpCard(open) {
       <li><b>Administrateur</b> : créer sur GitHub un dépôt <b>privé</b> de données (ex. <span class="mono">CSRE-DCE/fiche-de-controle-donnees</span>), distinct du dépôt public de l’application ; l’ajouter vide ou avec un README.</li>
       <li><b>Un jeton par tablette</b> : l’administrateur crée, depuis son compte GitHub, un jeton « fine-grained » par tablette (voir ci-dessous), nommé d’après la tablette (« Tablette 1 », « Tablette 2 »…). Les agents n’ont pas besoin de compte GitHub. Un jeton n’est jamais copié sur une autre tablette.</li>
       <li><b>Première tablette</b> (administrateur) : « Rejoindre une équipe » (ou, sur un appareil autonome déjà utilisé, « Rattacher cet appareil ») avec le jeton « Tablette 1 » : le dépôt vide est initialisé (config/equipe.json, utilisateurs.json, appareils.json, sequences.json) puis le référentiel est envoyé.</li>
-      <li><b>Agents</b> : Administration › Agents de cette tablette › « Nouvel agent » ; chaque agent choisit et saisit son mot de passe.</li>
-      <li><b>Deuxième tablette</b> : « Rejoindre une équipe » avec le même dépôt et le jeton « Tablette 2 » (l’administrateur y retrouve son profil), puis Administration › « Agents de l’équipe pas encore sur cette tablette » › <b>Ajouter sur cette tablette</b> pour chaque agent (même profil, mot de passe choisi par l’agent). Les données sont ensuite synchronisées automatiquement (à chaque modification et toutes les 5 minutes en ligne).</li>
+      <li><b>Agents</b> : Administration › Agents de cette tablette › « Ajouter un agent » ; chaque agent choisit et saisit son mot de passe.</li>
+      <li><b>Deuxième tablette</b> : « Rejoindre une équipe » avec le même dépôt et le jeton « Tablette 2 » (l’administrateur y retrouve son profil), puis Administration › « Agents pas encore sur cette tablette » › <b>Ajouter sur cette tablette</b> pour chaque agent (même profil, mot de passe choisi par l’agent). Les données sont ensuite synchronisées automatiquement (à chaque modification et toutes les 5 minutes en ligne).</li>
       <li>Tablette perdue ou volée : Administration › Appareils de l’équipe › « Désactiver (perdu) » ET révoquer le jeton de cette tablette sur GitHub.</li>
     </ol>
     <h3>Créer le jeton</h3>${tokenHelp()}
@@ -81,15 +85,39 @@ function helpCard(open) {
     </ul></details></div>`;
 }
 
+/** Conflits (les deux modes) : fusion automatique, valeurs écartées consultables et restaurables. */
+function conflictsCard(conflicts) {
+  return html`<div class="card" id="conflicts"><h2>Conflits (${conflicts.filter(c => !c.resolved).length} à examiner)</h2>
+    ${conflicts.length ? html`<div class="list">${conflicts.map(c => html`<div class="li ${c.resolved ? '' : 'stripe-warn'}"><div class="li-main"><div class="li-title">${TYPE_LABELS[c.entityType] || c.entityType} — ${c.label}</div><div class="li-sub">${fmtDateTime(c.at)} · ${c.details.length} valeur(s) en concurrence${c.origin ? ' · ' + c.origin : ''}</div>${c.resolved ? badge('Examiné — ' + (c.resolution || ''), 'ok') : ''}</div><button class="btn ghost sm" data-act="conflict" data-id="${c.id}">Examiner</button></div>`)}</div>`
+      : html`<p class="note">Aucun conflit. En cas de modifications concurrentes d’une même donnée sur deux tablettes, la fusion est faite champ par champ et les valeurs écartées sont conservées ici.</p>`}</div>`;
+}
+
+/** Écran du mode autonome : échanges entre tablettes par fichier (aucun serveur, aucun jeton). */
+async function standaloneView(conflicts, admin) {
+  const devices = await knownDevices();
+  return html`${pageTitle('Échanges entre tablettes', 'Mode autonome (aucun dépôt d’équipe) : échanges par fichier, sans serveur ni jeton')}
+    ${await exchangeCard()}
+    ${historyCard()}
+    ${conflictsCard(conflicts)}
+    <div class="card"><h2>Tablettes de l’équipe</h2>${kv([['Cette tablette', `${session.device.name} (n° ${session.device.number})`], ['Connexion', navigator.onLine ? 'En ligne (non nécessaire)' : 'Hors connexion']])}
+      ${devices.length > 1 ? html`<div class="list" style="margin-top:8px">${devices.filter(d => !d.self).map(d => html`<div class="li"><div class="li-main"><div class="li-title">${d.name || 'Tablette'}${d.number ? ` (n° ${d.number})` : ''}</div><div class="li-sub">${d.seenAt ? 'dernier fichier reçu le ' + fmtDateTime(d.seenAt) : 'connue par un fichier reçu'}${Number(d.number) === Number(session.device.number) ? ' · MÊME N° que cette tablette : numéros d’audit en double possibles' : ''}</div></div></div>`)}</div>` : html`<p class="note">Aucune autre tablette connue : elle apparaîtra à la réception de son premier fichier.</p>`}
+      <p class="note">Chaque agent a son compte et son mot de passe sur chaque tablette (Administration › Agents de cette tablette). Les fichiers sont toujours chiffrés avec le mot de passe d’échange de l’équipe.</p></div>
+    <details class="card" id="teamAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
+      <p class="note">Synchronisation automatique par un dépôt GitHub privé de données. L’OEG ne l’utilise pas : les tablettes échangent leurs données par fichier.</p>
+      ${admin ? html`<button class="btn ghost" data-act="attach">Rejoindre une équipe (dépôt GitHub)</button>` : html`<p class="note">Le rattachement à une équipe est réservé à l’administrateur de la tablette.</p>`}
+      ${helpCard(false)}</details>`;
+}
+
 export default {
-  nav: 'sync', title: 'Synchronisation',
+  nav: 'sync', get title() { return isTeamMode() ? 'Synchronisation' : 'Échanges entre tablettes'; },
   async render() {
+    const conflicts = sortBy(store.all('conflict'), x => x.resolved ? 1 : 0, '-at');
+    if (!isTeamMode()) return standaloneView(conflicts, can('settings.manage'));
     const out = await outboxEntries();
     const byType = {};
     for (const e of out) byType[e.type] = (byType[e.type] || 0) + 1;
     const rejected = out.filter(e => e.rejected);
     const logs = sortBy(store.all('syncLog'), '-at').slice(0, 30);
-    const conflicts = sortBy(store.all('conflict'), x => x.resolved ? 1 : 0, '-at');
     const team = isTeamMode() && session.team;
     const tok = team ? tokenInfo() : null;
     const cfg = team ? await readTeamConfig().catch(() => null) : null;
@@ -125,25 +153,24 @@ export default {
           ${syncState.initialized === false && admin ? html`<button class="btn warn" data-act="init">Initialiser le dépôt</button>` : ''}
           ${admin ? html`<button class="btn danger-ghost" data-act="detach">Détacher cet appareil de l’équipe</button>` : ''}
         </div><div id="testResult">${lastTest && Date.now() - lastTest.at < 600000 ? testResult(lastTest) : ''}</div>`
-      : html`${kv([['Mode', 'Autonome — données sur cette tablette'], ['Connexion', navigator.onLine ? 'En ligne' : 'Hors connexion'], ['Tablette', `${session.device.name} (n° ${session.device.number}) — ${session.device.id}`], ['Modifications non partagées', String(out.length)]])}
-        <p class="note">Les échanges avec l’autre tablette se font par fichier : paquets de données (ci-dessous), fusionnés champ par champ.</p>`}</div>
-      ${team ? helpCard(false) : html`<details class="card" id="teamAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
-        <p class="note">Synchronisation automatique par un dépôt GitHub privé de données. L’OEG ne l’utilise pas.</p>
-        ${admin ? html`<button class="btn ghost" data-act="attach">Rejoindre une équipe (dépôt GitHub)</button>` : html`<p class="note">Le rattachement à une équipe est réservé à l’administrateur de la tablette.</p>`}
-        ${helpCard(false)}</details>`}
+      : ''}</div>
+      ${helpCard(false)}
       <div class="card"><h2>File d’envoi</h2>${out.length ? html`<div class="row" style="gap:6px">${Object.entries(byType).map(([t, n]) => badge(`${TYPE_LABELS[t] || t} : ${n}`, 'outline'))}</div>` : html`<p class="note">Aucune modification en attente.</p>`}
         ${rejected.length ? html`<div class="banner nc" style="margin-top:10px">${rejected.length} modification(s) non envoyée(s).</div><div class="list">${rejected.map(e => html`<div class="li stripe-nc"><div class="li-main"><div class="li-title">${TYPE_LABELS[e.type] || e.type} — ${store.getRaw(e.type === '__bin' ? 'media' : e.type, e.id)?.number || store.getRaw('media', e.id)?.name || e.id}</div><div class="li-sub">${e.error}</div></div><button class="btn ghost sm" data-act="drop" data-key="${e.key}">Retirer</button></div>`)}</div><button class="btn ghost sm" data-act="retry">Réessayer</button>` : ''}</div>
-      <div class="card"><h2>Conflits (${conflicts.filter(c => !c.resolved).length} à examiner)</h2>
-        ${conflicts.length ? html`<div class="list">${conflicts.map(c => html`<div class="li ${c.resolved ? '' : 'stripe-warn'}"><div class="li-main"><div class="li-title">${TYPE_LABELS[c.entityType] || c.entityType} — ${c.label}</div><div class="li-sub">${fmtDateTime(c.at)} · ${c.details.length} valeur(s) en concurrence${c.origin ? ' · ' + c.origin : ''}</div>${c.resolved ? badge('Examiné — ' + (c.resolution || ''), 'ok') : ''}</div><button class="btn ghost sm" data-act="conflict" data-id="${c.id}">Examiner</button></div>`)}</div>`
-          : html`<p class="note">Aucun conflit. En cas de modifications concurrentes d’une même donnée sur deux appareils, la fusion est faite champ par champ et les valeurs écartées sont conservées ici.</p>`}</div>
+      ${conflictsCard(conflicts)}
       <div class="card"><h2>Journal de synchronisation</h2>${logs.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Origine</th><th>Envois</th><th>Fichiers</th><th>Journal</th><th>Réceptions</th><th>Conflits</th><th>Commit</th><th>Erreurs</th></tr></thead><tbody>${logs.map(l => html`<tr><td>${fmtDateTime(l.at)}<div class="tiny muted">${l.durationMs} ms${l.attempts > 1 ? ` · ${l.attempts} essais` : ''}</div></td><td>${l.reason}</td><td>${l.pushed}</td><td>${l.media}</td><td>${l.journal ?? '—'}</td><td>${l.pulled}</td><td>${l.conflicts}</td><td>${commitLink(l.commit)}</td><td class="tiny">${(l.errors || []).join(' ; ') || '—'}</td></tr>`)}</tbody></table></div>` : html`<p class="note">Aucune synchronisation enregistrée sur cet appareil.</p>`}</div>
       <div class="card"><h2>Échanges par paquets (sans réseau)</h2>
         <p class="note">Pour transférer des données entre appareils sans dépôt d’équipe (ou hors réseau) : exporter un paquet sur l’un, l’importer sur l’autre. La fusion est faite champ par champ ; les valeurs concurrentes sont conservées dans les conflits ci-dessus. Sauvegarde chiffrée : écran Export.</p>
         <div class="btn-row"><button class="btn ghost" data-act="pkg-export">Exporter un paquet de données</button>
-          ${can('ref.manage') || !team ? html`<label class="btn ghost">Importer un paquet<input type="file" accept="application/json,.json" hidden data-change="pkg-import"></label>` : ''}
+          ${can('ref.manage') ? html`<label class="btn ghost">Importer un paquet<input type="file" accept="application/json,.json" hidden data-change="pkg-import"></label>` : ''}
           <a class="btn ghost" href="#/export">Écran Export</a></div></div>`;
   },
   handlers: {
+    /* Échanges entre tablettes (mode autonome) */
+    async 'xch-send'() { if (await sendDialog()) this.refresh(); },
+    async 'xch-send-all'() { if (await sendDialog({ scope: 'all' })) this.refresh(); },
+    async 'xch-receive'(el) { const f = el.files[0]; el.value = ''; if (!f) return; if (await receiveFile(f)) this.refresh(); },
+    async 'xch-password'() { if (await passwordDialog()) this.refresh(); },
     async sync() { const r = await runSync({ reason: 'manuelle' }); toast(r.skipped ? 'Synchronisation non lancée : ' + r.skipped : r.errors?.length ? 'Terminée avec erreurs : ' + r.errors[0] : `Synchronisé : ${r.pushed} envoi(s), ${r.pulled} réception(s)`, r.errors?.length || r.skipped ? 'warn' : 'ok', 5000); this.refresh(); },
     async full() { if (!(await confirmDialog({ title: 'Réception complète', message: 'Relire tout le dépôt de l’équipe (y compris le journal d’audit de plus de 4 mois des autres appareils) et retélécharger ce qui diffère ? Les modifications locales en attente sont conservées et fusionnées.' }))) return; const r = await runSync({ reason: 'réception complète', full: true }); toast(r.errors?.length ? r.errors[0] : `Réception : ${r.pulled || 0} élément(s)`, r.errors?.length ? 'warn' : 'ok'); this.refresh(); },
     async prefetch() { const n = await prefetchMedia(); toast(`${n} fichier(s) téléchargé(s) pour un usage hors connexion`, 'ok'); },

@@ -658,7 +658,7 @@ export function auditContent(audit) {
   const deviations = auditDeviations(audit.id).filter(before).map(d => Object.fromEntries(DEVIATION_CONSTAT.map(k => [k, d[k] ?? null])));
   const media = auditMedia(audit.id).filter(m => m.link?.type !== 'signature' && before(m))
     .map(m => ({ id: m.id, sha256: m.sha256, link: m.link, takenAt: m.takenAt, derivedFrom: m.derivedFrom || null })).sort((a, b) => a.id.localeCompare(b.id));
-  const { signatures, lock, amendments, reports, status, endedAt, updatedAt, updatedBy, updatedByName, _rev, _lv, _conflict, dismissedAlerts, ...content } = audit;
+  const { signatures, lock, amendments, reports, status, endedAt, updatedAt, updatedBy, updatedByName, _rev, _lv, _vv, _conflict, dismissedAlerts, ...content } = audit;
   // Type de tournée, stations, compartiments, contrôleurs et données des feuilles font partie du contenu scellé.
   for (const k of ['auditType', 'stations', 'compartments', 'controllerIds', 'controllerNames', 'sheets']) if (audit[k] !== undefined) content[k] = audit[k];
   return { audit: content, deviations, media };

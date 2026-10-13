@@ -8,11 +8,13 @@
  *    conservé CHIFFRÉ avec la clé de l'appareil (entité locale jamais synchronisée). Le rôle d'un compte
  *    rattaché à un login GitHub est celui de config/utilisateurs.json (appliqué par js/app/sync.js) ; à
  *    défaut, son rôle local.
- * TABLETTE PARTAGÉE (deux tablettes pour quatre agents) : chaque agent a son entrée dans le trousseau de
- * chaque tablette où il travaille (« Agents de cette tablette » : clé de l'appareil chiffrée par SON mot de
- * passe) et le MÊME profil « user » partout (« Ajouter sur cette tablette » : enrollAgent avec l'identifiant du
- * profil reçu de l'équipe) ; le jeton GitHub est celui de la TABLETTE (créé par l'administrateur) : seuls les
- * comptes explicitement rattachés à un login GitHub suivent config/utilisateurs.json, jamais les autres agents.
+ * TABLETTE PARTAGÉE (deux tablettes pour quatre agents, mode autonome : celui de l'OEG) : chaque agent a son
+ * entrée dans le trousseau de chaque tablette où il travaille (« Agents de cette tablette » : clé de l'appareil
+ * chiffrée par SON mot de passe) et le MÊME profil « user » partout (« Ajouter un agent » : nouveau profil ;
+ * « Ajouter sur cette tablette » : enrollAgent avec l'identifiant du profil reçu de l'autre tablette par fichier) ;
+ * jamais de tablette sans administrateur (removeAgentFromDevice, assertAdminRemains). Tablette supplémentaire : mise
+ * en service avec le fichier d'échange de la première (setupFromProfile : profil reçu, même identifiant). Mode équipe (option
+ * avancée) : seuls les comptes explicitement rattachés à un login GitHub suivent config/utilisateurs.json.
  */
 import { meta } from './db.js';
 import { session, clearSession } from './session.js';
@@ -20,7 +22,7 @@ import { store } from './store.js';
 import { wrapDEK, unwrapDEK, importDEK, newDEKRaw } from './crypto.js';
 import { uuid, nowISO } from './util.js';
 
-import { ROLES, PERMISSIONS, isAuditController } from '../domain/permissions.js';
+import { ROLES, PERMISSIONS, isAuditController, agentFullName } from '../domain/permissions.js';
 export { ROLES, PERMISSIONS };
 
 export function can(perm, user = session.user) {
@@ -80,17 +82,26 @@ async function openWithDEK(dekRaw, user) {
   await store.load();
 }
 
-/** Premier démarrage en mode autonome : crée l'administrateur local et la clé de l'appareil. */
+/**
+ * Premier démarrage en mode autonome (celui de l'OEG) : crée la clé de la tablette et l'agent administrateur qui la
+ * configure (admin : { firstName, lastName, initials, username, password } — comme « Ajouter un agent » — ou, forme
+ * antérieure, { name, username, password }).
+ */
 export async function setupStandalone({ deviceName, deviceNumber, admin }) {
   if (await isSetUp()) throw new Error('Cet appareil est déjà configuré.');
   validatePassword(admin.password);
+  const ident = {};
+  for (const k of ['firstName', 'lastName', 'initials']) if (String(admin[k] || '').trim()) ident[k] = String(admin[k]).trim();
+  if (ident.initials) ident.initials = ident.initials.toUpperCase().slice(0, 4);
+  const name = String(admin.name || agentFullName(ident.firstName, ident.lastName)).trim();
+  if (!name || !normUsername(admin.username)) throw new Error('Nom et identifiant de l’administrateur requis.');
   await loadDevice();
   await updateDevice({ name: deviceName || defaultDeviceName(), number: Math.max(1, Math.min(99, Number(deviceNumber) || 1)) });
   await meta.set('mode', 'standalone'); session.mode = 'standalone';
   const dekRaw = newDEKRaw();
-  const user = { id: uuid(), username: normUsername(admin.username), name: admin.name.trim(), role: 'admin', active: true };
+  const user = { id: uuid(), username: normUsername(admin.username), name, ...ident, role: 'admin', active: true };
   const k = await getKeyring();
-  k.users[user.username] = { userId: user.id, name: user.name, role: user.role, wrap: await wrapDEK(dekRaw, admin.password), lastLogin: nowISO() };
+  k.users[user.username] = { userId: user.id, name: user.name, ...(ident.initials ? { initials: ident.initials } : {}), role: user.role, wrap: await wrapDEK(dekRaw, admin.password), lastLogin: nowISO() };
   await saveKeyring(k);
   await openWithDEK(dekRaw, user);
   await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Configuration initiale de l’appareil' });
@@ -98,13 +109,38 @@ export async function setupStandalone({ deviceName, deviceNumber, admin }) {
   return user;
 }
 
+/**
+ * Mise en service d'une TABLETTE SUPPLÉMENTAIRE (mode autonome) avec le fichier d'échange de l'autre tablette : clé
+ * de la tablette créée, agent qui la met en service (« Qui êtes-vous ? » : un agent actif parmi les profils reçus)
+ * ajouté au trousseau avec SON profil — même identifiant de profil, aucun profil en double — et le mot de passe qu'il
+ * choisit pour cette tablette. Les données du fichier (son profil compris) sont reçues ensuite (js/app/exchange.js :
+ * setupFromExchange). Mise en service par un agent qui n'est pas administrateur : un administrateur s'ajoute ensuite
+ * lui-même sur la tablette (enrollAgent, tablette sans administrateur).
+ */
+export async function setupFromProfile({ deviceName, deviceNumber, profile, password }) {
+  if (await isSetUp()) throw new Error('Cet appareil est déjà configuré.');
+  validatePassword(password);
+  const username = normUsername(profile?.username);
+  if (!profile?.id || !username) throw new Error('Choisissez votre profil.');
+  if (profile.active === false || profile._deleted) throw new Error(`Le compte de ${profile.name} est désactivé.`);
+  await loadDevice();
+  await updateDevice({ name: String(deviceName || '').trim() || defaultDeviceName(), number: Math.max(1, Math.min(99, Number(deviceNumber) || 2)) });
+  await meta.set('mode', 'standalone'); session.mode = 'standalone';
+  const dekRaw = newDEKRaw();
+  const k = await getKeyring();
+  k.users[username] = { userId: profile.id, name: profile.name, ...(profile.initials ? { initials: profile.initials } : {}), role: profile.role, wrap: await wrapDEK(dekRaw, password), lastLogin: nowISO() };
+  await saveKeyring(k);
+  await openWithDEK(dekRaw, { id: profile.id, username, name: profile.name, role: profile.role });
+  return session.user;
+}
+
 /** Ouverture de session hors connexion (ou en ligne, la vérification est locale). */
 export async function unlock(username, password) {
   username = normUsername(username);
   const k = await getKeyring();
   const entry = k.users[username];
-  if (!entry) return { ok: false, error: 'Compte inconnu sur cet appareil.' };
-  if (entry.disabled) return { ok: false, error: 'Ce compte est désactivé sur cet appareil.' };
+  if (!entry) return { ok: false, error: 'Agent inconnu sur cette tablette.' };
+  if (entry.disabled) return { ok: false, error: 'Ce compte est désactivé sur cette tablette.' };
   const dekRaw = await unwrapDEK(entry.wrap, password);
   if (!dekRaw) {
     entry.failures = (entry.failures || 0) + 1; entry.lastFailure = nowISO();
@@ -143,7 +179,7 @@ export async function addLocalAccount({ id, username, name, role, password, sour
   validatePassword(password);
   username = normUsername(username);
   const k = await getKeyring();
-  if (k.users[username] && k.users[username].userId !== id) throw new Error('Identifiant déjà utilisé sur cet appareil.');
+  if (k.users[username] && k.users[username].userId !== id) throw new Error('Identifiant déjà utilisé sur cette tablette.');
   // Nouveau profil : identifiant libre aussi parmi les profils reçus de l'autre tablette (même identifiant partout).
   const homonym = !id ? store.find('user', x => normUsername(x.username) === username) : null;
   if (homonym) throw new Error(`Identifiant « ${username} » déjà utilisé par ${homonym.name}.`);
@@ -169,18 +205,32 @@ export async function removeLocalAccount(username) {
  */
 export async function enrollAgent(userId, password) {
   if (!session.dekRaw) throw new Error('Session fermée');
-  if (!can('users.manage')) throw new Error('Seul un administrateur peut ajouter un agent sur cette tablette.');
   const u = store.get('user', userId);
+  // Tablette sans administrateur (mise en service par un agent) : tout agent connecté peut y ajouter un ADMINISTRATEUR,
+  // qui choisit et saisit lui-même son mot de passe ; ensuite, seul un administrateur ajoute les agents.
+  const bootstrap = u?.role === 'admin' && !(await tabletHasAdmin());
+  if (!can('users.manage') && !bootstrap) throw new Error('Seul un administrateur peut ajouter un agent sur cette tablette.');
   if (!u) throw new Error('Profil inconnu sur cette tablette : recevez d’abord les données de l’autre tablette.');
   if (u.active === false) throw new Error(`Le compte de ${u.name} est désactivé.`);
   const k = await getKeyring();
   if (Object.values(k.users).some(e => e.userId === userId)) throw new Error(`${u.name} est déjà sur cette tablette.`);
   const username = normUsername(u.username);
   if (!username) throw new Error(`Le profil de ${u.name} n’a pas d’identifiant.`);
-  if (k.users[username]) throw new Error(`L’identifiant « ${username} » est déjà utilisé sur cette tablette par ${k.users[username].name}.`);
+  if (k.users[username]) {
+    // Même identifiant, autre profil (ex. compte créé à la configuration de cette tablette avec l'identifiant qu'il a
+    // déjà sur l'autre) : un identifiant ne désigne qu'un agent ; l'entrée locale doit d'abord être retirée.
+    const other = k.users[username], self = other.userId === session.user?.id;
+    throw new Error(`L’identifiant « ${username} » est déjà utilisé sur cette tablette par ${other.name} (autre profil, créé sur cette tablette). `
+      + `Pour ajouter ${u.name} avec son profil de l’autre tablette, ${self ? 'un autre administrateur doit d’abord retirer votre compte de cette tablette' : `retirez d’abord ${other.name} de cette tablette`}, puis recommencez.`);
+  }
   await addLocalAccount({ id: u.id, username, name: u.name, role: u.role, password, source: 'kept', extra: { initials: u.initials || null } });
   await store.log('account-enroll', { entityType: 'user', entityId: u.id, entityLabel: u.name, details: { identifiant: username, appareil: session.device?.name || '' } });
   return u;
+}
+/** La tablette a-t-elle au moins un administrateur actif dans son trousseau ? */
+export async function tabletHasAdmin() {
+  const k = await getKeyring();
+  return Object.values(k.users).some(e => { const prof = store.get('user', e.userId); return !e.disabled && (prof?.role || e.role) === 'admin' && prof?.active !== false; });
 }
 /**
  * « Retirer de cette tablette » : supprime SEULEMENT l'entrée du trousseau (l'agent ne peut plus ouvrir de session

@@ -3,11 +3,14 @@
  * effectifs (Biologie / Cours d’eau / Eaux souterraines), recherche (nom, code, bassin, commune, cours d'eau),
  * filtre par bassin et par statut de contrôle (à contrôler / tournée en cours / contrôlée dans l'année, déduit
  * des tournées dont la liste des stations contient la station), pictogrammes des compartiments à contrôler,
- * tournées en cours à reprendre, bouton « + Nouvelle tournée » et lien vers la carte. Carte → fiche station. */
+ * tournées en cours à reprendre, bouton « + Nouvelle tournée » et lien vers la carte. Carte → fiche station.
+ * Mode autonome (celui de l'OEG) : bandeau « n modifications à envoyer à l'autre tablette » avec « Envoyer à l'autre
+ * tablette » et « Recevoir un fichier » (js/views/exchange.js). */
 import { html, normalize, sortBy, fmtDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
-import { can } from '../core/auth.js';
+import { can, isTeamMode } from '../core/auth.js';
+import { homeBanner, sendDialog, receiveFile, passwordDialog } from './exchange.js';
 import { navigate } from '../ui/router.js';
 import { icon } from '../ui/icons.js';
 import { empty, options } from '../ui/components.js';
@@ -110,6 +113,7 @@ export default {
           <a class="btn ghost" href="#/carte${type ? '?type=' + type : ''}"><span class="ic">${icon('map')}</span>Carte<span class="hm-opt"> des stations</span></a>
         </div>
       </section>
+      ${isTeamMode() ? '' : await homeBanner()}
       ${tours.length ? html`<section class="hm-tours" aria-label="Tournées en cours sur cette tablette"><h2>${icon('route', { size: 20 })}Tournées en cours sur cette tablette</h2><div class="hm-tour-list">${tours.slice(0, 6).map(a => {
         const tt = TYPE_STYLES[a.auditType];
         const names = (a.stations || []).map(s => store.get('site', s.siteId)?.name || s.key);
@@ -148,6 +152,9 @@ export default {
     }
   },
   handlers: {
+    async 'xch-send'() { if (await sendDialog()) this.refresh(); },
+    async 'xch-receive'(el) { const f = el.files[0]; el.value = ''; if (!f) return; if (await receiveFile(f)) this.refresh(); },
+    async 'xch-password'() { if (await passwordDialog()) this.refresh(); },
     type(el) {
       setPref('home.type', el.dataset.v || '');
       const q = { ...this.query, type: el.dataset.v || '' };

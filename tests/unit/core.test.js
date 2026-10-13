@@ -2,8 +2,9 @@
  * utilitaires (js/core/util.js : identifiants, dates, échappement HTML, JSON canonique, différences, distances,
  * base64, empreintes), chiffrement local (js/core/crypto.js : enveloppe de la clé de données, AES-GCM, sauvegarde
  * chiffrée par mot de passe), journal chaîné (js/core/store.js : trailHash / verifyTrail, sans IndexedDB) et
- * projection UTM 22N (js/lib/geo.js), saisies en cours (js/ui/dom.js : enregistrement différé, settleInput), droit de
- * saisie dans une tournée en binôme (js/core/auth.js : canEditAudit). Portage de tests/audit-unit.mjs (fiches-oeg) complété. */
+ * projection UTM 22N (js/lib/geo.js), saisies en cours (js/ui/dom.js : enregistrement différé, settleInput ;
+ * fenêtres : premier champ activé sans voler le champ choisi, closeAllModals), droit de saisie dans une tournée en
+ * binôme (js/core/auth.js : canEditAudit). Portage de tests/audit-unit.mjs (fiches-oeg) complété. */
 import { test, assert, eq, deepEq, throwsAsync } from './harness.js';
 import {
   uuid, localDate, localTime, localDateTime, fmtDate, fmtTime, fmtDateTime, fmtBytes, daysBetween, addDays, esc, html, raw, SafeHTML,
@@ -15,7 +16,7 @@ import {
 } from '../../js/core/crypto.js';
 import { trailHash, verifyTrail, entityLabel, META_FIELDS, LOCAL_ONLY } from '../../js/core/store.js';
 import { utmToLatLon, latLonToUtm, ecartGPS } from '../../js/lib/geo.js';
-import { bindActions, settleInput, AUTOSAVE_DELAY } from '../../js/ui/dom.js';
+import { bindActions, settleInput, AUTOSAVE_DELAY, openModal, closeAllModals } from '../../js/ui/dom.js';
 import { canEditAudit } from '../../js/core/auth.js';
 
 const near = (a, b, tol, msg) => assert(Math.abs(a - b) <= tol, `${msg || ''} attendu ${b} ± ${tol}, obtenu ${a}`);
@@ -268,6 +269,24 @@ test('saisie en cours : settleInput valide le champ actif, exécute les enregist
     await settleInput({ timeout: 50 });
     eq(calls.length, n, 'rien à refaire');
   } finally { unbind(); root.remove(); }
+});
+
+test('fenêtres : premier champ activé, jamais au détriment du champ déjà choisi ; closeAllModals ferme tout', async () => {
+  const body = html`<input id="m-first"><input id="m-second">`;
+  const a = openModal({ title: 'A', body });
+  await wait(120);
+  eq(document.activeElement?.id, 'm-first', 'premier champ activé à l’ouverture');
+  a.close();
+  const b = openModal({ title: 'B', body });
+  b.root.querySelector('#m-second').focus();            // saisie rapide : l'agent a déjà touché le second champ
+  await wait(120);
+  eq(document.activeElement?.id, 'm-second', 'le champ touché garde la saisie');
+  const c = openModal({ title: 'C', body: html`<p>empilée</p>` });
+  eq(document.querySelectorAll('.modal-back').length >= 2, true);
+  const closed = [b.result, c.result];
+  closeAllModals();                                       // fermeture de session (« Changer d'agent », inactivité)
+  deepEq(await Promise.all(closed), [undefined, undefined]);
+  eq(document.querySelectorAll('.modal-back').length, 0, 'plus aucune fenêtre affichée pour l’agent suivant');
 });
 
 /* ---------- Droit de saisie dans une tournée (binôme, tablette partagée) ---------- */

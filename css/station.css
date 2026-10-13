@@ -204,6 +204,15 @@
   .hm-bassin{flex:1 1 100%}
 }
 
+/* Échanges entre tablettes : modifications à envoyer, recevoir un fichier (mode autonome) */
+.hm-xch{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 14px;margin:0 0 12px;border-radius:16px;background:#fff;border:1px solid var(--line);border-left:6px solid var(--ok)}
+.hm-xch.is-pending{border-left-color:var(--perf);background:var(--perf-bg)}
+.hm-xch.is-todo{border-left-color:var(--warn);background:var(--warn-bg)}
+.hm-xch-txt{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hm-xch-txt b{font-size:16.5px;color:var(--brand)}
+.hm-xch-txt span{font-size:14px;color:var(--muted)}
+.hm-xch-btns{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:560px){.hm-xch-btns{width:100%}.hm-xch-btns .btn{flex:1 1 auto}}
 .hm-tours{margin:0 0 12px}
 .hm-tours h2{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font-family:var(--font-cond);font-weight:800;text-transform:uppercase;font-size:17px;letter-spacing:.04em;color:var(--brand)}
 .hm-tours h2 .ico{color:var(--perf)}
@@ -377,3 +386,10 @@
 /* Tournées en binôme : contrôleurs de la tournée, tournées de l'agent connecté en premier */
 .hm-tour-ctrl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--brand)}
 .hm-tour.is-mine{border-left-color:var(--brand)}
+/* Création de tournée : contrôleurs OEG (initiales, nom, profil ; agent connecté coché d'office) */
+.an-ctrls{grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr))}
+.an-ctrls .check{align-items:center;gap:10px}
+.an-ctrl-av{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;letter-spacing:.02em}
+.an-ctrl-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.an-ctrl-txt b{color:var(--brand);font-size:15.5px}
+.an-ctrl-txt small{font-size:12.5px;color:var(--muted)}

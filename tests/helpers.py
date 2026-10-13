@@ -6,6 +6,7 @@ tournées et appels directs aux modules de l'application (import dynamique depui
 import re
 
 PASSWORD = 'motdepasse-test'
+EXCHANGE_PASSWORD = 'echange-equipe-test'   # mot de passe d'échange de l'équipe (fichiers entre tablettes)
 ORG = 'Office de l’Eau de Guyane'
 ATHANASE = 'site-09271503'
 ERROR_CARD = re.compile(r'Erreur d’affichage|Impossible de charger cet écran')
@@ -27,17 +28,25 @@ def wait_view(page, timeout=30000):
     page.wait_for_function("() => { const v = document.querySelector('#view'); return v && v.children.length > 0; }", timeout=timeout)
 
 
-def setup_standalone(page, app_url, *, org=ORG, device='Tablette test', device_no=7, name='Admin Test', username='admin',
-                     password=PASSWORD, oeg=True, demo=None):
-    """Première configuration de l'appareil en mode autonome (référentiel OEG), puis attente de l'application
-    déverrouillée. demo : None = choix par défaut de l'écran, True / False = case cochée / décochée."""
+def open_setup(page, app_url):
+    """Ouvre l'écran de mise en service (premier lancement) : deux choix, « Première tablette de l'équipe » et
+    « Tablette supplémentaire : recevoir le fichier de l'autre tablette »."""
     page.goto(app_url + 'index.html')
+    page.wait_for_selector('#setupFirst')
+
+
+def setup_standalone(page, app_url, *, org=ORG, device='Tablette test', device_no=7, name='Admin Test', username='admin',
+                     password=PASSWORD, oeg=True, demo=None, exchange_password=EXCHANGE_PASSWORD):
+    """Mise en service « Première tablette de l'équipe » (mode autonome, référentiel OEG, mot de passe d'échange),
+    puis attente de l'application déverrouillée. name : « Prénom Nom » (champs Prénom et Nom de l'écran ; initiales
+    proposées par l'écran). demo : None = choix par défaut de l'écran, True / False = case cochée / décochée."""
+    open_setup(page, app_url)
+    page.click('#setupFirst')
     page.wait_for_selector('#setupBtn')
-    standalone = page.locator('[data-act=mode][data-value=standalone]')   # mode autonome : affiché d'office
-    if standalone.count():
-        standalone.click()
-    values = dict(orgName=org, deviceName=device, deviceNumber=str(device_no), name=name, username=username,
-                  password=password, password2=password)
+    first, _, last = name.partition(' ')          # « Alice Dupont » → prénom « Alice », nom « Dupont »
+    values = dict(orgName=org, deviceName=device, deviceNumber=str(device_no), lastName=last or first, firstName=first,
+                  username=username, password=password, password2=password,
+                  exchangePassword=exchange_password, exchangePassword2=exchange_password)
     for k, v in values.items():
         page.fill(f'#app [name={k}]', v)
     page.set_checked('#app [name=oeg]', bool(oeg))

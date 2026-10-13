@@ -1,20 +1,26 @@
 /* Administration : agents de la tablette et profils, appareils (désactivation d'un appareil perdu), paramètres
  * de l'organisation, données (dont la mise à niveau du référentiel) ; écran « Mon compte ».
  * Tablette partagée (deux tablettes pour quatre agents) : « Agents de cette tablette » (comptes du trousseau :
- * connexion possible ici ; nouvel agent, modifier, « Retirer de cette tablette » — entrée locale seulement) et
- * « Agents de l'équipe pas encore sur cette tablette » (profils reçus d'une autre tablette : « Ajouter sur cette
- * tablette », mot de passe choisi et saisi par l'agent, MÊME profil).
+ * connexion possible ici ; « Ajouter un agent » — nom, prénom, initiales, profil, mot de passe saisi par l'agent —,
+ * modifier, « Retirer de cette tablette » — entrée locale seulement) et « Agents pas encore sur cette tablette »
+ * (profils reçus de l'autre tablette : « Ajouter sur cette tablette », mot de passe choisi et saisi par l'agent,
+ * MÊME profil). Jamais de tablette sans administrateur.
+ * Mode autonome : « Cette tablette » (nom et n°, modifiables par un administrateur), « Échanges entre tablettes »
+ * (mot de passe d'échange de l'équipe, tablettes connues) et « Changements de profils reçus à valider » (règle de
+ * sécurité de la réception : js/domain/exchange.js, guardProfile).
  * Mode équipe : les membres (login GitHub → profil) et les appareils sont tenus dans les fichiers
  * config/utilisateurs.json et config/appareils.json du dépôt de données (commit à chaque modification). */
 import { html, raw, fmtDateTime, fmtBytes, sortBy, uuid } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { meta, destroyDB, storageEstimate } from '../core/db.js';
-import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, updateDevice, isTeamMode, teamLabel, linkGithubLogin, enrollAgent, removeAgentFromDevice, assertAdminRemains, normUsername } from '../core/auth.js';
+import { ROLES, PERMISSIONS, can, addLocalAccount, setLocalAccountDisabled, syncKeyringProfile, changePassword, knownUsers, updateDevice, isTeamMode, teamLabel, linkGithubLogin, enrollAgent, removeAgentFromDevice, assertAdminRemains, normUsername, tabletHasAdmin } from '../core/auth.js';
 import { agentInitials, agentFullName, suggestUsername } from '../domain/permissions.js';
 import { toast, openModal, formValues, promptDialog, confirmDialog } from '../ui/dom.js';
 import { pageTitle, kv, badge, empty, options, field } from '../ui/components.js';
 import { orgSettings, saveOrgSettings, pref, setPref, applyDisplayPrefs } from '../app/settings.js';
+import { exchangePasswordInfo, knownDevices, acceptHeld, refuseHeld } from '../app/exchange.js';
+import { passwordDialog, heldCard } from './exchange.js';
 
 const PERM_LABELS = { 'audit.create': 'Créer un audit', 'audit.edit': 'Réaliser ses audits', 'audit.editOthers': 'Modifier les audits des autres', 'audit.amend': 'Modifier un audit signé (motif)', 'audit.delete': 'Abandonner un audit', 'deviation.manage': 'Enregistrer / suivre les écarts', 'deviation.close': 'Clôturer les écarts', 'observation.create': 'Observations et urgences', 'planning.manage': 'Gérer le planning et les imports', 'ref.manage': 'Gérer référentiels, documents, grilles', 'trail.view': 'Consulter le journal', 'users.manage': 'Gérer les utilisateurs', 'devices.manage': 'Gérer les appareils', 'settings.manage': 'Paramétrer l’application', export: 'Exporter' };
 const SETTINGS = [
@@ -127,6 +133,21 @@ async function agentsCards(team) {
         : html`<p class="note">Tous les agents connus sont sur cette tablette.${team ? ' Un agent créé sur une autre tablette apparaît ici après synchronisation.' : ''}</p>`}</div>` : ''}`;
 }
 
+/**
+ * Tablette sans administrateur (mise en service par un agent) : un administrateur reçu de l'autre tablette s'y ajoute
+ * lui-même (« Ajouter sur cette tablette », mot de passe qu'il saisit) ; il pourra ensuite y ajouter les agents.
+ */
+async function noAdminCard() {
+  if (await tabletHasAdmin()) return '';
+  const here = new Set((await knownUsers()).map(e => e.userId));
+  const admins = sortBy(store.filter('user', u => u.role === 'admin' && u.active !== false && !here.has(u.id)), 'name');
+  return html`<div class="card" id="noAdmin" style="border-color:var(--warn)"><h2>Aucun administrateur sur cette tablette</h2>
+    <p class="note">Cette tablette a été mise en service par un agent qui n’est pas administrateur. Pour y ajouter les autres agents, un administrateur doit d’abord s’y ajouter lui-même, avec son profil de l’autre tablette : c’est lui qui choisit et saisit son mot de passe.</p>
+    ${admins.length ? html`<div class="list">${admins.map(u => html`<div class="li stripe-warn" data-agent="${u.id}"><span class="avatar">${agentInitials(u)}</span><div class="li-main"><div class="li-title">${u.name}</div><div class="li-sub">${u.username} · ${ROLES[u.role] || u.role}</div></div>
+      <button class="btn primary sm" data-act="agent-enroll" data-id="${u.id}">Ajouter sur cette tablette</button></div>`)}</div>`
+      : html`<p class="note">Aucun profil d’administrateur reçu : recevez d’abord un fichier de l’autre tablette (« Tout envoyer »).</p>`}</div>`;
+}
+
 /** Membre de l'équipe (config/utilisateurs.json) : login GitHub, nom, profil, actif. */
 function teamUserForm(u = null) {
   const isNew = !u;
@@ -178,10 +199,20 @@ export default {
     const est = await storageEstimate();
     const persisted = await navigator.storage?.persisted?.().catch(() => null);
     const local = await knownUsers();
+    const xpw = team ? null : exchangePasswordInfo();
+    const devices = team ? [] : await knownDevices();
     return html`${pageTitle('Administration', team ? `Mode équipe — dépôt ${teamLabel()}` : 'Mode autonome')}
-      ${can('users.manage') ? await agentsCards(team) : ''}
+      ${can('users.manage') && !team ? heldCard() : ''}
+      ${can('users.manage') ? await agentsCards(team) : team ? '' : await noAdminCard()}
       ${team ? await teamCards() : ''}
-      ${can('devices.manage') && !team ? html`<div class="card"><h2>Cette tablette</h2>${kv([['Tablette', `${session.device.name} — n° ${session.device.number}`], ['Identifiant', session.device.id]])}<p class="note">Tablette perdue ou volée : ses données restent protégées par le chiffrement et les mots de passe des agents.</p></div>` : ''}
+      ${can('devices.manage') && !team ? html`<div class="card" id="thisTablet"><h2>Cette tablette</h2>${kv([['Tablette', `${session.device.name} — n° ${session.device.number}`], ['Identifiant', session.device.id]])}
+        <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="device-rename">Renommer la tablette</button><button class="btn ghost" data-act="device-number">Changer le n°</button></div>
+        <p class="note">Le n° (1 à 99) doit être différent sur chaque tablette : il garantit des numéros d’audit uniques. Tablette perdue ou volée : ses données restent protégées par le chiffrement et les mots de passe des agents ; changez alors le mot de passe d’échange sur les autres tablettes.</p></div>
+      <div class="card" id="xchAdmin"><h2>Échanges entre tablettes</h2>${kv([
+        ['Mot de passe d’échange', xpw ? `défini le ${fmtDateTime(xpw.setAt)}${xpw.setByName ? ' par ' + xpw.setByName : ''}` : html`${badge('non défini', 'nc')} — nécessaire pour envoyer et recevoir`],
+        ['Autres tablettes', devices.filter(d => !d.self).map(d => `${d.name || 'Tablette'}${d.number ? ' (n° ' + d.number + ')' : ''}${d.seenAt ? ' — dernier fichier reçu le ' + fmtDateTime(d.seenAt) : ''}`).join(' ; ') || 'aucune (connue à la réception de son premier fichier)']])}
+        <div class="btn-row" style="margin-top:10px">${can('settings.manage') ? html`<button class="btn ${xpw ? 'ghost' : 'primary'}" data-act="xch-password">${xpw ? 'Changer le mot de passe d’échange' : 'Définir le mot de passe d’échange'}</button>` : ''}<a class="btn ghost" href="#/synchronisation">Envoyer ou recevoir un fichier</a></div>
+        <p class="note">Le même mot de passe d’échange sur toutes les tablettes de l’équipe : il chiffre les fichiers (Quick Share, Bluetooth, e-mail, Teams, clé USB). Un changement de profil ou de statut d’un agent reçu dans un fichier n’est appliqué d’office que si le fichier a été envoyé par un administrateur de cette tablette ; sinon il attend votre validation (ci-dessus).</p></div>` : ''}
       ${can('settings.manage') ? html`<div class="card"><h2>Paramètres de l’organisation</h2><form id="setf"><div class="grid2">${SETTINGS.map(([key, l, t]) => field(l, html`<input name="${key}" type="${t === 'number' ? 'number' : 'text'}" value="${org[key] ?? ''}">`))}</div>
         <button class="btn primary" type="button" data-act="save-settings">Enregistrer les paramètres</button></form></div>` : ''}
       <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
@@ -190,6 +221,35 @@ export default {
       ${can('settings.manage') ? html`<div class="card" style="border-color:var(--nc)"><h2>Zone sensible</h2><p class="note">Efface toutes les données de cet appareil (base chiffrée, comptes locaux, cartes). Les données non synchronisées ou non exportées seront perdues.</p><button class="btn danger" data-act="wipe">Effacer les données de cet appareil</button></div>` : ''}`;
   },
   handlers: {
+    /* Échanges entre tablettes : mot de passe d'échange, changements de profils reçus, nom et n° de la tablette. */
+    async 'xch-password'() { if (await passwordDialog()) this.refresh(); },
+    async 'held-accept'(el) {
+      try { await acceptHeld(el.dataset.id); toast('Changement de profil appliqué', 'ok'); } catch (e) { toast(e.message, 'err', 6000); }
+      this.refresh();
+    },
+    async 'held-refuse'(el) {
+      if (!(await confirmDialog({ title: 'Refuser le changement', message: 'Le profil garde sa valeur actuelle sur cette tablette (l’autre tablette n’est pas modifiée). Continuer ?', okLabel: 'Refuser' }))) return;
+      try { await refuseHeld(el.dataset.id); toast('Changement refusé', 'ok'); } catch (e) { toast(e.message, 'err'); }
+      this.refresh();
+    },
+    async 'device-rename'() {
+      const n = await promptDialog({ title: 'Nom de la tablette', label: 'Nom (ex. « Tablette 2 »)', value: session.device.name, multiline: false, voice: false });
+      if (!n) return;
+      await updateDevice({ name: n.trim() });
+      await store.log('device-rename', { entityLabel: n.trim() });
+      toast('Tablette renommée', 'ok'); this.refresh();
+    },
+    async 'device-number'() {
+      const others = (await knownDevices()).filter(d => !d.self && d.number);
+      const v = await promptDialog({ title: 'N° de la tablette', label: 'N° (1 à 99)', value: String(session.device.number), multiline: false, voice: false, hint: others.length ? `Déjà utilisés : ${others.map(d => `${d.number} (${d.name})`).join(', ')}.` : 'Différent sur chaque tablette.' });
+      if (!v) return;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 99) { toast('N° invalide : un nombre de 1 à 99.', 'err'); return; }
+      if (others.some(d => Number(d.number) === n)) { toast(`Le n° ${n} est déjà celui d’une autre tablette.`, 'err'); return; }
+      await updateDevice({ number: n });
+      await store.log('device-rename', { entityLabel: `${session.device.name} — n° ${n}` });
+      toast(`N° de la tablette : ${n}`, 'ok'); this.refresh();
+    },
     /** « Ajouter un agent » : NOUVEAU profil et entrée du trousseau de cette tablette (mot de passe saisi par l'agent). */
     async 'user-new'() {
       const team = isTeamMode();
@@ -303,8 +363,9 @@ export const accountView = {
   nav: 'compte', title: 'Mon compte',
   async render() {
     return html`${pageTitle('Mon compte', `${session.user.name} — ${ROLES[session.user.role]}`)}
-      <div class="card"><h2>Session</h2>${kv([['Nom', session.user.name], ['Identifiant', session.user.username], ['Profil', ROLES[session.user.role]], ['Session ouverte le', fmtDateTime(session.unlockedAt)], ['Appareil', `${session.device.name} (n° ${session.device.number})`], ['Mode', isTeamMode() ? `Équipe — dépôt GitHub ${teamLabel()}${session.githubLogin ? ' (@' + session.githubLogin + ')' : ''}` : 'Autonome'], ['Version de l’application', `${self.AUDIT_VERSION} (${self.AUDIT_BUILD_DATE})`]])}
-        <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="password">Changer mon mot de passe</button><button class="btn ghost" data-act="rename">Renommer l’appareil</button><button class="btn ghost" data-act="update">Rechercher une mise à jour</button></div></div>
+      <div class="card"><h2>Session</h2>${kv([['Nom', session.user.name], ['Identifiant', session.user.username], ['Profil', ROLES[session.user.role]], ['Session ouverte le', fmtDateTime(session.unlockedAt)], ['Tablette', `${session.device.name} (n° ${session.device.number})`], ['Mode', isTeamMode() ? `Équipe — dépôt GitHub ${teamLabel()}${session.githubLogin ? ' (@' + session.githubLogin + ')' : ''}` : 'Autonome'], ['Version de l’application', `${self.AUDIT_VERSION} (${self.AUDIT_BUILD_DATE})`]])}
+        <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="password">Changer mon mot de passe sur cette tablette</button>${can('devices.manage') ? html`<button class="btn ghost" data-act="rename">Renommer la tablette</button>` : ''}<button class="btn ghost" data-act="update">Rechercher une mise à jour</button><button class="btn ghost" data-act="switch-agent">Changer d’agent</button></div>
+        <p class="note">Votre mot de passe est propre à chaque tablette : s’il est le même sur l’autre tablette, changez-le aussi là-bas. Ne le communiquez pas à vos collègues : avant de passer la tablette, « Changer d’agent ».</p></div>
       <div class="card"><h2>Affichage terrain</h2>
         <label class="check ${pref('sun') ? 'sel' : ''}"><input type="checkbox" data-change="sun" ${pref('sun') ? 'checked' : ''}> Mode « plein soleil » (contraste renforcé, texte agrandi)</label>
         <p class="note">Boutons larges utilisables avec des gants, navigation principale en bas d’écran, saisie vocale et lecture de QR codes lorsque l’appareil les propose.</p></div>`;
@@ -318,7 +379,9 @@ export const accountView = {
       try { await changePassword(v.old, v.n1); toast('Mot de passe changé', 'ok'); }
       catch (e) { toast(e.message, 'err'); }
     },
-    async rename() { const n = await promptDialog({ title: 'Nom de l’appareil', label: 'Nom', value: session.device.name, multiline: false, voice: false }); if (n) { await updateDevice({ name: n }); toast('Appareil renommé', 'ok'); this.refresh(); } },
+    async rename() { if (!can('devices.manage')) return; const n = await promptDialog({ title: 'Nom de la tablette', label: 'Nom', value: session.device.name, multiline: false, voice: false }); if (n) { await updateDevice({ name: n }); toast('Tablette renommée', 'ok'); this.refresh(); } },
+    /** « Changer d'agent » : comme le bouton de l'en-tête (saisie enregistrée, écran « Qui utilise la tablette ? »). */
+    'switch-agent'() { window.AuditApp?.lockApp('changement d’agent'); },
     async update() {
       const reg = await navigator.serviceWorker?.getRegistration();
       if (!reg) { toast('Mise à jour automatique indisponible sur ce navigateur.', 'warn'); return; }

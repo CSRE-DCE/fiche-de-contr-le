@@ -142,7 +142,9 @@ export function openModal(opts) {
   document.addEventListener('keydown', onKey);
   if (opts.dismissable !== false) back.addEventListener('click', e => { if (e.target === back) api.close(undefined); });
   opts.onMount?.(dialog, api);
-  setTimeout(() => (dialog.querySelector('[autofocus]') || dialog.querySelector('input,select,textarea'))?.focus?.(), 50);
+  // Premier champ activé, sauf si l'utilisateur a déjà choisi un champ de la fenêtre (saisie rapide : jamais de texte
+  // tapé dans un autre champ que celui touché).
+  setTimeout(() => { if (!dialog.contains(document.activeElement)) (dialog.querySelector('[autofocus]') || dialog.querySelector('input,select,textarea'))?.focus?.(); }, 50);
   return api;
 }
 

@@ -17,6 +17,7 @@ import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
 import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
+import { agentInitials } from '../domain/permissions.js';
 import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
 import { getPosition } from '../ui/gps.js';
 import { pref } from '../app/settings.js';
@@ -128,9 +129,9 @@ function controllersHTML(d) {
   const ids = new Set([me, ...(d.controllerIds || [])]);
   return html`<div class="checks an-ctrls">${agents.map(u => {
       const on = ids.has(u.id), mine = u.id === me;
-      return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${u.id}" data-change="setCtrl" ${on ? 'checked' : ''} ${mine ? 'disabled' : ''}> ${icon('user', { size: 20 })} ${u.name}${mine ? html` <small class="muted">(vous)</small>` : html` <small class="muted">${ROLES[u.role] || u.role}${tabletIds.size && !tabletIds.has(u.id) ? ' · autre tablette' : ''}</small>`}</label>`;
+      return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${u.id}" data-change="setCtrl" ${on ? 'checked' : ''} ${mine ? 'disabled' : ''}><span class="an-ctrl-av">${agentInitials(u)}</span><span class="an-ctrl-txt"><b>${u.name}</b><small>${mine ? 'vous' : `${ROLES[u.role] || u.role}${tabletIds.size && !tabletIds.has(u.id) ? ' · autre tablette' : ''}`}</small></span></label>`;
     })}</div>
-    <p class="note">${agents.length > 1 ? 'Cochez le ou les collègues qui contrôlent avec vous : chacun pourra saisir dans la tournée en se connectant sur la tablette (« Changer d’agent »), et chaque saisie reste attribuée à son auteur.' : html`Vous êtes le seul agent connu sur cet appareil. Les collègues s’ajoutent dans <a href="#/administration">Administration › Agents de cette tablette</a> ; ils pourront aussi « Rejoindre la tournée » plus tard.`}</p>`;
+    <p class="note">${agents.length > 1 ? 'Cochez le ou les collègues qui contrôlent avec vous : chacun pourra saisir dans la tournée en se connectant sur la tablette (« Changer d’agent »), et chaque saisie reste attribuée à son auteur.' : html`Vous êtes le seul agent connu sur cette tablette. Les collègues s’ajoutent dans <a href="#/administration">Administration › Agents de cette tablette</a> ; ils pourront aussi « Rejoindre la tournée » plus tard.`}</p>`;
 }
 
 /* ---------- Écran de création de tournée ---------- */

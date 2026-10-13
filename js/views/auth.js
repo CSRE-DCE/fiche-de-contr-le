@@ -1,13 +1,21 @@
-/* Écrans hors session : première configuration de la tablette (mode autonome, celui de l'OEG : données chiffrées
- * sur la tablette, un compte par agent, échanges entre tablettes par fichier ; option avancée repliée « Rejoindre
- * une équipe » par un dépôt GitHub privé de données — nécessite un jeton GitHub, non utilisée à l'OEG),
- * ouverture de session « Qui utilise la tablette ? » (tuiles des agents de la tablette, aide si un agent n'y
- * figure pas), messages. */
-import { html } from '../core/util.js';
+/* Écrans hors session : mise en service de la tablette (mode autonome, celui de l'OEG : données chiffrées sur la
+ * tablette, un compte par agent, échanges entre tablettes par fichier), ouverture de session « Qui utilise la
+ * tablette ? » (tuiles des agents de la tablette, aide si un agent n'y figure pas), messages.
+ * Mise en service, deux choix :
+ *  - « Première tablette de l'équipe » : compte de l'administrateur saisi comme « Ajouter un agent » (nom, prénom,
+ *    initiales et identifiant proposés), mot de passe d'échange de l'équipe, référentiel ; il ajoute ensuite les agents ;
+ *  - « Tablette supplémentaire : recevoir le fichier de l'autre tablette » : fichier d'échange et mot de passe
+ *    d'échange, aperçu, nom et n° de la tablette (n° libre proposé), « Qui êtes-vous ? » parmi les agents reçus
+ *    (même identifiant de profil sur les deux tablettes : aucun profil en double) et son mot de passe ; toutes
+ *    les données du fichier sont reçues (js/app/exchange.js : setupFromExchange).
+ * Option avancée repliée « Rejoindre une équipe » par un dépôt GitHub privé de données — nécessite un jeton GitHub,
+ * non utilisée à l'OEG. */
+import { html, fmtDateTime } from '../core/util.js';
 import { session } from '../core/session.js';
 import * as auth from '../core/auth.js';
-import { agentInitials } from '../domain/permissions.js';
+import { agentInitials, suggestUsername } from '../domain/permissions.js';
 import { bindActions, toast, formValues } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import { seedAll } from '../app/bootstrap.js';
 import { saveOrgSettings } from '../app/settings.js';
 import { parseRepoSpec } from '../app/github.js';
@@ -62,36 +70,98 @@ function profilesChoice(p, chosen) {
       <label class="check ${chosen ? '' : 'sel'}"><input type="radio" name="profileId" value="" data-change="pick-profile" ${chosen ? '' : 'checked'}><span>Créer un nouveau compte</span></label></div></div>`;
 }
 
+/** Aperçu du fichier reçu à la mise en service d'une tablette supplémentaire. */
+function extraPreview(pv) {
+  const tours = pv.tours.slice(0, 6);
+  return html`<div class="banner ok" id="extraPreview">Fichier de <b>${pv.from.name || 'l’autre tablette'}</b>${pv.from.number ? ` (n° ${pv.from.number})` : ''}, envoyé par ${pv.sentBy.name || '—'}${pv.createdAt ? ' le ' + fmtDateTime(pv.createdAt) : ''} : ${pv.label || 'aucun élément'}.</div>
+    ${pv.scope !== 'all' && !(pv.counts.byType?.grid && pv.counts.byType?.site) ? html`<div class="banner warn" id="extraPartial">Ce fichier ne contient que les dernières modifications de l’autre tablette (ni grille ni stations) : pour une mise en service, demandez-lui « Tout envoyer ».</div>` : ''}
+    ${pv.tours.length ? html`<p class="note">Tournées : ${tours.map(t => t.number).join(', ')}${pv.tours.length > tours.length ? '…' : ''}</p>` : ''}`;
+}
+
 export function renderSetup(root, { onDone }) {
-  let mode = 'standalone';
+  // 'choice' (deux choix), 'standalone' (première tablette), 'extra' (tablette supplémentaire), 'team' (option avancée).
+  let mode = 'choice';
   let probe = null, probeKey = '', profileId = '';
-  const draw = () => {
-    root.innerHTML = String(html`<div class="auth"><div class="auth-card">
-      <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
-      <h1>Configuration de la tablette</h1>
-      <p class="sub">Fiches de contrôle terrain — première utilisation sur cette tablette.</p>
-      ${mode === 'standalone' ? html`<form data-submit="standalone" autocomplete="off">
+  let manualIni = false, manualUser = false;   // initiales / identifiant modifiés à la main : plus de proposition
+  const extra = { file: null, rx: null, pv: null, profileId: '' };   // tablette supplémentaire : fichier ouvert, agent choisi
+  const back = html`<button type="button" class="btn ghost sm" data-act="mode" data-value="choice" style="margin-bottom:10px">← Revenir au choix de mise en service</button>`;
+  const choice = () => html`<div class="setup-choices" id="setupChoice" role="group" aria-label="Mise en service">
+      <button type="button" class="setup-choice" data-act="mode" data-value="standalone" id="setupFirst"><span class="setup-choice-ic">${icon('station', { size: 30 })}</span>
+        <span><b>Première tablette de l’équipe</b><span class="setup-choice-sub">L’administrateur crée son compte et le mot de passe d’échange, puis ajoute les agents. Les autres tablettes recevront ensuite ses données par fichier.</span></span></button>
+      <button type="button" class="setup-choice" data-act="mode" data-value="extra" id="setupExtra"><span class="setup-choice-ic">${icon('download', { size: 30 })}</span>
+        <span><b>Tablette supplémentaire : recevoir le fichier de l’autre tablette</b><span class="setup-choice-sub">Sur la première tablette : Échanges entre tablettes › « Tout envoyer ». Ici : choisir ce fichier, saisir le mot de passe d’échange, puis « Qui êtes-vous ? ».</span></span></button>
+    </div>
+    <details class="setup-adv" id="setupAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
+      <p class="note">Synchronisation par un dépôt GitHub privé de données. L’OEG ne l’utilise pas : les tablettes échangent leurs données par fichier.</p>
+      <button type="button" class="btn ghost" data-act="mode" data-value="team">Rejoindre une équipe (dépôt GitHub privé)</button></details>`;
+  const first = () => html`${back}<form data-submit="standalone" autocomplete="off">
         <div class="banner info">Les données restent chiffrées sur cette tablette, sans connexion nécessaire. Chaque agent y aura son compte et son mot de passe (Administration › Agents de cette tablette) ; les échanges avec l’autre tablette se font par fichier.</div>
         <div class="field"><label>Organisme</label><input name="orgName" value="Office de l’Eau de Guyane" required></div>
         <div class="grid2">
-          <div class="field"><label>Nom de la tablette</label><input name="deviceName" value="${auth.defaultDeviceName()}" required placeholder="ex. Tablette 1"></div>
+          <div class="field"><label>Nom de la tablette</label><input name="deviceName" value="Tablette 1" required placeholder="ex. Tablette 1"></div>
           <div class="field"><label>N° de la tablette (1 à 99)</label><input name="deviceNumber" type="number" min="1" max="99" value="1" required><div class="hint">Différent sur chaque tablette (1, 2…) : garantit des numéros d’audit uniques.</div></div>
         </div>
         <h3>Votre compte (administrateur de la tablette)</h3>
-        <div class="field"><label>Nom et prénom</label><input name="name" required autocomplete="name"></div>
         <div class="grid2">
-          <div class="field"><label>Identifiant</label><input name="username" required autocapitalize="none" autocomplete="username"></div>
+          <div class="field"><label>Nom</label><input name="lastName" required autocomplete="family-name" autocapitalize="words" data-input="setup-name"></div>
+          <div class="field"><label>Prénom</label><input name="firstName" required autocomplete="given-name" autocapitalize="words" data-input="setup-name"></div>
+          <div class="field"><label>Initiales</label><input name="initials" required maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" data-input="setup-ini"><div class="hint">Affichées sur l’écran « Qui utilise la tablette ? ».</div></div>
+          <div class="field"><label>Identifiant</label><input name="username" required autocapitalize="none" autocomplete="username" spellcheck="false" data-input="setup-user"><div class="hint">Proposé à partir du prénom et du nom ; le même sur toutes les tablettes.</div></div>
           <div class="field"><label>Mot de passe (8 caractères min.)</label><input name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+          <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"></div>
         </div>
-        <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"></div>
+        <h3>Mot de passe d’échange de l’équipe</h3>
+        <p class="note">Il chiffre les fichiers échangés avec l’autre tablette (Quick Share, Bluetooth, e-mail, Teams, clé USB). Le même sur toutes les tablettes : il sera saisi une seule fois, à la mise en service de la tablette supplémentaire ; ensuite, envoyer et recevoir ne demandent plus rien. Différent de votre mot de passe ; communiquez-le de vive voix.</p>
+        <div class="grid2">
+          <div class="field"><label>Mot de passe d’échange (10 caractères min.)</label><input name="exchangePassword" type="password" required minlength="10" autocomplete="new-password"></div>
+          <div class="field"><label>Confirmer le mot de passe d’échange</label><input name="exchangePassword2" type="password" required autocomplete="new-password"></div>
+        </div>
+        <p class="note" id="setupSecond">Une tablette de l’équipe est déjà en service ? Revenez au choix précédent : « Tablette supplémentaire : recevoir le fichier de l’autre tablette » (aucun profil en double).</p>
         <label class="check sel"><input type="checkbox" name="oeg" checked> Reprendre le référentiel des fiches terrain OEG (stations, organismes, préleveurs, campagnes)</label>
         <label class="check" style="margin-top:8px"><input type="checkbox" name="demo"> Ajouter des données de démonstration fictives (prestataire « DÉMO », 3 prestations, documents « EXEMPLE »)</label>
         <p class="hint" id="setupErr" style="color:var(--nc)"></p>
         <button class="btn primary lg block" type="submit" id="setupBtn">Créer et ouvrir la session</button>
-      </form>
-      <details class="setup-adv" id="setupAdvanced"><summary>Option avancée : mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG</summary>
-        <p class="note">Synchronisation par un dépôt GitHub privé de données. L’OEG ne l’utilise pas : les tablettes échangent leurs données par fichier.</p>
-        <button type="button" class="btn ghost" data-act="mode" data-value="team">Rejoindre une équipe (dépôt GitHub privé)</button></details>` : html`<button type="button" class="btn ghost sm" data-act="mode" data-value="standalone" style="margin-bottom:10px">← Revenir au mode autonome (celui de l’OEG)</button>
+      </form>`;
+  const extraForm = () => {
+    if (!extra.rx) {
+      return html`${back}<form data-submit="extra-open" id="extraOpenForm" autocomplete="off">
+        <div class="banner info">Sur la première tablette : Échanges entre tablettes › <b>« Tout envoyer »</b>, puis faites passer le fichier sur cette tablette (Quick Share, Bluetooth, e-mail, Teams, clé USB).</div>
+        <div class="field"><label>Fichier d’échange (OEG-echange_….oegct)</label>
+          <label class="btn ghost block" id="extraPick">${icon('download')}Choisir le fichier<input type="file" id="extraFile" hidden data-change="extra-file"></label>
+          <div class="hint" id="extraFileName">${extra.file ? extra.file.name : 'Aucun fichier choisi (dossier Téléchargements après Quick Share, Bluetooth ou e-mail)'}</div></div>
+        <div class="field"><label>Mot de passe d’échange de l’équipe</label><input name="exchangePassword" type="password" required autocomplete="off"><div class="hint">Celui défini sur la première tablette ; il sera enregistré sur cette tablette.</div></div>
+        <p class="hint" id="extraErr" style="color:var(--nc)"></p>
+        <button class="btn primary lg block" type="submit" id="extraOpen">Ouvrir le fichier</button>
+      </form>`;
+    }
+    const agents = extra.agents;
+    const number = extra.number;
+    return html`${back}${extraPreview(extra.pv)}
+      <form data-submit="extra" id="extraForm" autocomplete="off">
+        <div class="grid2">
+          <div class="field"><label>Nom de la tablette</label><input name="deviceName" value="Tablette ${number}" required></div>
+          <div class="field"><label>N° de la tablette (1 à 99)</label><input name="deviceNumber" type="number" min="1" max="99" value="${number}" required><div class="hint">Différent de celui des autres tablettes (${extra.pv.from.name || 'autre tablette'} : n° ${extra.pv.from.number || '?'}).</div></div>
+        </div>
+        <h3>Qui êtes-vous ?</h3>
+        <p class="note">Touchez votre nom : vous gardez le MÊME profil que sur l’autre tablette (tournées, saisies, journal). Les autres agents s’ajoutent ensuite : Administration › Agents pas encore sur cette tablette › « Ajouter sur cette tablette » — par un administrateur (si vous n’en êtes pas un, un administrateur s’ajoute d’abord lui-même sur cette tablette).</p>
+        ${agents.length ? html`<div class="user-tiles" role="group" aria-label="Agents reçus">${agents.map(u => html`<button type="button" class="user-tile ${u.id === extra.profileId ? 'sel' : ''}" data-act="extra-pick" data-id="${u.id}" data-u="${u.username}" aria-pressed="${u.id === extra.profileId}">
+            <span class="avatar">${agentInitials(u)}</span><span><b>${u.name}</b><br><span class="tiny muted">${auth.ROLES[u.role] || u.role} · ${u.username}</span></span></button>`)}</div>`
+          : html`<div class="banner nc">Aucun agent actif dans ce fichier : demandez à l’autre tablette de « Tout envoyer ».</div>`}
+        <div class="grid2">
+          <div class="field"><label>Votre mot de passe sur cette tablette (8 caractères min.)</label><input name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+          <div class="field"><label>Confirmer le mot de passe</label><input name="password2" type="password" required autocomplete="new-password"></div>
+        </div>
+        <p class="hint">Il peut être le même que sur l’autre tablette ; il ouvre votre session ici, hors connexion.</p>
+        <p class="hint" id="setupErr" style="color:var(--nc)"></p>
+        <button class="btn primary lg block" type="submit" id="extraBtn" ${agents.length ? '' : 'disabled'}>Mettre en service la tablette</button>
+      </form>`;
+  };
+  const draw = () => {
+    root.innerHTML = String(html`<div class="auth"><div class="auth-card">
+      <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
+      <h1>Mise en service de la tablette</h1>
+      <p class="sub">Fiches de contrôle terrain — première utilisation sur cette tablette.</p>
+      ${mode === 'choice' ? choice() : mode === 'standalone' ? first() : mode === 'extra' ? extraForm() : html`<button type="button" class="btn ghost sm" data-act="mode" data-value="choice" style="margin-bottom:10px">← Revenir au mode autonome (celui de l’OEG)</button>
       <form data-submit="team" autocomplete="off" id="teamForm">
         <div class="banner warn">Mode équipe GitHub — nécessite un jeton GitHub — non utilisé à l’OEG.</div>
         <div class="banner info">Les données de l’équipe sont partagées par un dépôt GitHub <b>privé</b>, lu et écrit directement depuis cette tablette avec <b>le jeton d’accès de la tablette</b>, créé par l’administrateur (aucun serveur ; les agents n’ont pas besoin de compte GitHub). Sur la tablette, les données restent chiffrées et la session s’ouvre ensuite hors connexion.</div>
@@ -165,20 +235,88 @@ export function renderSetup(root, { onDone }) {
   }
   draw();
   bind(root, {
-    mode(el) { mode = el.dataset.value; probe = null; probeKey = ''; profileId = ''; draw(); },
+    mode(el) {
+      mode = el.dataset.value; probe = null; probeKey = ''; profileId = ''; manualIni = manualUser = false;
+      if (mode === 'choice') Object.assign(extra, { file: null, rx: null, pv: null, profileId: '' });
+      draw();
+    },
+    /** Nom ou prénom saisi : initiales et identifiant proposés (tant qu'ils n'ont pas été modifiés à la main). */
+    'setup-name'(el) {
+      const f = el.closest('form'), fn = f.querySelector('[name=firstName]').value, ln = f.querySelector('[name=lastName]').value;
+      if (!manualIni) f.querySelector('[name=initials]').value = fn || ln ? agentInitials({ firstName: fn, lastName: ln }) : '';
+      if (!manualUser) f.querySelector('[name=username]').value = suggestUsername(fn, ln);
+    },
+    'setup-ini'(el) { manualIni = !!el.value; },
+    'setup-user'(el) { manualUser = !!el.value; },
     'pick-profile'(el) { profileId = el.value || ''; applyProfile(el.closest('form')); },
     async standalone(form) {
       const v = formValues(form), err = form.querySelector('#setupErr'), btn = form.querySelector('#setupBtn');
       err.textContent = '';
       if (v.password !== v.password2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
-      btn.disabled = true; btn.textContent = 'Préparation de l’appareil…';
+      const { validateExchangePassword, setExchangePassword } = await import('../app/exchange.js');
+      try { validateExchangePassword(v.exchangePassword); } catch (e) { err.textContent = e.message; return; }
+      if (v.exchangePassword !== v.exchangePassword2) { err.textContent = 'Les deux mots de passe d’échange ne correspondent pas.'; return; }
+      btn.disabled = true; btn.textContent = 'Préparation de la tablette…';
       try {
-        await auth.setupStandalone({ deviceName: v.deviceName, deviceNumber: v.deviceNumber, admin: { name: v.name, username: v.username, password: v.password } });
+        await auth.setupStandalone({ deviceName: v.deviceName, deviceNumber: v.deviceNumber, admin: { firstName: v.firstName, lastName: v.lastName, initials: v.initials, username: v.username, password: v.password } });
         await seedAll({ oeg: !!v.oeg, demo: !!v.demo });
         await saveOrgSettings({ orgName: v.orgName }, 'Configuration initiale');
-        toast('Appareil configuré ✓', 'ok');
+        await setExchangePassword(v.exchangePassword, { reason: 'Mise en service de la première tablette' });
+        toast('Tablette mise en service ✓ — ajoutez maintenant les agents (Administration)', 'ok', 5000);
         onDone({ password: v.password });
       } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Créer et ouvrir la session'; }
+    },
+    /* ---------- Tablette supplémentaire ---------- */
+    'extra-file'(el) {
+      extra.file = el.files[0] || null;
+      const n = root.querySelector('#extraFileName'); if (n) n.textContent = extra.file ? extra.file.name : 'Aucun fichier choisi';
+      root.querySelector('#extraErr').textContent = '';
+    },
+    async 'extra-open'(form) {
+      const err = form.querySelector('#extraErr'), btn = form.querySelector('#extraOpen'), pw = formValues(form).exchangePassword;
+      err.textContent = '';
+      if (!extra.file) { err.textContent = 'Choisissez d’abord le fichier envoyé par l’autre tablette.'; return; }
+      btn.disabled = true; btn.textContent = 'Ouverture du fichier…';
+      try {
+        const X = await import('../app/exchange.js');
+        const rx = await X.readExchange(extra.file, { password: pw, knownPassword: null });
+        if (rx.legacy) throw new Error('Ancien paquet de données : pour une mise en service, choisissez le fichier d’échange « OEG-echange_….oegct » (sur la première tablette : Échanges entre tablettes › « Tout envoyer »).');
+        extra.rx = rx; extra.pv = await X.previewExchange(rx);
+        extra.agents = X.setupProfiles(rx);
+        extra.number = X.proposedDeviceNumber(rx);
+        extra.profileId = extra.agents.length === 1 ? extra.agents[0].id : '';
+        draw();
+      } catch (e) {
+        err.textContent = e.code === 'password' ? 'Mot de passe d’échange incorrect pour ce fichier : vérifiez-le auprès de l’administrateur (le même que sur la première tablette).' : e.message;
+        btn.disabled = false; btn.textContent = 'Ouvrir le fichier';
+      }
+    },
+    'extra-pick'(el) {
+      extra.profileId = el.dataset.id;
+      root.querySelectorAll('[data-act=extra-pick]').forEach(t => { t.classList.toggle('sel', t === el); t.setAttribute('aria-pressed', String(t === el)); });
+      root.querySelector('#setupErr').textContent = '';
+      root.querySelector('#extraForm [name=password]')?.focus();
+    },
+    async extra(form) {
+      const v = formValues(form), err = form.querySelector('#setupErr'), btn = form.querySelector('#extraBtn');
+      err.textContent = '';
+      if (!extra.profileId) { err.textContent = 'Touchez d’abord votre nom (« Qui êtes-vous ? »).'; return; }
+      if (v.password !== v.password2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+      btn.disabled = true; btn.textContent = 'Mise en service et réception des données…';
+      try {
+        const X = await import('../app/exchange.js');
+        const report = await X.setupFromExchange(extra.rx, { deviceName: v.deviceName, deviceNumber: v.deviceNumber, profileId: extra.profileId, password: v.password });
+        const admin = auth.can('users.manage');
+        toast(`Tablette mise en service ✓ — ${X.receiveSummary(report)}. ${admin ? 'Ajoutez maintenant les autres agents (Administration).' : 'Un administrateur doit maintenant s’ajouter sur cette tablette (Administration) pour y ajouter les autres agents.'}`, 'ok', 8000);
+        // Étape suivante : administrateur → ajouter les agents (« Agents pas encore sur cette tablette ») ; agent → accueil.
+        history.replaceState(null, '', admin ? '#/administration' : '#/');
+        onDone({ password: v.password });
+      } catch (e) {
+        console.error(e);
+        // Tablette déjà créée (session ouverte) mais réception interrompue : on entre, « Recevoir un fichier » reste possible.
+        if (session.unlocked) { toast('Tablette mise en service, mais réception interrompue : ' + e.message + ' (Échanges entre tablettes › Recevoir un fichier)', 'err', 9000); history.replaceState(null, '', '#/synchronisation'); onDone({ password: v.password }); return; }
+        err.textContent = e.message; btn.disabled = false; btn.textContent = 'Mettre en service la tablette';
+      }
     },
     async 'team-check'(el) {
       const form = el.closest('form');

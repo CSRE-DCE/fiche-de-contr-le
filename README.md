@@ -4,12 +4,12 @@ Application web de l’Office de l’Eau de Guyane (OEG) pour **contrôler sur l
 
 **Adresse de l’application :** <https://csre-dce.github.io/fiche-de-contr-le/>
 
-> Ce dépôt est **public** : il contient uniquement l’application. Les données de contrôle (audits, photos, signatures) restent chiffrées sur les appareils et, en mode équipe, dans un **dépôt GitHub privé distinct** (voir [Synchroniser plusieurs appareils](#synchroniser-plusieurs-appareils-avec-un-dépôt-github-privé)). N’ajoutez jamais de données ni de jeton d’accès dans ce dépôt.
+> Ce dépôt est **public** : il contient uniquement l’application. Les données de contrôle (audits, photos, signatures) restent **chiffrées sur les tablettes** et passent d’une tablette à l’autre **par fichier** (voir [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents)). N’ajoutez jamais de données dans ce dépôt.
 
 Documents complémentaires :
 
-- [docs/GUIDE-GITHUB.md](docs/GUIDE-GITHUB.md) : guide pas à pas de GitHub pour débutant (ajouter des fichiers, GitHub Desktop, VS Code, GitHub Pages, dépôt privé de données, jetons) ;
-- [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) : architecture et règles de développement (pour les personnes qui modifient le code) ;
+- [docs/GUIDE-GITHUB.md](docs/GUIDE-GITHUB.md) : guide pas à pas de GitHub pour débutant (publier l’application, ajouter des fichiers, GitHub Desktop, VS Code, archiver des rapports dans le dépôt privé) ;
+- [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) : architecture, format du fichier d’échange entre tablettes et règles de développement (pour les personnes qui modifient le code) ; en annexe technique, la synchronisation par GitHub, non utilisée à l’OEG ;
 - [docs/charte.html](docs/charte.html) : charte graphique « vivante » (composants réels de l’application) ; [docs/maquettes/](docs/maquettes/) : maquettes des 9 feuilles d’origine.
 
 ## Sommaire
@@ -17,15 +17,14 @@ Documents complémentaires :
 1. [Présentation](#présentation)
 2. [Fonctionnalités](#fonctionnalités)
 3. [Utiliser l’application](#utiliser-lapplication)
-4. [Publier le site avec GitHub Pages](#publier-le-site-avec-github-pages)
-5. [Travailler sans Node : VS Code ou Python](#travailler-sans-node--vs-code-ou-python)
-6. [Ajouter ou modifier des fichiers sur GitHub](#ajouter-ou-modifier-des-fichiers-sur-github)
-7. [Synchroniser plusieurs appareils avec un dépôt GitHub privé](#synchroniser-plusieurs-appareils-avec-un-dépôt-github-privé)
-8. [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents)
-9. [Mettre à jour l’application](#mettre-à-jour-lapplication)
-10. [Tests](#tests)
-11. [Structure du dépôt](#structure-du-dépôt)
-12. [Licences et sources](#licences-et-sources)
+4. [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents) : mise en service, au quotidien, échanges par fichier, conflits, tablette perdue
+5. [Publier le site avec GitHub Pages](#publier-le-site-avec-github-pages)
+6. [Travailler sans Node : VS Code ou Python](#travailler-sans-node--vs-code-ou-python)
+7. [Ajouter ou modifier des fichiers sur GitHub](#ajouter-ou-modifier-des-fichiers-sur-github)
+8. [Mettre à jour l’application](#mettre-à-jour-lapplication)
+9. [Tests](#tests)
+10. [Structure du dépôt](#structure-du-dépôt)
+11. [Licences et sources](#licences-et-sources)
 
 ---
 
@@ -112,43 +111,27 @@ En hydrobiologie, les feuilles F4 à F9 ne s’affichent que si le compartiment 
 - **Hors connexion** : toute l’application est mise en cache à la première ouverture ; le fond de carte peut être préchargé (écran Carte › « Précharger la zone affichée »).
 - **Chiffrement local** : toutes les données (y compris photos et signatures) sont chiffrées sur l’appareil (AES-GCM 256 bits), déverrouillées par le mot de passe de chaque agent de la tablette ; verrouillage automatique après 30 minutes d’inactivité (réglable).
 - **Journal d’audit** : qui a fait quoi, quand, sur quel appareil, avec l’ancienne valeur et le motif ; entrées chaînées par empreintes, bouton « Vérifier l’intégrité ».
-- **Synchronisation entre appareils** par un dépôt GitHub privé (mode équipe), ou échanges de paquets de données sans réseau (mode autonome).
+- **Échanges entre tablettes par fichier**, sans réseau, sans serveur et sans compte GitHub : « Envoyer à l’autre tablette » produit un fichier unique chiffré (`OEG-echange_….oegct`) à faire passer par Quick Share, Bluetooth, e-mail, Teams ou clé USB ; « Recevoir un fichier » le fusionne automatiquement, champ par champ, en gardant les conflits consultables.
 - Et aussi : planning des prestations (liste ou calendrier, import Excel / CSV / ICS), carte des stations, tableau de bord, historique et comparaison de tournées, observations simples et bouton « Urgence », exports Excel / CSV / ICS, gestion documentaire, bibliothèque de grilles, référentiels, mode « plein soleil » (contraste renforcé).
 
 ---
 
 ## Utiliser l’application
 
-### Première configuration d’un appareil
+### Mise en service d’une tablette
 
-1. Ouvrez <https://csre-dce.github.io/fiche-de-contr-le/> **avec une connexion** (Chrome ou Edge sur Android / Windows, Safari sur iPad / iPhone). La navigation privée est à éviter : le navigateur y efface les données.
-2. L’écran **« Configuration de l’appareil »** propose deux choix :
-   - **« Mode autonome »** — données sur cet appareil ;
-   - **« Rejoindre une équipe »** — dépôt GitHub privé (voir la section [Synchroniser plusieurs appareils](#synchroniser-plusieurs-appareils-avec-un-dépôt-github-privé)).
-3. En mode autonome, renseignez :
-   - **Organisme** (Office de l’Eau de Guyane par défaut), **Nom de l’appareil** ;
-   - **N° de l’appareil (1 à 99)** : un numéro **différent pour chaque appareil**, qui garantit des numéros d’audit uniques ;
-   - le **compte administrateur** : nom et prénom, identifiant, mot de passe (8 caractères minimum) et confirmation ;
-   - la case « Reprendre le référentiel des fiches terrain OEG » (stations, organismes, préleveurs, campagnes) : à laisser cochée ;
-   - la case « Ajouter des données de démonstration fictives » : **cochée par défaut, à décocher pour un usage réel** (elles se retirent aussi plus tard : Administration › Données et stockage › « Retirer les données de démonstration »).
-4. Cliquez sur **« Créer et ouvrir la session »**.
+1. Ouvrez <https://csre-dce.github.io/fiche-de-contr-le/> **avec une connexion** (Chrome ou Edge sur Android / Windows, Safari sur iPad / iPhone) et installez l’application sur l’écran d’accueil ([Installer l’application](#installer-lapplication-sur-une-tablette-ou-un-téléphone)). La navigation privée est à éviter : le navigateur y efface les données.
+2. L’écran **« Mise en service de la tablette »** propose **deux choix** :
+   - **« Première tablette de l’équipe »** : pour la toute première tablette ; l’administrateur y crée son compte et le mot de passe d’échange de l’équipe, puis ajoute les agents ;
+   - **« Tablette supplémentaire : recevoir le fichier de l’autre tablette »** : pour toute autre tablette ; elle reçoit tout de la première, profils des agents compris (**aucun profil en double**), et chaque agent s’y ajoute avec son propre mot de passe.
 
-> **Mot de passe** : il déverrouille la clé de chiffrement de l’appareil et **ne peut pas être récupéré**. Ajoutez au moins un second agent administrateur (Administration › Agents de cette tablette › « ＋ Nouvel agent ») ou utilisez le mode équipe, dont les données sont aussi conservées dans le dépôt privé. Un administrateur peut redonner un mot de passe à un agent qui l’a oublié (Administration › Agents de cette tablette › « Modifier »).
+   Le pas à pas complet est dans [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents). L’option avancée repliée en bas de l’écran (mode équipe GitHub) ne sert pas à l’OEG : ne l’ouvrez pas.
 
-### Mode autonome ou mode équipe ?
-
-| | Mode autonome | Mode équipe (dépôt GitHub privé) |
-|---|---|---|
-| Où sont les données ? | sur l’appareil uniquement (chiffrées) | sur l’appareil (chiffrées) et dans le dépôt privé de l’équipe |
-| Échanges entre appareils | paquets de données (Export › « Paquet de données complet (JSON) », puis « Importer un paquet ») | automatiques, dès qu’il y a du réseau |
-| Comptes et profils | agents et profils gérés sur l’appareil | agents ajoutés sur chaque tablette (même profil partout, mot de passe propre à chaque tablette) ; seul l’administrateur a besoin d’un compte GitHub |
-| Pour qui ? | un contrôleur seul, un essai | plusieurs contrôleurs ou plusieurs tablettes (par exemple [deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents)) |
-
-Un appareil autonome peut être rattaché plus tard à une équipe par son administrateur (Synchronisation › « Rejoindre une équipe (dépôt GitHub) »).
+Les données restent **chiffrées sur la tablette** ; chaque agent y a son compte et son mot de passe. Les données de démonstration fictives (case à laisser décochée pour un usage réel) se retirent aussi plus tard : Administration › Données et stockage › « Retirer les données de démonstration ».
 
 ### Déroulé d’une tournée
 
-1. **Avant de partir (avec du réseau)** : ouvrez l’application et la session ; en mode équipe, attendez la fin de la synchronisation ; préchargez le fond de carte de la zone (menu Carte › « Précharger la zone affichée ») ; imprimez si besoin les fiches vierges de secours (fiche station › « Fiches vierges (PDF) »).
+1. **Avant de partir** : ouvrez l’application et la session ; si l’autre tablette a travaillé depuis le dernier échange, recevez son fichier (« Recevoir un fichier ») ; préchargez le fond de carte de la zone (menu Carte › « Précharger la zone affichée ») ; imprimez si besoin les fiches vierges de secours (fiche station › « Fiches vierges (PDF) »).
 2. **Créer la tournée** : accueil **Stations › « Nouvelle tournée »** (ou, depuis une fiche station, « Démarrer une tournée » ; ou, depuis le Planning, cochez des prestations puis « Démarrer une tournée »). Remplissez les sept étapes :
    1. Type de tournée (Biologie, Cours d’eau, Eaux souterraines) ;
    2. Prestataire contrôlé ;
@@ -169,7 +152,121 @@ Un appareil autonome peut être rattaché plus tard à une équipe par son admin
 6. **Signatures** : vérifiez le « Contrôle avant clôture », cliquez sur « Terminer l’audit (heure de fin) », « Signer en tant que contrôleur » (n’importe quel contrôleur de la tournée), puis « Faire signer le représentant » (ou « Refus / absence de signature »), enfin **« Valider et verrouiller l’audit »**. Les boutons « Fiches de contrôle (PDF) », « Rapport d’audit détaillé (PDF) » et « Dossier de preuve (JSON + médias) » produisent les documents.
 7. **Interrompre** : onglet « Infos » › « Continuer plus tard ». La tournée se reprend depuis l’accueil (« Tournées en cours sur cette tablette ») ou la fiche station. Sur une tablette partagée, « Changer d’agent » (en-tête) laisse la tournée sur la tablette pour le collègue. Une tournée non signée peut être abandonnée (« Abandonner l’audit », avec motif).
 
-La barre de navigation donne accès aux autres écrans : Stations, Planning, Audits, Écarts, Observations, Carte, Tableau de bord, Prestataires, Historique et comparaison, Documents, Grilles d’audit, Référentiels, Import, Export, Synchronisation, Journal d’audit, Administration et Mon compte (changement de mot de passe, « Rechercher une mise à jour », mode « plein soleil »). Le bouton **« Changer d’agent »** de l’en-tête (icône seule sur téléphone ; aussi dans Menu) enregistre la saisie en cours et revient à l’écran « Qui utilise la tablette ? ».
+La barre de navigation donne accès aux autres écrans : Stations, Planning, Audits, Écarts, Observations, Carte, Tableau de bord, Prestataires, Historique et comparaison, Documents, Grilles d’audit, Référentiels, Import, Export, Échanges entre tablettes, Journal d’audit, Administration et Mon compte (changement de mot de passe, « Rechercher une mise à jour », mode « plein soleil »). Le bouton **« Changer d’agent »** de l’en-tête (icône seule sur téléphone ; aussi dans Menu) enregistre la saisie en cours et revient à l’écran « Qui utilise la tablette ? ».
+
+---
+
+## Deux tablettes pour quatre agents
+
+L’OEG dispose de **deux tablettes pour quatre agents**. Chaque agent a **sa propre session** : un compte à son nom (le **même profil** sur les deux tablettes) et **son mot de passe** sur chaque tablette où il travaille. Les tablettes ne passent ni par GitHub ni par un serveur : elles s’échangent leurs données **par fichier** (« Envoyer à l’autre tablette », puis « Recevoir un fichier » sur l’autre), même sans connexion. Aucun agent n’a besoin de compte GitHub.
+
+Deux sortes de mots de passe, à ne pas confondre :
+
+| Mot de passe | Qui le choisit ? | Où ? | À quoi sert-il ? |
+|---|---|---|---|
+| **Mot de passe de l’agent** (8 caractères minimum) | chaque agent, pour lui seul | sur chaque tablette où il travaille (il peut être le même sur les deux) | ouvrir **sa** session ; il ne se communique à personne |
+| **Mot de passe d’échange de l’équipe** (10 caractères minimum) | un administrateur | le **même sur toutes les tablettes**, saisi une seule fois sur chacune | chiffrer les fichiers échangés entre les tablettes ; ensuite, envoyer et recevoir ne le demandent plus |
+
+### Mise en service de la tablette 1 (administrateur)
+
+1. Ouvrez <https://csre-dce.github.io/fiche-de-contr-le/> **avec une connexion** et installez l’application ([Installer l’application](#installer-lapplication-sur-une-tablette-ou-un-téléphone)).
+2. Écran **« Mise en service de la tablette »** › **« Première tablette de l’équipe »**.
+3. Renseignez :
+   - **Organisme** (Office de l’Eau de Guyane), **Nom de la tablette** (« Tablette 1 ») et **N° de la tablette** : **1** (un numéro différent par tablette, pour des numéros d’audit uniques) ;
+   - **votre compte** d’administrateur : nom, prénom, initiales et identifiant (proposés : initiale du prénom + nom, par exemple `adupont`), mot de passe et confirmation ;
+   - le **mot de passe d’échange de l’équipe**, deux fois : notez-le en lieu sûr, il sera demandé pour mettre en service la tablette 2 ;
+   - laissez **cochée** « Reprendre le référentiel des fiches terrain OEG » et **décochée** « Ajouter des données de démonstration fictives ».
+4. Touchez **« Créer et ouvrir la session »**.
+5. **Ajoutez les agents, en leur présence** : Administration › Agents de cette tablette › **« ＋ Ajouter un agent »** : nom, prénom, initiales, **profil** (« Auditeur » en général) et identifiant (proposé, par exemple `bmartin`) ; **l’agent choisit et saisit lui-même son mot de passe**, deux fois, puis « Ajouter l’agent ». Recommencez pour chacun des quatre agents (l’administrateur qui a mis la tablette en service a déjà son compte) et **prévoyez un second administrateur**.
+6. Vérifiez : bouton **« Changer d’agent »**, puis chaque agent touche son nom et ouvre sa session une fois.
+
+> **Mot de passe oublié** : il ne peut pas être récupéré, mais un administrateur peut en redonner un (Administration › Agents de cette tablette › « Modifier » › nouveau mot de passe, saisi par l’agent). D’où l’intérêt d’un second administrateur.
+
+| Profil | Peut notamment |
+|---|---|
+| Administrateur | tout, y compris les agents, la tablette et les paramètres |
+| Responsable qualité | référentiels, documents et grilles ; modifier un audit signé (avec motif) ; abandonner un audit |
+| Superviseur | modifier les audits des autres, clôturer les écarts, planning, journal d’audit |
+| Auditeur | créer et réaliser ses tournées, écarts, observations |
+| Consultation | consulter et exporter |
+
+### Mise en service de la tablette 2
+
+1. **Sur la tablette 1** : Échanges entre tablettes › **« Tout envoyer »**, puis « Partager » (Quick Share, Bluetooth…) ou « Enregistrer le fichier » (clé USB, e-mail) : voir [Faire passer le fichier](#faire-passer-le-fichier-dune-tablette-à-lautre).
+2. **Sur la tablette 2** : ouvrez l’adresse de l’application **avec une connexion**, installez-la, puis « Mise en service de la tablette » › **« Tablette supplémentaire : recevoir le fichier de l’autre tablette »**.
+3. **« Choisir le fichier »** (le fichier `OEG-echange_Tablette-1_….oegct`, en général dans Téléchargements), saisissez le **mot de passe d’échange de l’équipe**, puis **« Ouvrir le fichier »** : un aperçu affiche la tablette d’origine, la date, les agents et les tournées. Avec un mauvais mot de passe, le fichier est refusé et rien n’est créé.
+4. **Nom** (« Tablette 2 ») et **n°** de la tablette : un numéro libre est proposé (2), jamais celui de la tablette 1.
+5. **« Qui êtes-vous ? »** : touchez **votre** nom parmi les agents reçus (de préférence un administrateur), choisissez votre mot de passe pour cette tablette (deux fois ; il peut être le même que sur la tablette 1), puis **« Mettre en service la tablette »**. Vous gardez **le même profil** : vos tournées et vos saisies restent les vôtres, sans doublon.
+6. **Chaque autre agent s’ajoute avec son propre mot de passe** : un administrateur ouvre Administration › **« Agents pas encore sur cette tablette »** › **« Ajouter sur cette tablette »** ; l’agent saisit lui-même, deux fois, le mot de passe qu’il utilisera sur cette tablette. Si la tablette a été mise en service par un agent qui n’est pas administrateur, l’Administration affiche d’abord **« Aucun administrateur sur cette tablette »** : un administrateur s’y ajoute lui-même, puis ajoute les autres agents.
+
+Un agent ajouté plus tard sur une tablette arrive sur l’autre avec le fichier suivant : il apparaît alors dans « Agents pas encore sur cette tablette ». Un agent qui ne voit pas son nom à l’écran « Qui utilise la tablette ? » demande à un administrateur de l’ajouter. « Retirer de cette tablette » supprime seulement son accès à cette tablette (son profil, ses tournées et ses saisies restent ; l’agent connecté et le dernier administrateur ne peuvent pas être retirés). Pour bloquer un agent sur toutes les tablettes : « Modifier » › décocher « Compte actif » (sur l’autre tablette : dès la réception d’un fichier envoyé par un administrateur, sinon après validation dans l’Administration).
+
+### Au quotidien
+
+1. **Le matin** : si l’autre tablette a envoyé un fichier depuis la veille, **« Recevoir un fichier »** (bouton de l’accueil).
+2. **Ouvrir sa session** : l’écran **« Qui utilise la tablette ? »** affiche les agents de la tablette avec leurs initiales ; touchez votre nom, saisissez votre mot de passe.
+3. **Tournée en binôme** : « Nouvelle tournée » › étape **« Contrôleurs OEG de la tournée »** : vous êtes coché d’office ; cochez votre binôme. « Agent(s) OEG » et « Contrôleur OEG » sont pré-remplis avec vos deux noms (« A. Dupont, B. Martin »).
+4. **Passer la tablette au collègue** : bouton **« Changer d’agent »** (en-tête ; sur téléphone, icône ou Menu). La saisie est enregistrée et **la tournée reste sur la tablette** ; le collègue ouvre sa session et arrive sur la tournée (sinon sur l’accueil, « Tournées en cours sur cette tablette »). **Chaque saisie reste attribuée à l’agent connecté** (« Saisi le … par … » sous chaque point ; onglet **Infos**, « Qui a saisi quoi »).
+5. **Rejoindre la tournée** : un agent qui ne fait pas partie des contrôleurs voit la tournée en lecture seule avec le bandeau « Tournée de … — **Rejoindre la tournée** » ; en le touchant, il devient contrôleur (tracé au journal) et peut saisir. Un contrôleur peut aussi en ajouter ou en retirer un autre (onglet Infos, retrait avec motif ; jamais le dernier).
+6. **Signer** : n’importe quel contrôleur de la tournée signe « en tant que contrôleur » ; le PDF et le rapport détaillé indiquent **tous les contrôleurs**.
+7. **Envoyer à l’autre tablette** : **en fin de journée** (l’accueil affiche « Fin de journée : n modifications à envoyer à l’autre tablette ») et **toujours avant de passer une tournée à l’autre tablette** : bouton **« Envoyer à l’autre tablette »** (accueil ou écran Échanges entre tablettes), puis faites passer le fichier.
+8. **Recevoir** : sur l’autre tablette, **« Recevoir un fichier »**, choisissez le fichier, vérifiez l’aperçu, puis **« Recevoir et fusionner »** : un compte rendu indique ce qui a changé (« 1 tournée mise à jour, 1 nouvel agent à ajouter sur cette tablette… »).
+
+**Une tournée se saisit sur une seule tablette à la fois** : pour la continuer sur l’autre, envoyez d’abord, recevez ensuite. Chaque agent garde **son** mot de passe pour lui et touche « Changer d’agent » avant de passer la tablette : chaque saisie reste ainsi attribuée à la bonne personne. Avant « Changer d’agent », l’écran « Qui utilise la tablette ? » rappelle les modifications pas encore envoyées (sans bloquer).
+
+### Faire passer le fichier d’une tablette à l’autre
+
+« Envoyer à l’autre tablette » prépare **un fichier unique**, `OEG-echange_<tablette>_<AAAA-MM-JJ_HHhMM>.oegct`, **toujours chiffré** avec le mot de passe d’échange, et affiche son contenu et sa taille. Ensuite, au choix :
+
+- **Quick Share ou Bluetooth** (tablettes côte à côte) : **« Partager »** › Quick Share (ou Bluetooth) › l’autre tablette, qui accepte le fichier : il arrive dans Téléchargements ;
+- **E-mail ou Teams** : **« Partager »** › Gmail, Outlook ou Teams, vers votre propre adresse ou celle du collègue ; sur l’autre tablette, ouvrez le message et téléchargez la pièce jointe ;
+- **Clé USB ou ordinateur** : **« Enregistrer le fichier »** (dossier Téléchargements), puis copiez-le.
+
+Sur certaines tablettes Android, le fichier est partagé sous le nom `….oegct.txt` : c’est normal, « Recevoir un fichier » l’accepte. Sans le mot de passe d’échange, le fichier est illisible : ne mettez **jamais** ce mot de passe dans le message qui transporte le fichier.
+
+- **Contenu** : par défaut, **les modifications depuis le dernier envoi** (tournées, réponses, écarts, signatures, photos et documents pas encore envoyés, profils des agents — jamais de mot de passe —, journal d’audit, référentiels, suppressions et abandons). **« Tout envoyer »** produit un fichier complet : fichier perdu, nouvelle tablette.
+- Le fichier n’est noté « envoyé » qu’**une fois partagé ou enregistré** ; un partage annulé ne compte pas.
+- **Gros fichier** (au-delà d’environ 20 Mo, beaucoup de photos) : un e-mail risque de le refuser ; l’application propose d’envoyer sans les photos (elles partiront au prochain envoi). Préférez alors Quick Share, Bluetooth ou une clé USB.
+- **À la réception**, rien n’est modifié avant votre confirmation : l’application déchiffre le fichier, vérifie son **empreinte d’intégrité** (un fichier abîmé ou modifié est refusé) et affiche un **aperçu** (tablette d’origine, date, agent qui l’a envoyé, agents, tournées, nombre d’éléments et de photos).
+- **Fusion automatique, hors connexion** : une donnée modifiée sur une seule tablette prend la nouvelle valeur ; en binôme, les saisies faites sur les deux tablettes se rejoignent, **chacune attribuée à son auteur**. **Recevoir deux fois le même fichier ne change rien** ; un **fichier ancien n’écrase jamais** une saisie plus récente. Une tournée **signée** reste scellée, avec la même empreinte sur les deux tablettes.
+- **Historique** : Échanges entre tablettes › « Historique des échanges » (date, sens, tablette, agent, contenu) ; chaque envoi et chaque réception sont aussi tracés au journal d’audit.
+- Les anciens paquets de données (`donnees_audit_….json`, écran Export) sont acceptés par « Recevoir un fichier ».
+
+### Conflits
+
+Un **conflit** survient quand **la même valeur** (par exemple la cote d’un même point) a été modifiée **sur les deux tablettes** entre deux échanges. À la réception :
+
+- la valeur **la plus récente est retenue** et l’autre est **conservée** ; le compte rendu indique « n conflits à examiner » ;
+- **Échanges entre tablettes › Conflits › « Examiner »** affiche, pour chaque valeur, celle de cette tablette, celle reçue et celle retenue ; **« Restaurer l’autre valeur »** remet la valeur écartée, **« Marquer comme examiné »** confirme la fusion ;
+- une tournée **signée d’un seul côté** est gardée telle qu’elle a été signée (son scellé reste valide) ; les valeurs de l’autre version restent dans le rapport de conflit. Sur un audit verrouillé, une valeur ne se restaure que par une modification motivée depuis l’audit.
+
+Pour éviter les conflits : une tournée sur une seule tablette à la fois ; « Envoyer à l’autre tablette » avant de lui passer une tournée ; « Recevoir un fichier » le matin.
+
+### Le mot de passe d’échange
+
+- Défini par un administrateur à la mise en service de la tablette 1, puis saisi pour ouvrir le fichier à la mise en service de la tablette 2 : **le même sur toutes les tablettes**, 10 caractères minimum, différent des mots de passe des agents. Il est conservé chiffré sur chaque tablette : envoyer et recevoir ne le demandent plus.
+- Communiquez-le **de vive voix**, jamais dans le message qui transporte le fichier.
+- Pour le changer : Administration › Échanges entre tablettes › **« Changer le mot de passe d’échange »**, **sur chaque tablette**. Un fichier chiffré avec un autre mot de passe n’est pas ouvert : l’application l’explique et demande le mot de passe utilisé par l’autre tablette (rien n’est modifié tant que le fichier n’est pas ouvert et la réception confirmée).
+
+### Profils des agents : règle de sécurité
+
+Un fichier reçu ne peut pas, à l’insu de l’administrateur de la tablette, **élever le profil d’un agent**, **créer un administrateur**, **désactiver ou supprimer un agent** : ces changements ne s’appliquent d’office que si le fichier a été **envoyé par un administrateur de cette tablette** (agent connecté au moment de l’envoi). Sinon, ils sont mis **en attente** : Administration › **« Changements de profils reçus à valider »** › « Accepter » ou « Refuser ». Le dernier administrateur d’une tablette n’en est jamais retiré par un fichier. Le fichier ne contient ni mot de passe ni clé : il ne modifie jamais les comptes de connexion de la tablette (seuls le nom, les initiales et le profil affichés suivent le profil reçu).
+
+La protection des fichiers repose sur le **mot de passe d’échange** : quiconque le connaît et dispose d’un fichier peut en lire le contenu, et même mettre une tablette en service. Gardez-le secret et changez-le si une tablette est perdue.
+
+### Tablette perdue ou volée
+
+Les données de la tablette perdue **restent chiffrées** (AES 256 bits) : sans le mot de passe d’un agent de cette tablette, elles sont illisibles. Rien ne peut être effacé à distance ; sur l’autre tablette :
+
+1. un administrateur **change le mot de passe d’échange** (Administration › Échanges entre tablettes) : les fichiers de la tablette perdue ne s’ouvriront plus ;
+2. chaque agent qui utilisait le même mot de passe sur la tablette perdue **le change** (Mon compte › « Changer mon mot de passe sur cette tablette ») ;
+3. un agent qui quitte l’équipe, ou dont le mot de passe a pu être vu, est **retiré** : « Modifier » › décocher « Compte actif » (bloqué aussi sur les autres tablettes au prochain échange), ou « Retirer de cette tablette ».
+
+Ce qui n’avait pas encore été envoyé est perdu : d’où l’intérêt d’envoyer chaque soir. **Tablette de remplacement** : sur l’autre tablette, « Tout envoyer » ; sur la nouvelle, « Tablette supplémentaire : recevoir le fichier de l’autre tablette » (avec le nouveau mot de passe d’échange et un nouveau n°), puis « Ajouter sur cette tablette » pour chaque agent. Tablette retrouvée : avant de la réutiliser, un administrateur y saisit le nouveau mot de passe d’échange (Administration › Échanges entre tablettes).
+
+### Le dépôt privé de données n’est plus nécessaire
+
+Le dépôt GitHub privé **`CSRE-DCE/fiche-de-controle-donn-es`** (GitHub a remplacé le « é » de « données » par « - ») ne sert plus à l’application : aucune tablette ne s’y connecte et aucun agent n’a besoin de compte GitHub. Il peut servir, si vous le souhaitez, d’**archive manuelle** : un administrateur y dépose, par le site github.com, les rapports PDF signés et, au besoin, des fichiers d’échange `.oegct` (qui restent chiffrés : pour les relire, il faut le mot de passe d’échange en vigueur à leur date). Ce dépôt doit rester **privé** ([pas à pas](docs/GUIDE-GITHUB.md#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)). **Jamais de données dans le dépôt public de l’application** (`CSRE-DCE/fiche-de-contr-le`).
 
 ---
 
@@ -187,7 +284,7 @@ GitHub Pages publie gratuitement le contenu du dépôt (fichiers tels quels, san
 
 **Délai de publication** : chaque envoi sur la branche `main` republie le site, en général en 1 à 10 minutes. L’avancement est visible dans l’onglet **Actions** (travail « pages build and deployment »). Le fichier `.nojekyll` à la racine demande à GitHub de publier les fichiers sans les transformer : ne le supprimez pas.
 
-> Le site publié est **public**, comme le dépôt de l’application : il ne doit contenir aucune donnée. Les données restent sur les appareils et dans le dépôt privé de l’équipe.
+> Le site publié est **public**, comme le dépôt de l’application : il ne doit contenir aucune donnée. Les données restent chiffrées sur les tablettes.
 
 ### Installer l’application sur une tablette ou un téléphone
 
@@ -196,7 +293,7 @@ GitHub Pages publie gratuitement le contenu du dépôt (fichiers tels quels, san
    - **Android (Chrome)** : menu **⋮** › **« Ajouter à l’écran d’accueil »** (ou « Installer l’application ») ;
    - **iPad / iPhone (Safari)** : bouton **Partager** › **« Sur l’écran d’accueil »** ;
    - **Windows (Edge ou Chrome)** : icône d’installation dans la barre d’adresse, ou menu › « Installer cette application ».
-3. Lancez-la depuis l’icône « Contrôle OEG », configurez l’appareil, puis vérifiez en mode avion qu’elle s’ouvre bien hors connexion.
+3. Lancez-la depuis l’icône « Contrôle OEG », mettez la tablette en service ([Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents)), puis vérifiez en mode avion qu’elle s’ouvre bien hors connexion.
 
 ---
 
@@ -274,114 +371,6 @@ Si vous **ajoutez un nouveau fichier** utilisé par l’application (script, feu
 
 ---
 
-## Synchroniser plusieurs appareils avec un dépôt GitHub privé
-
-### Principe
-
-En mode équipe, les appareils partagent leurs données au moyen d’un **dépôt GitHub privé de données**, distinct du dépôt public de l’application (par exemple `CSRE-DCE/fiche-de-controle-donnees`). L’application lit et écrit ce dépôt **directement depuis le navigateur**, par l’API GitHub, avec **le jeton d’accès de la tablette** : il n’y a aucun serveur à installer. **Un jeton par tablette** (par appareil), créé par l’administrateur depuis son compte GitHub : les agents **n’ont pas besoin de compte GitHub**. Sur l’appareil, les données et le jeton restent chiffrés et la session s’ouvre hors connexion.
-
-La mise en place concrète pour l’OEG (deux tablettes partagées par quatre agents) est décrite pas à pas dans [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents) ; cette section en donne le détail.
-
-### 1. Créer le dépôt privé de données (administrateur, une seule fois)
-
-Sur GitHub : **+** › **New repository** › propriétaire `CSRE-DCE`, nom `fiche-de-controle-donnees`, visibilité **Private** › **Create repository**. Le dépôt peut rester vide (ou contenir un simple README) : l’application l’initialise.
-
-### 2. Qui a besoin d’un compte GitHub ?
-
-**Seul l’administrateur** (et, si vous le souhaitez, un administrateur suppléant) : son compte doit avoir le rôle **Write** (écriture) sur le dépôt de données (**Settings › Collaborators and teams › Add people**). Les agents de terrain n’ont **pas** de compte GitHub : ils sont ajoutés sur les tablettes dans l’application (Administration › Agents de cette tablette) et ouvrent leur session avec leur mot de passe.
-
-### 3. L’administrateur crée un jeton « fine-grained » par tablette
-
-Sur GitHub, connecté avec le compte de l’administrateur : photo de profil › **Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token**, **une fois pour chaque tablette** :
-
-- **Token name** : le nom de la tablette, par exemple **« Tablette 1 »**, puis **« Tablette 2 »** pour la seconde (c’est ce nom qui permet de révoquer le bon jeton si une tablette est perdue) ;
-- **Resource owner** : le propriétaire du dépôt de données (`CSRE-DCE` ; l’organisation doit autoriser les jetons fine-grained) ;
-- **Expiration** : par exemple 90 jours ;
-- **Repository access** : **Only select repositories** › uniquement le dépôt de données ;
-- **Permissions** › **Repository permissions** › **Contents** : **Read and write** (« Metadata : Read-only » est ajouté automatiquement). **Aucune autre permission** ;
-- **Generate token**, puis copiez le jeton (`github_pat_…`) : il n’est affiché qu’une fois.
-
-**Un jeton par tablette**, saisi directement sur cette tablette (où il est conservé chiffré) : jamais copié sur une autre tablette, ni écrit dans un fichier, un courriel ou un message. Notez dans un registre quelle tablette porte quel jeton et sa date d’expiration. (Une équipe où chacun a son propre appareil suit la même règle : un jeton par appareil.)
-
-### 4. Configurer la première tablette (administrateur)
-
-1. Écran « Configuration de l’appareil » › **« Rejoindre une équipe »**.
-2. **Dépôt GitHub (propriétaire/nom)** : `CSRE-DCE/fiche-de-controle-donnees` ; **Jeton d’accès « fine-grained » de la tablette** : collez le jeton « Tablette 1 ». Les « Options avancées » (branche `main`, dossier des données `donnees/`, adresse de l’API) n’ont normalement pas à être modifiées.
-3. **« Vérifier l’accès au dépôt »** : l’application confirme le compte GitHub et que le dépôt est privé (elle refuse un dépôt public).
-4. Dépôt vide : vérifiez les options (organisme, reprise du référentiel OEG), renseignez le **nom de la tablette** (« Tablette 1 ») et **votre compte d’administrateur** (nom, identifiant, mot de passe — ce mot de passe ouvre la session sur la tablette et n’est jamais envoyé à GitHub), puis **« Initialiser le dépôt et créer l’équipe »**. Vous êtes l’administrateur de l’équipe. Le compte créé à cette étape est toujours celui de la personne qui configure la tablette ; les agents sont ajoutés ensuite (étape 5).
-
-Un appareil déjà utilisé en mode autonome peut aussi devenir le premier appareil de l’équipe : son administrateur ouvre Synchronisation › « Rejoindre une équipe (dépôt GitHub) » › « Rattacher cet appareil » (ses données sont fusionnées avec celles du dépôt).
-
-### 5. Ajouter les agents et choisir leurs profils
-
-**Administration › Agents de cette tablette › « ＋ Nouvel agent »** : nom et prénom, identifiant, profil ; l’agent choisit et saisit lui-même son mot de passe (deux fois). Le profil de l’agent est synchronisé : il est le même sur toutes les tablettes et se modifie par « Modifier » (un agent désactivé l’est partout).
-
-La rubrique **Administration › Membres de l’équipe** concerne seulement les **comptes GitHub** (fichier `config/utilisateurs.json` du dépôt de données) : l’administrateur y est inscrit à l’initialisation ; ajoutez-y un administrateur suppléant s’il a son propre compte GitHub. Un agent rattaché à un login GitHub suit le profil de cette liste ; un agent sans login garde le profil choisi dans « Agents de cette tablette ». **Le login du propriétaire du jeton de la tablette ne s’applique jamais aux autres agents de la tablette.**
-
-| Profil | Peut notamment |
-|---|---|
-| Administrateur | tout, y compris utilisateurs, appareils et paramètres |
-| Responsable qualité | référentiels, documents et grilles ; modifier un audit signé (avec motif) ; abandonner un audit |
-| Superviseur | modifier les audits des autres, clôturer les écarts, planning, journal d’audit |
-| Auditeur | créer et réaliser ses tournées, écarts, observations |
-| Consultation | consulter et exporter |
-
-### 6. Configurer les autres tablettes
-
-Sur chaque autre tablette, l’administrateur : « Rejoindre une équipe », même dépôt, **jeton de cette tablette** (« Tablette 2 »…), « Vérifier l’accès au dépôt » ; dans « Vous êtes déjà dans l’équipe ? », il choisit **« C’est moi »** (il garde ainsi la même identité sur toutes les tablettes), saisit son mot de passe pour cette tablette, puis **« Rejoindre l’équipe »**. Ensuite, **Administration › Agents de l’équipe pas encore sur cette tablette › « Ajouter sur cette tablette »** pour chaque agent : l’agent saisit le mot de passe qu’il utilisera sur cette tablette (deux fois) ; son profil, ses tournées et ses saisies sont les mêmes que sur l’autre tablette. Les données de l’équipe sont reçues, puis la synchronisation est automatique : à l’ouverture de session, après chaque modification et toutes les 5 minutes tant qu’il y a du réseau. L’écran **Synchronisation** affiche l’état, la file d’envoi, les conflits éventuels (« Examiner ») et le journal ; boutons « Synchroniser maintenant », « Tester la connexion », « Renouveler le jeton » (jeton expiré), « Télécharger les documents pour le terrain ».
-
-Deux appareils qui modifient la même tournée sont fusionnés champ par champ ; si le même champ a été modifié des deux côtés, la valeur la plus récente est retenue et l’autre reste consultable et restaurable (Synchronisation › Conflits). Les numéros d’audit sont réservés par blocs : deux appareils ne produisent jamais le même numéro, même hors connexion.
-
-### Appareils
-
-Chaque appareil est enregistré dans `config/appareils.json`. Pour une tablette perdue ou retirée : **Administration › Appareils de l’équipe › « Désactiver (perdu) »** : ses données locales sont effacées à sa synchronisation suivante. Cela ne désactive **pas** son jeton : **révoquez aussi le jeton de cette tablette** sur GitHub (compte de l’administrateur › Settings › Developer settings › Personal access tokens › Fine-grained tokens › « Tablette … » › **Delete**).
-
-### Contenu du dépôt de données
-
-Dans le dossier `donnees/` : `config/` (équipe, utilisateurs, appareils, numéros réservés), `entites/<type>/<id>.json` (une donnée par fichier, lisible), `journal/` (journal d’audit par appareil et par jour) et `medias/` (photos, signatures, documents). L’historique Git conserve toutes les versions.
-
-### Sécurité : ce qu’il faut savoir
-
-- **La vraie protection des données partagées est l’accès au dépôt privé et aux jetons.** Toute personne disposant d’un jeton valide sur ce dépôt peut en lire et modifier tous les fichiers, quel que soit son profil dans l’application : les profils et le verrouillage des audits signés sont appliqués par l’application, pas par GitHub.
-- Dans le dépôt de données, les fichiers sont en clair pour les personnes qui y ont accès ; sur les appareils, ils sont chiffrés.
-- Les audits signés restent scellés par leur empreinte et le journal d’audit chaîné permet de détecter une altération.
-- **Jamais de données dans le dépôt public de l’application** ; ne rendez jamais le dépôt de données public ; un jeton par tablette, limité au seul dépôt de données et à la permission « Contents » ; préférez une expiration courte ; activez la double authentification sur le compte GitHub de l’administrateur.
-- Sur une tablette partagée, chaque agent a **son** mot de passe : il ne le communique pas à ses collègues et utilise « Changer d’agent » avant de passer la tablette, pour que chaque saisie reste attribuée à la bonne personne.
-
----
-
-## Deux tablettes pour quatre agents
-
-L’OEG dispose de **deux tablettes pour quatre agents** : les agents travaillent en binôme sur une tablette partagée, et un agent peut utiliser l’une ou l’autre tablette selon les jours. L’application est prévue pour cela : chaque agent a **son profil** (le même sur les deux tablettes) et **son mot de passe** sur chaque tablette où il travaille ; il n’a pas besoin de compte GitHub.
-
-### Mise en place (administrateur, une seule fois)
-
-1. **Dépôt de données** : créez le dépôt privé `CSRE-DCE/fiche-de-controle-donnees` ([détail](#1-créer-le-dépôt-privé-de-données-administrateur-une-seule-fois)).
-2. **Un jeton par tablette** : depuis votre compte GitHub, créez **un jeton « fine-grained » pour chaque tablette**, nommé **« Tablette 1 »**, puis **« Tablette 2 »** : *Only select repositories* › le seul dépôt de données ; *Repository permissions* › **Contents : Read and write** ; aucune autre permission ; expiration courte (par exemple 90 jours) ([détail](#3-ladministrateur-crée-un-jeton--fine-grained--par-tablette)).
-3. **Tablette 1** : « Rejoindre une équipe » avec le jeton « Tablette 1 », nom de la tablette « Tablette 1 », votre compte d’administrateur, puis « Initialiser le dépôt et créer l’équipe ».
-4. **Les quatre agents sur la tablette 1** : Administration › Agents de cette tablette › **« ＋ Nouvel agent »** pour chaque agent (nom, identifiant, profil — en général « Auditeur ») ; **chaque agent choisit et saisit lui-même son mot de passe**.
-5. **Tablette 2** : « Rejoindre une équipe » avec le jeton « Tablette 2 », nom « Tablette 2 » ; dans « Vous êtes déjà dans l’équipe ? », choisissez **« C’est moi »**, saisissez votre mot de passe pour cette tablette, puis « Rejoindre l’équipe ».
-6. **Les quatre agents sur la tablette 2** : Administration › **Agents de l’équipe pas encore sur cette tablette** › **« Ajouter sur cette tablette »** pour chaque agent ; l’agent saisit son mot de passe pour cette tablette (deux fois ; il peut reprendre le même). Il retrouve ainsi le même profil, les mêmes tournées et ses saisies.
-
-Un agent qui ne voit pas son nom à l’écran de connexion demande à un administrateur de l’ajouter : Administration › Agents de cette tablette. « Retirer de cette tablette » supprime seulement son accès à cette tablette (son profil, ses tournées et ses saisies restent ; le dernier administrateur ne peut pas être retiré) ; pour bloquer un agent partout : « Modifier » › décocher « Compte actif ».
-
-### Au quotidien
-
-- **Ouvrir la session** : l’écran **« Qui utilise la tablette ? »** affiche les agents de la tablette ; l’agent touche son nom puis saisit son mot de passe.
-- **Tournée en binôme** : à la création (« Nouvelle tournée »), étape **« Contrôleurs OEG de la tournée »** : l’agent connecté est coché d’office ; cochez votre binôme. « Agent(s) OEG » (feuille d’organisation) et « Contrôleur OEG » (repères des stations) sont pré-remplis avec vos deux noms.
-- **Passer la tablette** : bouton **« Changer d’agent »** (en-tête ; sur téléphone, icône ou Menu) : la saisie en cours est enregistrée, l’écran de connexion revient et **la tournée reste sur la tablette** ; le collègue se connecte et la reprend depuis l’accueil (« Tournées en cours sur cette tablette » : les tournées dont il est contrôleur d’abord). **Chaque saisie reste attribuée à l’agent connecté** (« Saisi le … par … » sous chaque point) ; l’onglet **Infos** liste les contrôleurs et le nombre de réponses saisies par chacun.
-- **Rejoindre la tournée** : un agent qui ne fait pas partie des contrôleurs voit le bandeau « Tournée d’… — **Rejoindre la tournée** » ; en le touchant, il devient contrôleur (tracé au journal) et peut saisir. Un contrôleur peut aussi en ajouter ou en retirer un autre (onglet Infos, retrait avec motif ; jamais le dernier).
-- **Signature** : n’importe quel contrôleur de la tournée signe « en tant que contrôleur » ; le PDF de la tournée et le rapport détaillé indiquent **tous les contrôleurs** ; l’empreinte scellée couvre la liste des contrôleurs.
-- **Synchronisation** : automatique dès qu’il y a du réseau ; une tournée commencée sur une tablette peut être poursuivie sur l’autre après synchronisation.
-
-### Tablette perdue ou volée
-
-1. Sur l’autre tablette, l’administrateur : **Administration › Appareils de l’équipe › « Désactiver (perdu) »** sur la tablette perdue (ses données locales seront effacées à sa prochaine connexion) ;
-2. **ET** sur GitHub, il **révoque le jeton de cette tablette** : Settings › Developer settings › Personal access tokens › Fine-grained tokens › « Tablette 1 » (ou 2) › **Delete**. Les autres tablettes et leurs jetons ne sont pas touchés.
-3. Pour une tablette de remplacement : nouveau jeton (« Tablette 3 »), « Rejoindre une équipe », puis « Ajouter sur cette tablette » pour chaque agent.
-
----
-
 ## Mettre à jour l’application
 
 1. Modifiez les fichiers (voir [Ajouter ou modifier des fichiers](#ajouter-ou-modifier-des-fichiers-sur-github)) et **incrémentez la version** (`python tools/bump_version.py`).
@@ -396,7 +385,7 @@ Les données enregistrées ne sont pas touchées par une mise à jour. Une tourn
 
 Aucun Node n’est nécessaire : les tests utilisent Python et le navigateur.
 
-**Tests unitaires dans le navigateur** : lancez le serveur local (`python tools/serve.py`) puis ouvrez <http://localhost:8000/tests/unit/index.html>. La page exécute tous les fichiers de tests (`core`, `domain`, `formats`, `grid-ct-2026`, `pdf-sheets`, `github`) et affiche les réussites et les échecs. Pour n’en lancer que certains : `tests/unit/index.html?files=grid-ct-2026,core`.
+**Tests unitaires dans le navigateur** : lancez le serveur local (`python tools/serve.py`) puis ouvrez <http://localhost:8000/tests/unit/index.html>. La page exécute tous les fichiers de tests (`core`, `domain`, `formats`, `grid-ct-2026`, `pdf-sheets`, `github`, `attendus`, `exchange`) et affiche les réussites et les échecs. Pour n’en lancer que certains : `tests/unit/index.html?files=grid-ct-2026,core`.
 
 **Tests automatisés (pytest + Playwright)**, depuis la racine du dépôt :
 
@@ -406,7 +395,7 @@ python -m playwright install chromium      # une seule fois (sous Linux : --with
 python -m pytest
 ```
 
-`python -m pytest -q` donne un affichage condensé ; `python -m pytest -m "not lent"` saute les tests longs (tournées complètes, PDF) ; la variable d’environnement `HEADED=1` affiche le navigateur pendant les tests. Ces tests ouvrent l’application dans un Chromium sans fenêtre : tests unitaires, parcours de l’application, synchronisation entre deux appareils avec un faux serveur GitHub (`tests/fake_github.py`, sans réseau), tablette partagée et tournée en binôme (`tests/test_tablette_partagee.py`). Ils tournent aussi automatiquement sur GitHub à chaque envoi (onglet Actions).
+`python -m pytest -q` donne un affichage condensé ; `python -m pytest -m "not lent"` saute les tests longs (tournées complètes, PDF) ; la variable d’environnement `HEADED=1` affiche le navigateur pendant les tests. Ces tests ouvrent l’application dans un Chromium sans fenêtre : tests unitaires, parcours de l’application, synchronisation entre deux appareils avec un faux serveur GitHub (`tests/fake_github.py`, sans réseau), tablette partagée et tournée en binôme (`tests/test_tablette_partagee.py`), échange par fichier entre deux tablettes (`tests/test_echange_tablettes.py` : deux navigateurs indépendants). Ils tournent aussi automatiquement sur GitHub à chaque envoi (onglet Actions).
 
 ---
 
@@ -422,9 +411,9 @@ js/
   main.js               démarrage et liste des écrans (routes)
   core/                 stockage chiffré, session, comptes, médias, outils
   domain/               règles métier pures : grille CT-2026, conditions, alertes, synthèse, fusion
-  app/                  opérations : audits, PDF, synchronisation GitHub, imports, exports
+  app/                  opérations : audits, PDF, échanges entre tablettes (fichier .oegct), imports, exports, synchronisation GitHub (option avancée)
   ui/                   composants d’interface : feuilles, icônes, carte, photo, GPS, signature
-  views/                écrans (accueil, station, tournée, audit, synchronisation, administration…)
+  views/                écrans (accueil, station, tournée, audit, échanges entre tablettes, administration…)
   formats/              CSV, Excel, ICS, moteur PDF
   lib/                  conversions de coordonnées (RGFG95 / UTM 22N), contour de la Guyane
 data/referentiel-oeg.json   référentiel des stations repris des fiches terrain OEG
