@@ -94,6 +94,7 @@ tools/        serve.py, check_release.py, bump_version.py
 | `bootstrap.js` | installation des données (`seedAll`) et mise à niveau idempotente (`upgradeReferentiel2026`) |
 | `sheets-pdf.js` | fiches de contrôle en PDF (tournée, fiches vierges, fiche station) |
 | `report.js` | rapport d’audit détaillé (PDF) |
+| `attendus-pdf.js` | attendus des prestataires : chargement de `data/attendus-ct-2026.json`, modèle d’affichage par type de tournée, PDF « Fiche des attendus » et « Liste de préparation » (écran : `js/views/attendus.js`, route `#/attendus`, fenêtre « Attendu » ouverte depuis les feuilles par `openAttendu(itemId)`) |
 | `static-map.js` | carte statique de la feuille 1 pour les PDF (tuiles en cache ou schéma hors connexion) |
 | `github.js` | client REST GitHub, arborescence du dépôt de données, erreurs en français, empreintes git |
 | `exchange-file.js` | format du fichier d’échange `.oegct` : texte ASCII, chiffrement AES-GCM avec le mot de passe d’échange, compression gzip, médias joints, empreintes SHA-256 (`encodeExchange`, `decodeExchange`, `ExchangeError`) |
@@ -440,3 +441,7 @@ Une grille **publiée est figée** : chaque audit en garde une copie intégrale 
 4. incrémenter `AUDIT_BUILD`, lancer les tests, publier.
 
 Les tournées déjà commencées restent sur la version avec laquelle elles ont été créées.
+
+### Attendus des prestataires
+
+`data/attendus-ct-2026.json` contient une entrée par critère de la grille CT-2026 (attendu, vérification, exemples C / P / NC / N/A, références, points « à préciser par l’OEG »). C’est la source unique de l’écran `#/attendus`, des PDF et de [ATTENDUS-PRESTATAIRES.md](ATTENDUS-PRESTATAIRES.md). Après toute modification du JSON, lancer `python tools/attendus_md.py` pour régénérer le document ; `python tools/attendus_md.py --check` vérifie qu’il est à jour (test `tests/test_attendus.py`). Quand un critère est ajouté ou modifié dans la grille, `tests/unit/attendus.test.js` signale l’entrée à créer ou à mettre à jour.

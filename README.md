@@ -9,6 +9,7 @@ Application web de l’Office de l’Eau de Guyane (OEG) pour **contrôler sur l
 Documents complémentaires :
 
 - [docs/GUIDE-GITHUB.md](docs/GUIDE-GITHUB.md) : guide pas à pas de GitHub pour débutant (publier l’application, ajouter des fichiers, GitHub Desktop, VS Code, archiver des rapports dans le dépôt privé) ;
+- [docs/ATTENDUS-PRESTATAIRES.md](docs/ATTENDUS-PRESTATAIRES.md) : fiche des attendus des prestataires (ce qui est attendu pour chaque point de contrôle, comment le contrôleur le vérifie, comment coter C / P / NC / N/A ; liste de préparation de la tournée) ;
 - [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) : architecture, format du fichier d’échange entre tablettes et règles de développement (pour les personnes qui modifient le code) ; en annexe technique, la synchronisation par GitHub, non utilisée à l’OEG ;
 - [docs/charte.html](docs/charte.html) : charte graphique « vivante » (composants réels de l’application) ; [docs/maquettes/](docs/maquettes/) : maquettes des 9 feuilles d’origine.
 
@@ -108,6 +109,7 @@ En hydrobiologie, les feuilles F4 à F9 ne s’affichent que si le compartiment 
 - **Synthèse sans score** : décomptes C / P / NC / N/A / non renseignés pour la tournée, par station et par feuille, conclusions des feuilles (choix du contrôleur), commentaire et bilan de l’auditeur, autres préconisations. Un point commun à la tournée n’est compté qu’une fois.
 - **Signatures et verrouillage scellé** : contrôle avant clôture, signature du contrôleur OEG (n’importe quel contrôleur de la tournée) et du représentant du prestataire (ou refus / absence motivé), puis « Valider et verrouiller l’audit » : le contenu est scellé par une empreinte SHA-256 ; ensuite, seule une modification motivée et tracée est possible (profils Administrateur et Responsable qualité).
 - **PDF** : fiches de contrôle de la tournée remplies (« Fiches de contrôle (PDF) », filigrane « PROVISOIRE » tant que l’audit n’est pas verrouillé), rapport d’audit détaillé, dossier de preuve (JSON + médias), fiches vierges imprimables par station et par type de tournée, fiche station seule.
+- **Attendus des prestataires** (menu Gestion › « Attendus des prestataires », bouton « Attendu » sur chaque point des feuilles, lien depuis la fiche station) : pour chacun des 213 points de la grille, ce que le prestataire doit faire ou présenter, comment le contrôleur le vérifie et des exemples de cotation C / P / NC / N/A, avec les références normatives ; filtres par type de tournée et par feuille, recherche ; PDF « Fiche des attendus » et « Liste de préparation » à remettre aux prestataires. Les exigences propres au marché (nombres, délais, matériel) sont marquées « À préciser (OEG) ».
 - **Hors connexion** : toute l’application est mise en cache à la première ouverture ; le fond de carte peut être préchargé (écran Carte › « Précharger la zone affichée »).
 - **Chiffrement local** : toutes les données (y compris photos et signatures) sont chiffrées sur l’appareil (AES-GCM 256 bits), déverrouillées par le mot de passe de chaque agent de la tablette ; verrouillage automatique après 30 minutes d’inactivité (réglable).
 - **Journal d’audit** : qui a fait quoi, quand, sur quel appareil, avec l’ancienne valeur et le motif ; entrées chaînées par empreintes, bouton « Vérifier l’intégrité ».
@@ -417,6 +419,7 @@ js/
   formats/              CSV, Excel, ICS, moteur PDF
   lib/                  conversions de coordonnées (RGFG95 / UTM 22N), contour de la Guyane
 data/referentiel-oeg.json   référentiel des stations repris des fiches terrain OEG
+data/attendus-ct-2026.json  attendus des prestataires (source unique de l’écran, des PDF et de docs/ATTENDUS-PRESTATAIRES.md)
 fonts/                  polices Barlow, Barlow Condensed, Montserrat (+ fonts/pdf pour les PDF)
 icons/, img/            logo, icônes, décors, photos de la station ATHANASE
 vendor/                 bibliothèques embarquées : Leaflet (carte), jsQR (QR codes)
