@@ -1,0 +1,4391 @@
+{
+  "version": "1.0",
+  "grid": "grid-ct-2026-v1",
+  "updated": "2026-10-12",
+  "titre": "Attendus des prestataires – contrôle terrain 2026",
+  "avertissement": "Document de référence de l’Office de l’Eau de Guyane pour les contrôles terrain 2026, partagé entre les contrôleurs et les prestataires. Il indique, pour chaque point de contrôle des fiches, ce que le prestataire doit faire ou présenter, comment le contrôleur le vérifie et comment il choisit C, P, NC ou N/A. Il ne remplace ni le CCTP, ni les protocoles, ni les consignes du laboratoire, qui prévalent en cas de différence. Les mentions « à préciser » signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.",
+  "typesTournee": {
+    "bio": {
+      "label": "Hydrobiologie – RCS ESC BIO",
+      "court": "Hydrobiologie"
+    },
+    "ce": {
+      "label": "Cours d’eau – physico-chimie",
+      "court": "Cours d’eau"
+    },
+    "eso": {
+      "label": "Eaux souterraines",
+      "court": "Eaux souterraines"
+    }
+  },
+  "echelle": {
+    "C": "L’exigence est respectée et le contrôleur l’a constaté (observation directe, document présenté ou explication précise du préleveur).",
+    "P": "L’exigence est globalement respectée mais une amélioration est attendue (oubli mineur, geste hésitant, document incomplet), sans incidence démontrée sur la représentativité ou l’intégrité de l’échantillon. Observation obligatoire.",
+    "NC": "L’exigence n’est pas respectée, ou l’écart peut affecter la représentativité ou l’intégrité de l’échantillon, la traçabilité des données ou la sécurité des personnes. Observation obligatoire ; une photo en preuve est recommandée.",
+    "NA": "Le point est sans objet pour cette station, ce type de prélèvement ou cette tournée (pas de navigation, pas d’analyse de métaux dissous…). À justifier en observation. Un point qui n’a pas pu être observé est signalé comme tel en observation et n’est jamais coté C par défaut."
+  },
+  "preparation": {
+    "commun": [
+      {
+        "titre": "Documents",
+        "icone": "doc",
+        "elements": [
+          "CCTP du marché et lettre de mission ou bon de commande (papier, ou numérique consultable hors connexion)",
+          "Protocoles et référentiels techniques en vigueur, dans leur version applicable",
+          "Planning de la tournée transmis à l’OEG : stations, ordre de passage, horaires, lieu et heure de dépôt des échantillons",
+          "Fiches stations ou fiches de localisation à jour (coordonnées, accès, point de prélèvement, photos, contacts)",
+          "Fiches terrain vierges du protocole et support papier de secours",
+          "Notices des appareils et fiches de vie ou registres d’étalonnage",
+          "Consignes du laboratoire (flaconnage, remplissage, conservation, délais) et descriptif du flaconnage"
+        ]
+      },
+      {
+        "titre": "Personnel",
+        "icone": "people",
+        "elements": [
+          "Équipe conforme au CCTP (nombre, qualifications) ; tout remplacement signalé à l’OEG à l’avance",
+          "Permis ou titres requis pour la conduite et la navigation",
+          "Agents formés aux protocoles de la tournée, justificatifs de formation disponibles sur demande",
+          "Stagiaires annoncés, équipés et encadrés par un agent qualifié présent sur place",
+          "Consignes de sécurité rappelées à l’équipe avant le départ"
+        ]
+      },
+      {
+        "titre": "Matériel et EPI",
+        "icone": "gear",
+        "elements": [
+          "Tenues adaptées et gants nitrile à usage unique en quantité suffisante",
+          "Gilet de sauvetage en bon état pour chaque personne embarquée ou exposée (contrôleur compris)",
+          "Équipements de sécurité routière : triangle, gilets haute visibilité, cônes",
+          "Trousse de premiers secours et moyen d’alerte adapté à la zone (téléphone satellite en zone non couverte)",
+          "Véhicule ou embarcation en bon état ; rangement qui sépare matériel propre, matériel sale, carburant et produits"
+        ]
+      },
+      {
+        "titre": "Sondes et consommables",
+        "icone": "gauge",
+        "elements": [
+          "Sondes étalonnées selon le protocole, étalonnage tracé, vérification prévue matin et soir",
+          "Solutions étalons dans leur date de validité, piles ou batteries de rechange",
+          "Appareil ou sonde de secours",
+          "Thermomètre pour contrôler la température des échantillons"
+        ]
+      },
+      {
+        "titre": "Flaconnage et étiquettes",
+        "icone": "bottle",
+        "elements": [
+          "Flaconnage fourni par le laboratoire, conforme au programme analytique de chaque station (nombre, type, conservateur)",
+          "Flacons de réserve de chaque type",
+          "Étiquettes résistantes à l’eau (code station ou code BSS, date, heure) et marqueur indélébile",
+          "Flacons propres et fermés, transportés à l’abri des chocs et des salissures"
+        ]
+      },
+      {
+        "titre": "Glacières et suivi thermique",
+        "icone": "cooler",
+        "elements": [
+          "Glacières propres et en bon état, en nombre suffisant pour toute la tournée",
+          "Accumulateurs de froid congelés en quantité suffisante, glacières pré-réfrigérées",
+          "Enregistreur de température, thermobouton ou flacon témoin pour chaque glacière",
+          "Solution de stockage réfrigéré si les échantillons ne peuvent pas être déposés directement"
+        ]
+      },
+      {
+        "titre": "Traçabilité et expédition",
+        "icone": "truck",
+        "elements": [
+          "Bordereaux d’envoi ou fiches de transmission (papier ou application)",
+          "Dépôt au laboratoire ou transporteur réservé, avec une heure limite compatible avec le programme",
+          "Appareil de positionnement et appareil photo"
+        ]
+      }
+    ],
+    "bio": [
+      {
+        "titre": "Invertébrés – PEZADA",
+        "icone": "bug",
+        "elements": [
+          "Protocole PEZADA en vigueur et fiches terrain",
+          "Surber et matériel prévu par le protocole, en bon état et propre",
+          "Récipients étanches, produit de conservation prévu, sa fiche de données de sécurité et les EPI de manipulation",
+          "Étiquettes résistantes au produit de conservation"
+        ]
+      },
+      {
+        "titre": "Diatomées – IDGF",
+        "icone": "diatom",
+        "elements": [
+          "Protocole IDGF en vigueur et fiches terrain",
+          "Brosses propres (neuves ou nettoyées) pour chaque station, bac, pissette",
+          "Récipients, produit de conservation prévu et étiquettes"
+        ]
+      },
+      {
+        "titre": "Poissons et mercure",
+        "icone": "fish",
+        "elements": [
+          "Protocoles de pêche et mercure, fiches terrain",
+          "Batterie de filets maillants complète, en bon état, aux mailles prévues",
+          "Matériel de biométrie (mesure, pesée)",
+          "Sachets ou récipients propres, étiquettes et glacière pour les échantillons destinés au mercure",
+          "Autorisation de pêche à des fins scientifiques, si elle est requise"
+        ]
+      },
+      {
+        "titre": "Phytoplancton",
+        "icone": "algae",
+        "elements": [
+          "Protocole et fiches terrain phytoplancton",
+          "Matériel de prélèvement prévu (intégré ou ponctuel)",
+          "Flacons protégés de la lumière et fixateur prévu (Lugol ou autre)",
+          "Glacière pour un stockage au frais et à l’obscurité"
+        ]
+      }
+    ],
+    "ce": [
+      {
+        "titre": "Prélèvement en cours d’eau",
+        "icone": "wave",
+        "elements": [
+          "Canne, seau inox ou plastique, chaîne et corde, bouteille, selon les configurations (pont, berge, gué)",
+          "Matériel en matériau compatible avec les paramètres analysés (pas de métal pour les métaux)",
+          "Turbidimètre et cuves propres",
+          "Fiches stations indiquant le site précis (amont ou aval du pont…)"
+        ]
+      },
+      {
+        "titre": "Sécurité sur site",
+        "icone": "warning",
+        "elements": [
+          "Gilets de sauvetage pour les prélèvements depuis un pont, une berge à risque ou un gué",
+          "Signalisation pour les arrêts en bord de route et les prélèvements depuis un pont"
+        ]
+      }
+    ],
+    "eso": [
+      {
+        "titre": "Accès et rendez-vous",
+        "icone": "key",
+        "elements": [
+          "Autorisations d’accès et rendez-vous confirmés avec les gestionnaires ou exploitants",
+          "Fiches de localisation à jour et codes BSS des points d’eau"
+        ]
+      },
+      {
+        "titre": "Ouvrage et purge",
+        "icone": "well",
+        "elements": [
+          "Caractéristiques des ouvrages (diamètre, profondeur, équipement) pour calculer le volume à purger",
+          "Pompe, tuyaux propres et alimentation (batterie, véhicule, groupe électrogène)",
+          "Sonde piézométrique propre",
+          "Chronomètre et récipient gradué pour estimer le débit"
+        ]
+      },
+      {
+        "titre": "Mesures in situ",
+        "icone": "gauge",
+        "elements": [
+          "Sonde redox étalonnée, en plus des paramètres habituels",
+          "Seau ou cellule de mesure alimentés en continu, tuyau assez long pour atteindre le fond du récipient"
+        ]
+      },
+      {
+        "titre": "Échantillonnage",
+        "icone": "filter",
+        "elements": [
+          "Kit de filtration (seringues, filtres neufs) si des métaux dissous sont analysés",
+          "Gants nitrile à usage unique"
+        ]
+      }
+    ]
+  },
+  "references": {
+    "NF EN ISO 5667-1": "Qualité de l’eau – échantillonnage : conception des programmes et des techniques d’échantillonnage.",
+    "NF EN ISO 5667-3": "Qualité de l’eau – échantillonnage : conservation et manipulation des échantillons d’eau (conservation réfrigérée à 5 ± 3 °C).",
+    "NF EN ISO 5667-6": "Qualité de l’eau – échantillonnage : rivières et cours d’eau.",
+    "NF EN ISO 5667-11": "Qualité de l’eau – échantillonnage : eaux souterraines.",
+    "NF EN ISO 5667-14": "Qualité de l’eau – échantillonnage : contrôle et assurance qualité de l’échantillonnage.",
+    "FD T90-523-1": "Guide de prélèvement pour le suivi de la qualité des eaux dans l’environnement : prélèvement d’eau superficielle (cours d’eau).",
+    "FD T90-523-3": "Guide de prélèvement pour le suivi de la qualité des eaux dans l’environnement : prélèvement d’eau souterraine.",
+    "NF EN ISO 10523": "Qualité de l’eau – détermination du pH.",
+    "NF EN 27888": "Qualité de l’eau – détermination de la conductivité électrique.",
+    "NF EN ISO 5814": "Qualité de l’eau – dosage de l’oxygène dissous, méthode électrochimique à la sonde.",
+    "NF EN ISO 7027-1": "Qualité de l’eau – détermination de la turbidité.",
+    "NF EN 13946": "Qualité de l’eau – échantillonnage et prétraitement des diatomées benthiques de rivières.",
+    "NF EN ISO/IEC 17025": "Exigences générales concernant la compétence des laboratoires d’étalonnages et d’essais."
+  },
+  "feuilles": {
+    "1": {
+      "titre": "Fiche station de contrôle terrain",
+      "onglet": "Station",
+      "theme": "ocean",
+      "portee": "station",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "titres": {
+        "ce": "Fiche de contrôle terrain",
+        "eso": "Fiche de contrôle terrain"
+      },
+      "intro": "Fiche station : repères du contrôle (date, heures d’arrivée et de départ, contrôleur, équipe du prestataire, météo, niveau d’eau, observations). Ces informations sont relevées par le contrôleur et ne sont pas cotées. Le prestataire facilite le relevé en présentant son équipe à l’arrivée.",
+      "documents": [
+        "Liste de l’équipe présente (noms, fonctions)",
+        "Fiche station ou fiche de localisation à jour"
+      ]
+    },
+    "2": {
+      "titre": "Organisation, sécurité et déroulé de mission",
+      "onglet": "Organisation",
+      "theme": "navy",
+      "portee": "tournee",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "titres": {
+        "ce": "Organisation, logistique et sécurité de la tournée",
+        "eso": "Organisation, logistique et sécurité de la tournée"
+      },
+      "intro": "Organisation, logistique et sécurité de la tournée. Feuille renseignée une fois par tournée, et non pour chaque station : chaque point est jugé une seule fois pour toute la journée. Dès le début de la tournée, le prestataire doit pouvoir présenter son équipe, ses moyens, ses EPI, son planning, ses documents, et son organisation de traçabilité et d’expédition des échantillons.",
+      "documents": [
+        "CCTP du marché et lettre de mission ou bon de commande",
+        "Planning de la tournée transmis à l’OEG (stations, ordre, horaires)",
+        "Protocoles et référentiels techniques en vigueur",
+        "Notices et suivi du matériel de mesure",
+        "Fiches stations (localisation, accès, point de prélèvement)",
+        "Support de notation des données et support papier de secours",
+        "Organisation du dépôt ou de l’expédition des échantillons (lieu, heure, transporteur)"
+      ]
+    },
+    "3": {
+      "titre": "Prise d’informations de terrain – caractérisation de la station",
+      "onglet": "Caractérisation",
+      "theme": "green",
+      "portee": "station",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "titres": {
+        "ce": "Prise d’informations de terrain – station et site",
+        "eso": "Prise d’informations de terrain – station et site"
+      },
+      "intro": "Station et site : informations de terrain relevées par le préleveur (identification de la station, conditions du jour, équipe, protocoles, coordonnées, photos), localisation et approche de la station, observations environnementales et, pour les eaux souterraines, accès au site et rendez-vous. Pour les informations F3.1 à F3.18, le contrôleur vérifie que la fiche terrain du préleveur les mentionne et qu’elles sont exactes ; les valeurs connues sont pré-remplies depuis le référentiel des stations.",
+      "documents": [
+        "Fiche terrain du protocole, remplie sur place",
+        "Fiche station ou fiche de localisation à jour",
+        "Appareil de positionnement et appareil photo",
+        "Eaux souterraines : autorisation d’accès et rendez-vous confirmé avec le gestionnaire"
+      ]
+    },
+    "10": {
+      "titre": "Eau souterraine – ouvrage, pompage et purge",
+      "onglet": "Ouvrage et purge",
+      "theme": "slate",
+      "portee": "station",
+      "types": [
+        "eso"
+      ],
+      "intro": "Eaux souterraines – ouvrage, pompage et purge (une fiche par point d’eau). Le préleveur adapte l’accès à l’eau, la purge et la mesure du niveau à la configuration de l’ouvrage, pour prélever une eau représentative de la nappe et non une eau restée immobile dans l’ouvrage ou les canalisations.",
+      "documents": [
+        "Caractéristiques de l’ouvrage (diamètre, profondeur, équipement, pompe à demeure)",
+        "Protocole de purge du marché",
+        "Sonde piézométrique propre",
+        "Pompe, tuyaux propres et alimentation, si nécessaire"
+      ]
+    },
+    "4": {
+      "titre": "Physico-chimie, mesures in situ et flaconnage",
+      "onglet": "PC in situ",
+      "theme": "peach",
+      "portee": "station",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "titres": {
+        "ce": "Physico-chimie, mesures in situ, étalonnage et flaconnage",
+        "eso": "Physico-chimie, mesures in situ, étalonnage et flaconnage"
+      },
+      "intro": "Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les points sont jugés sur chaque station, sauf F4.2 et F4.18 à F4.25, communs à la tournée (une seule réponse). Le contrôleur ne fait pas de contre-mesure : il observe la façon de mesurer, l’état et l’étalonnage des appareils et la cohérence des valeurs. Le détail des appareils (marque, n° de série, dernière calibration, étalonnage et vérifications) est relevé dans le module « Appareils de mesure ».",
+      "documents": [
+        "Fiche de vie ou registre d’étalonnage de chaque appareil",
+        "Solutions étalons dans leur date de validité",
+        "Notices des appareils",
+        "Descriptif du flaconnage fourni par le laboratoire",
+        "Flacons de réserve"
+      ]
+    },
+    "5": {
+      "titre": "Physico-chimie – prélèvement, conditionnement et chaîne du froid",
+      "onglet": "PC prélèvement",
+      "theme": "orange",
+      "portee": "station",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "titres": {
+        "ce": "Prélèvement, conditionnement et chaîne du froid",
+        "eso": "Prélèvement, conditionnement et chaîne du froid"
+      },
+      "intro": "Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le remplissage, l’identification et la transmission des échantillons sont jugés sur chaque station ; les glacières, la réfrigération, le suivi thermique, le stockage intermédiaire et le matériel de prélèvement (F5.11, F5.12, F5.14, F5.15, F5.17, F5.18, F5.29 et F5.30) sont communs à la tournée.",
+      "documents": [
+        "Consignes de remplissage du laboratoire",
+        "Glacières, accumulateurs de froid et témoin de température",
+        "Thermomètre",
+        "Bordereaux d’envoi ou fiches de transmission",
+        "Étiquettes résistantes à l’eau"
+      ]
+    },
+    "6": {
+      "titre": "Invertébrés aquatiques – protocole PEZADA",
+      "onglet": "Invertébrés",
+      "theme": "violet",
+      "portee": "station",
+      "types": [
+        "bio"
+      ],
+      "intro": "Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le prélèvement suit le protocole PEZADA en vigueur : équipe, fiche terrain, limites de la station, nombre et répartition des prélèvements, matériel, conservation, identification et transport des échantillons. Les exigences chiffrées (nombre de prélèvements, répartition par habitat, maille, produit de conservation) sont celles du protocole et du CCTP du marché.",
+      "documents": [
+        "Protocole PEZADA en vigueur",
+        "Fiche terrain PEZADA",
+        "Fiche station avec coordonnées des limites amont et aval",
+        "Fiche de données de sécurité du produit de conservation"
+      ]
+    },
+    "7": {
+      "titre": "Diatomées – IDGF",
+      "onglet": "Diatomées",
+      "theme": "sky",
+      "portee": "station",
+      "types": [
+        "bio"
+      ],
+      "intro": "Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatomées benthiques suit le protocole IDGF en vigueur et les principes de la norme NF EN 13946 : substrats, matériel, nombre de supports, doublons, conservation, identification et transport. Les exigences chiffrées sont celles du protocole et du CCTP du marché.",
+      "documents": [
+        "Protocole IDGF en vigueur",
+        "Fiche terrain diatomées",
+        "Brosses propres pour chaque station",
+        "Fiche de données de sécurité du produit de conservation"
+      ]
+    },
+    "8": {
+      "titre": "Ichtyologie et mercure dans le biote",
+      "onglet": "Poissons",
+      "theme": "ocean",
+      "portee": "station",
+      "types": [
+        "bio"
+      ],
+      "intro": "Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur vérifie la mise en œuvre du protocole de pêche (filets maillants, pose et relève, biométrie) puis le choix, l’identification et la conservation des poissons destinés à l’analyse du mercure. Les exigences chiffrées (batterie de filets, mailles, durée de pose, espèces et nombre d’individus) sont celles des protocoles et du CCTP du marché.",
+      "documents": [
+        "Protocole de pêche du marché",
+        "Protocole d’échantillonnage du biote pour le mercure",
+        "Fiche terrain ichtyologique",
+        "Autorisation de pêche à des fins scientifiques, si elle est requise"
+      ]
+    },
+    "9": {
+      "titre": "Phytoplancton d’eau douce",
+      "onglet": "Phytoplancton",
+      "theme": "teal",
+      "portee": "station",
+      "types": [
+        "bio"
+      ],
+      "intro": "Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type intégré ou ponctuel, volume, nombre de prélèvements et doublons), l’homogénéisation, le flaconnage, la fixation au Lugol ou au produit prévu, la traçabilité, le stockage et le transport. Les exigences chiffrées sont celles du protocole et du CCTP du marché.",
+      "documents": [
+        "Protocole phytoplancton du marché",
+        "Fiche terrain phytoplancton",
+        "Flacons protégés de la lumière",
+        "Fixateur prévu et sa fiche de données de sécurité"
+      ]
+    }
+  },
+  "criteres": {
+    "it-F1-R1": {
+      "feuille": 1,
+      "no": "R1",
+      "libelle": "Date",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : date du contrôle de la station (pré-remplie avec la date de la tournée)."
+    },
+    "it-F1-R2": {
+      "feuille": 1,
+      "no": "R2",
+      "libelle": "Heure d’arrivée sur site",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : heure d’arrivée du contrôleur sur la station (fiche eaux souterraines : heure d’arrivée sur site)."
+    },
+    "it-F1-R8": {
+      "feuille": 1,
+      "no": "R8",
+      "libelle": "Heure de départ du site",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : heure de départ du site."
+    },
+    "it-F1-R3": {
+      "feuille": 1,
+      "no": "R3",
+      "libelle": "Contrôleur OEG",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : nom du contrôleur OEG (pré-rempli)."
+    },
+    "it-F1-R4": {
+      "feuille": 1,
+      "no": "R4",
+      "libelle": "Opérateurs du prestataire",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : noms des opérateurs du prestataire présents sur la station. Le prestataire présente son équipe (noms et fonctions) à l’arrivée du contrôleur."
+    },
+    "it-F1-R5": {
+      "feuille": 1,
+      "no": "R5",
+      "libelle": "Météo",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : conditions météorologiques au moment du contrôle."
+    },
+    "it-F1-R6": {
+      "feuille": 1,
+      "no": "R6",
+      "libelle": "Niveau d’eau",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : niveau d’eau apparent (étiage, basses eaux, moyennes eaux, hautes eaux, crue). Sans objet pour les eaux souterraines."
+    },
+    "it-F1-R7": {
+      "feuille": 1,
+      "no": "R7",
+      "libelle": "Observations",
+      "section": "Repères terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : remarques générales sur la station le jour du contrôle (accès, particularités, événements)."
+    },
+    "it-F2-1.1": {
+      "feuille": 2,
+      "no": "1.1",
+      "libelle": "Agent(s) OEG",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : nom du ou des agents OEG qui réalisent le contrôle (pré-rempli)."
+    },
+    "it-F2-1.2": {
+      "feuille": 2,
+      "no": "1.2",
+      "libelle": "Structure accompagnatrice",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : organisme qui accompagne le contrôle, le cas échéant (gestionnaire du site, partenaire…)."
+    },
+    "it-F2-1.3": {
+      "feuille": 2,
+      "no": "1.3",
+      "libelle": "Agent(s) accompagnateur(s)",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : nom des personnes accompagnatrices, le cas échéant."
+    },
+    "it-F2-1.4": {
+      "feuille": 2,
+      "no": "1.4",
+      "libelle": "Date mission",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : date de la tournée (obligatoire)."
+    },
+    "it-F2-1.5": {
+      "feuille": 2,
+      "no": "1.5",
+      "libelle": "Heure début",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : heure de début du contrôle."
+    },
+    "it-F2-1.6": {
+      "feuille": 2,
+      "no": "1.6",
+      "libelle": "Heure fin",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : heure de fin du contrôle."
+    },
+    "it-F2-1.7": {
+      "feuille": 2,
+      "no": "1.7",
+      "libelle": "Moyens OEG",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : moyens mobilisés par l’OEG (véhicule, embarcation, matériel)."
+    },
+    "it-F2-1.8": {
+      "feuille": 2,
+      "no": "1.8",
+      "libelle": "Niveau d’eau",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : situation hydrologique générale de la journée. Sans objet pour les eaux souterraines."
+    },
+    "it-F2-1.9": {
+      "feuille": 2,
+      "no": "1.9",
+      "libelle": "Conditions météo",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : conditions météorologiques de la journée."
+    },
+    "it-F2-1.10": {
+      "feuille": 2,
+      "no": "1.10",
+      "libelle": "Difficulté d’accès",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : difficultés d’accès rencontrées (piste, niveau d’eau, végétation, autorisation…)."
+    },
+    "it-F2-1.11": {
+      "feuille": 2,
+      "no": "1.11",
+      "libelle": "Type d’audit",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : contrôle inopiné ou avec rendez-vous."
+    },
+    "it-F2-1.12": {
+      "feuille": 2,
+      "no": "1.12",
+      "libelle": "Lot / marché de prélèvement",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : lot ou marché de prélèvement contrôlé (intitulé ou référence)."
+    },
+    "it-F2-1.13": {
+      "feuille": 2,
+      "no": "1.13",
+      "libelle": "Support(s) audité(s)",
+      "section": "Identification mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "valeur": true,
+      "attendu": "Information à relever : supports contrôlés (eau, sédiments, biote…)."
+    },
+    "it-F2-2.1": {
+      "feuille": 2,
+      "no": "2.1",
+      "libelle": "Identification des prestataires",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Dès l’arrivée du contrôleur, l’équipe se présente : organisme prestataire, préleveur responsable et assistant(s), avec leur fonction. Un éventuel sous-traitant est annoncé et a été déclaré à l’OEG.",
+      "verification": "Le contrôleur demande à l’équipe de se présenter et compare avec le prestataire attendu (planning, lettre de mission). Il relève les noms dans les repères terrain.",
+      "C": "Organisme, préleveur et assistant identifiés sans ambiguïté et conformes à la commande.",
+      "P": "Identification obtenue mais incomplète ou tardive (fonction de l’assistant non précisée, nom à redemander).",
+      "NC": "Équipe ou organisme différent de celui attendu sans information préalable de l’OEG (sous-traitance non déclarée), ou personne qui refuse de s’identifier.",
+      "refs": [
+        "CCTP du marché",
+        "Lettre de mission / bon de commande"
+      ]
+    },
+    "it-F2-2.2": {
+      "feuille": 2,
+      "no": "2.2",
+      "libelle": "Effectif total",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’effectif présent est suffisant pour réaliser toutes les opérations prévues avec qualité et en sécurité. Il correspond à ce que prévoient le CCTP et l’offre du prestataire.",
+      "verification": "Le contrôleur compte les personnes présentes (« Valeur / réponse ») et compare avec l’effectif prévu.",
+      "C": "Effectif conforme à l’effectif prévu et adapté aux opérations.",
+      "P": "Effectif conforme mais organisation tendue : une même personne enchaîne mesures, prélèvements et notation, avec des retards.",
+      "NC": "Effectif inférieur à l’effectif prévu, ou insuffisant pour la sécurité (personne seule pour une opération qui exige d’être à plusieurs).",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Effectif minimal attendu par type d’opération (navigation, pêche, prélèvement depuis un pont…) : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F2-2.3": {
+      "feuille": 2,
+      "no": "2.3",
+      "libelle": "Stagiaires en observation",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les stagiaires présents seulement en observation sont annoncés, encadrés en permanence et ne réalisent aucune mesure ni aucun prélèvement. Ils portent les mêmes EPI que l’équipe.",
+      "verification": "Le contrôleur relève le nombre de stagiaires en observation (« Valeur / réponse ») et vérifie qu’ils n’interviennent pas sur les opérations.",
+      "C": "Stagiaires annoncés, équipés et encadrés, sans intervention sur les opérations.",
+      "P": "Stagiaire encadré mais EPI incomplet, ou présence non annoncée à l’arrivée.",
+      "NC": "Stagiaire en observation qui réalise seul une mesure ou un prélèvement, ou qui n’est pas équipé dans une situation à risque (navigation, pont).",
+      "NA": "Aucun stagiaire en observation (valeur 0).",
+      "refs": []
+    },
+    "it-F2-2.4": {
+      "feuille": 2,
+      "no": "2.4",
+      "libelle": "Stagiaires chargés de mission",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Un stagiaire qui réalise des opérations le fait après formation au protocole, sous la responsabilité directe d’un agent qualifié présent sur place, et dans le cadre prévu par le marché.",
+      "verification": "Le contrôleur relève le nombre de stagiaires chargés d’opérations et observe l’encadrement (consignes données, vérifications par l’agent qualifié).",
+      "C": "Stagiaire formé, encadré de près, opérations vérifiées par l’agent qualifié.",
+      "P": "Encadrement présent mais intermittent (vérifications non systématiques), sans erreur constatée.",
+      "NC": "Stagiaire qui réalise seul des opérations sans encadrement, ou erreurs de protocole non corrigées par l’agent responsable.",
+      "NA": "Aucun stagiaire chargé d’opérations (valeur 0).",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Conditions d’intervention des stagiaires admises par le marché : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F2-2.5": {
+      "feuille": 2,
+      "no": "2.5",
+      "libelle": "Agents non spécialisés mais formés",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les agents non spécialistes du prélèvement ne font que les tâches pour lesquelles ils ont été formés (aide au portage, notation, sécurité). Leur formation peut être justifiée sur demande.",
+      "verification": "Le contrôleur relève leur nombre et demande quelles tâches leur sont confiées et quelle formation ils ont suivie.",
+      "C": "Tâches limitées et cohérentes avec la formation déclarée.",
+      "P": "Formation déclarée mais non justifiable sur le moment ; tâches sans incidence sur les échantillons.",
+      "NC": "Agent qui réalise des opérations techniques (mesures, prélèvements, conditionnement) sans formation démontrée.",
+      "NA": "Aucun agent dans cette situation (valeur 0).",
+      "refs": []
+    },
+    "it-F2-2.6": {
+      "feuille": 2,
+      "no": "2.6",
+      "libelle": "Agents non spécialisés non formés",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Aucun agent non formé ne réalise de mesure, de prélèvement ou de conditionnement des échantillons. S’il est présent, il n’assure que des tâches annexes, sous surveillance et avec les EPI requis.",
+      "verification": "Le contrôleur relève leur nombre et observe les tâches réellement effectuées.",
+      "C": "Présence limitée à des tâches annexes encadrées.",
+      "P": "Agent non formé qui aide ponctuellement une opération technique sous contrôle direct, sans incidence constatée.",
+      "NC": "Agent non formé qui réalise une mesure, un prélèvement ou le conditionnement des échantillons.",
+      "NA": "Aucun agent dans cette situation (valeur 0).",
+      "refs": []
+    },
+    "it-F2-2.7": {
+      "feuille": 2,
+      "no": "2.7",
+      "libelle": "Sous-effectif",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’équipe n’est pas en sous-effectif. En cas d’absence imprévue, l’OEG est prévenu et les opérations qui ne peuvent pas être bien réalisées ou qui deviennent dangereuses sont reportées.",
+      "verification": "Le contrôleur indique « Oui » ou « Non » et rapproche l’effectif des opérations à réaliser.",
+      "C": "Pas de sous-effectif.",
+      "P": "Sous-effectif ponctuel signalé à l’OEG et compensé par une réorganisation, sans incidence sur la qualité ni sur la sécurité.",
+      "NC": "Sous-effectif non signalé, ou qui conduit à supprimer ou bâcler une opération, ou à réaliser seul une opération à risque.",
+      "refs": [
+        "CCTP du marché"
+      ]
+    },
+    "it-F2-2.8": {
+      "feuille": 2,
+      "no": "2.8",
+      "libelle": "Conformité équipe/CCTP",
+      "section": "Prestataires et équipe",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "La composition de l’équipe (nombre, qualifications, rôles) correspond à celle prévue par le CCTP et l’offre du prestataire.",
+      "verification": "Le contrôleur fait la synthèse des points F2.2.1 à F2.2.7 et la compare au CCTP.",
+      "C": "Équipe conforme au CCTP.",
+      "P": "Écart mineur sans incidence (remplaçant de qualification équivalente non annoncé).",
+      "NC": "Équipe non conforme aux exigences du CCTP (nombre ou qualifications).",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Composition et qualifications d’équipe exigées : à préciser par l’OEG d’après le CCTP et l’offre retenue."
+    },
+    "it-F2-3.1": {
+      "feuille": 2,
+      "no": "3.1",
+      "libelle": "Type(s) de moyen",
+      "section": "Moyens de locomotion",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le moyen de locomotion (4x4, bateau motorisé ou pirogue, à pied, hélicoptère, avion…) est adapté à l’accès des stations, au transport du matériel et au maintien des échantillons au froid.",
+      "verification": "Le contrôleur relève le ou les moyens utilisés (« Valeur / réponse ») et juge leur adéquation à la tournée.",
+      "C": "Moyen adapté à toutes les stations de la tournée.",
+      "P": "Moyen adapté mais contraignant pour le matériel ou les échantillons (rangement difficile, glacières exposées au soleil).",
+      "NC": "Moyen inadapté qui empêche d’atteindre une station ou qui met en danger l’équipe ou les échantillons.",
+      "refs": []
+    },
+    "it-F2-3.2": {
+      "feuille": 2,
+      "no": "3.2",
+      "libelle": "État général",
+      "section": "Moyens de locomotion",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le véhicule ou l’embarcation est en bon état apparent, sans défaut visible qui compromet la sécurité (pneus, éclairage, coque, moteur, amarrage).",
+      "verification": "Observation visuelle du contrôleur, sans inspection technique.",
+      "C": "Bon état apparent.",
+      "P": "Usure ou défaut mineur sans risque immédiat (propreté, petit équipement manquant).",
+      "NC": "Défaut visible qui compromet la sécurité (pneu lisse, fuite de carburant, coque endommagée).",
+      "refs": []
+    },
+    "it-F2-3.3": {
+      "feuille": 2,
+      "no": "3.3",
+      "libelle": "Conducteur(s)",
+      "section": "Moyens de locomotion",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le conducteur ou le pilote détient le permis ou le titre requis pour le moyen utilisé et conduit prudemment (vitesse adaptée, code de la route et règles de navigation respectés).",
+      "verification": "Le contrôleur observe la conduite pendant les trajets ; il peut demander à voir le titre de conduite ou de navigation.",
+      "C": "Conducteur habilité, conduite prudente.",
+      "P": "Conduite globalement prudente avec un comportement à corriger (téléphone au volant, vitesse ponctuellement excessive).",
+      "NC": "Absence du titre requis, ou conduite dangereuse.",
+      "refs": []
+    },
+    "it-F2-3.4": {
+      "feuille": 2,
+      "no": "3.4",
+      "libelle": "Conformité et sécurité",
+      "section": "Moyens de locomotion",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le moyen de locomotion dispose des équipements de sécurité réglementaires (par exemple l’armement de sécurité d’une embarcation), d’une trousse de premiers secours et d’un moyen d’alerte adapté à la zone (téléphone, téléphone satellite en zone non couverte).",
+      "verification": "Le contrôleur vérifie la présence de ces équipements et demande comment l’alerte serait donnée en cas d’accident.",
+      "C": "Équipements présents, moyen d’alerte opérationnel.",
+      "P": "Équipement présent mais incomplet ou peu accessible (trousse de secours incomplète).",
+      "NC": "Équipement de sécurité obligatoire absent, ou aucun moyen d’alerte en zone isolée.",
+      "refs": [
+        "Consignes de sécurité du prestataire"
+      ]
+    },
+    "it-F2-3.5": {
+      "feuille": 2,
+      "no": "3.5",
+      "libelle": "Aménagement du véhicule (étagères, rangement…)",
+      "section": "Moyens de locomotion",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le matériel est rangé et arrimé (étagères, caisses). Le matériel propre, le flaconnage et les échantillons sont séparés du matériel sale, du carburant et des produits (conservateurs, solutions).",
+      "verification": "Observation du rangement du véhicule ou de l’embarcation.",
+      "C": "Rangement organisé, séparation entre propre et sale, matériel arrimé.",
+      "P": "Rangement perfectible, sans contact entre les échantillons et une source de contamination.",
+      "NC": "Flacons ou échantillons au contact du carburant, de produits ou de matériel sale, ou chargement non arrimé dangereux.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F2-4.1": {
+      "feuille": 2,
+      "no": "4.1",
+      "libelle": "Tenue adaptée",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Chaque membre de l’équipe porte une tenue adaptée au terrain et aux opérations : chaussures ou bottes adaptées, waders pour entrer dans l’eau, vêtements couvrants, protection contre le soleil et les insectes.",
+      "verification": "Observation visuelle ; le jugement porte sur toute la tournée.",
+      "C": "Tenue adaptée pour tous.",
+      "P": "Tenue globalement adaptée avec un manque ponctuel (chaussures peu adaptées pour une personne restée sur la berge).",
+      "NC": "Tenue inadaptée qui expose à un risque (entrée dans l’eau sans équipement adapté).",
+      "refs": []
+    },
+    "it-F2-4.2": {
+      "feuille": 2,
+      "no": "4.2",
+      "libelle": "EPI navigation présents",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Un gilet de sauvetage en bon état est disponible pour chaque personne embarquée, y compris le contrôleur et les stagiaires.",
+      "verification": "Le contrôleur compte les gilets et vérifie leur état apparent.",
+      "C": "Un gilet en bon état par personne.",
+      "P": "Gilets présents mais état à surveiller (sangle usée, taille mal adaptée).",
+      "NC": "Nombre de gilets insuffisant, ou gilets hors d’usage.",
+      "NA": "Pas de navigation pendant la tournée.",
+      "refs": []
+    },
+    "it-F2-4.3": {
+      "feuille": 2,
+      "no": "4.3",
+      "libelle": "Port des EPI navigation",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les gilets de sauvetage sont portés et attachés pendant toute la navigation, par toutes les personnes embarquées.",
+      "verification": "Observation pendant les trajets en embarcation.",
+      "C": "Gilets portés et attachés en permanence.",
+      "P": "Gilet porté mais non attaché, ou retiré brièvement ; rappel fait et suivi.",
+      "NC": "Navigation sans gilet porté.",
+      "NA": "Pas de navigation pendant la tournée.",
+      "refs": []
+    },
+    "it-F2-4.4": {
+      "feuille": 2,
+      "no": "4.4",
+      "libelle": "Port des EPI prélèvements",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Pendant les prélèvements, l’équipe porte les EPI adaptés au contexte : gilet de sauvetage sur une berge à risque, depuis un pont, dans un gué ou en eau profonde ; gants, waders et équipements prévus pour manipuler les produits de conservation.",
+      "verification": "Observation pendant les opérations sur chaque station ; le jugement porte sur toute la tournée.",
+      "C": "EPI adaptés portés à chaque opération.",
+      "P": "Oubli ponctuel corrigé spontanément ou après rappel, sans exposition à un risque sérieux.",
+      "NC": "Opération à risque (berge instable, pont, courant) sans gilet de sauvetage, ou produit de conservation manipulé sans gants.",
+      "refs": [
+        "Consignes de sécurité du prestataire"
+      ]
+    },
+    "it-F2-4.5": {
+      "feuille": 2,
+      "no": "4.5",
+      "libelle": "Rappels EPI",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le responsable d’équipe rappelle les consignes de sécurité et le port des EPI, en début de journée et avant les opérations à risque, et les fait respecter.",
+      "verification": "Le contrôleur observe si des rappels sont faits ou demande comment les consignes sont transmises à l’équipe.",
+      "C": "Rappels faits et consignes respectées.",
+      "P": "Pas de rappel, mais consignes connues et appliquées.",
+      "NC": "Aucune consigne, ou manquements non corrigés par le responsable.",
+      "refs": [
+        "Consignes de sécurité du prestataire"
+      ]
+    },
+    "it-F2-4.6": {
+      "feuille": 2,
+      "no": "4.6",
+      "libelle": "Sécurité routière / équipements (triangle, chasuble, cônes…)",
+      "section": "EPI (Équipements de protection individuelle)",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Lors d’un arrêt ou d’un prélèvement en bord de route ou depuis un pont, le véhicule est stationné en sécurité, la signalisation est posée (triangle, cônes) et l’équipe porte un gilet haute visibilité.",
+      "verification": "Observation lors des arrêts en bord de route ou sur un pont.",
+      "C": "Signalisation et gilets haute visibilité en place.",
+      "P": "Signalisation partielle (gilet porté mais cônes non posés) sur une route peu fréquentée.",
+      "NC": "Aucune signalisation ni gilet haute visibilité sur une route circulée ou un pont.",
+      "NA": "Aucun arrêt en bord de route ni prélèvement depuis un pont pendant la tournée.",
+      "refs": []
+    },
+    "it-F2-5.1": {
+      "feuille": 2,
+      "no": "5.1",
+      "libelle": "Jour",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "La tournée a lieu le jour annoncé à l’OEG dans le planning. Tout changement de date est signalé à l’avance.",
+      "verification": "Le contrôleur saisit la date (« Valeur / réponse ») et la compare au planning communiqué.",
+      "C": "Date conforme au planning.",
+      "P": "Changement de date signalé tardivement, sans gêne pour le contrôle.",
+      "NC": "Changement non signalé qui empêche ou compromet le contrôle.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Délai de transmission du planning et des modifications à l’OEG : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F2-5.2": {
+      "feuille": 2,
+      "no": "5.2",
+      "libelle": "Heure début",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "La tournée commence à l’heure annoncée, ou à une heure qui permet de tenir le programme et les délais de dépôt des échantillons.",
+      "verification": "Le contrôleur saisit l’heure de début (« Valeur / réponse ») et la compare à l’horaire annoncé.",
+      "C": "Horaire respecté.",
+      "P": "Retard limité, sans conséquence sur le programme.",
+      "NC": "Retard important ou début non annoncé qui compromet le programme ou le contrôle.",
+      "refs": []
+    },
+    "it-F2-5.3": {
+      "feuille": 2,
+      "no": "5.3",
+      "libelle": "Heure fin",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "La tournée se termine à une heure cohérente avec le programme et qui permet le dépôt ou l’expédition des échantillons dans les délais.",
+      "verification": "Le contrôleur saisit l’heure de fin (« Valeur / réponse »).",
+      "C": "Fin cohérente avec le programme et les délais de dépôt.",
+      "P": "Fin tardive sans conséquence sur les échantillons.",
+      "NC": "Fin tardive qui empêche le dépôt ou l’expédition des échantillons dans les délais.",
+      "refs": []
+    },
+    "it-F2-5.4": {
+      "feuille": 2,
+      "no": "5.4",
+      "libelle": "Description des étapes de la mission",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le responsable d’équipe sait décrire le déroulé de la mission : stations et ordre de passage, opérations prévues sur chaque station, gestion du froid, lieu et heure de dépôt ou d’expédition des échantillons.",
+      "verification": "Le contrôleur demande au responsable de décrire la journée et résume les étapes (« Valeur / réponse »).",
+      "C": "Déroulé clair, cohérent et connu de l’équipe.",
+      "P": "Déroulé connu mais imprécis sur un point (heure de dépôt non fixée).",
+      "NC": "Déroulé inconnu ou incohérent (dépôt des échantillons non organisé).",
+      "refs": []
+    },
+    "it-F2-5.5": {
+      "feuille": 2,
+      "no": "5.5",
+      "libelle": "Planification de l’audit, respect du RDV / horaire si inopiné",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le prestataire a transmis à l’OEG un planning fiable qui permet un contrôle avec rendez-vous ou inopiné. Avec rendez-vous : l’équipe est présente au lieu et à l’heure convenus. Contrôle inopiné : l’équipe se trouve là où le planning l’indique.",
+      "verification": "Le contrôleur compare la situation à son arrivée avec le planning ou le rendez-vous.",
+      "C": "Rendez-vous ou planning respecté.",
+      "P": "Léger décalage expliqué, contrôleur prévenu.",
+      "NC": "Équipe absente du lieu prévu ou planning erroné, sans information de l’OEG.",
+      "refs": [
+        "CCTP du marché"
+      ]
+    },
+    "it-F2-5.6": {
+      "feuille": 2,
+      "no": "5.6",
+      "libelle": "Programme journalier (nombre de stations)",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le nombre de stations prévu dans la journée est réaliste : il permet de respecter le protocole sur chaque station, la sécurité et les délais de dépôt ou d’expédition des échantillons.",
+      "verification": "Le contrôleur relève le nombre de stations (pré-rempli avec les stations de la tournée) et juge s’il est tenable.",
+      "C": "Programme réaliste et tenu.",
+      "P": "Programme chargé qui entraîne une précipitation visible, sans écart de protocole constaté.",
+      "NC": "Programme intenable qui entraîne des écarts de protocole, l’abandon de stations ou le dépassement des délais.",
+      "refs": []
+    },
+    "it-F2-5.7": {
+      "feuille": 2,
+      "no": "5.7",
+      "libelle": "Amplitude horaire",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’amplitude de la journée reste compatible avec la sécurité de l’équipe, la qualité des opérations jusqu’à la dernière station et le respect des délais de transmission des échantillons.",
+      "verification": "Le contrôleur reprend la durée proposée par l’application à partir des heures de début et de fin (F2.5.2 et F2.5.3).",
+      "C": "Amplitude raisonnable.",
+      "P": "Journée longue qui entraîne fatigue ou précipitation en fin de tournée.",
+      "NC": "Amplitude excessive qui met en cause la sécurité (route ou navigation de nuit non prévue) ou la qualité des derniers prélèvements.",
+      "refs": []
+    },
+    "it-F2-5.8": {
+      "feuille": 2,
+      "no": "5.8",
+      "libelle": "Logique d’enchaînement de la tournée (ordre des stations)",
+      "section": "Planning et déroulé de mission",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’ordre des stations est logique : trajets optimisés, contraintes d’accès prises en compte (marée, rendez-vous, horaires d’ouverture), dernière station compatible avec l’heure de dépôt ou d’expédition des échantillons.",
+      "verification": "Le contrôleur examine l’ordre de passage et demande les raisons de cet ordre.",
+      "C": "Ordre cohérent et justifié.",
+      "P": "Ordre perfectible (détour, attente) sans incidence sur les échantillons.",
+      "NC": "Ordre incohérent qui entraîne un dépassement de délai ou une rupture de la chaîne du froid.",
+      "refs": []
+    },
+    "it-F2-6.1": {
+      "feuille": 2,
+      "no": "6.1",
+      "libelle": "Documents contractuels à disposition (CCTP, lettre de mission…)",
+      "section": "Documentation",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le CCTP et la lettre de mission (ou le bon de commande) de la prestation sont disponibles sur le terrain, sur papier ou sur un support numérique consultable hors connexion.",
+      "verification": "Le contrôleur demande à voir les documents.",
+      "C": "Documents présentés immédiatement.",
+      "P": "Documents disponibles mais incomplets, anciens ou longs à retrouver.",
+      "NC": "Aucun document contractuel disponible.",
+      "refs": [
+        "CCTP du marché",
+        "Lettre de mission / bon de commande"
+      ]
+    },
+    "it-F2-6.2": {
+      "feuille": 2,
+      "no": "6.2",
+      "libelle": "Référentiels techniques à disposition",
+      "section": "Documentation",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les protocoles et référentiels techniques de la prestation sont disponibles dans leur version applicable : protocoles de prélèvement, normes ou guides cités par le CCTP, consignes du laboratoire, modes opératoires internes.",
+      "verification": "Le contrôleur demande à voir les référentiels et vérifie leur version.",
+      "C": "Référentiels présents et à jour.",
+      "P": "Référentiels présents mais version ancienne ou document secondaire manquant.",
+      "NC": "Protocole de référence absent, ou version périmée appliquée.",
+      "refs": [
+        "CCTP du marché",
+        "FD T90-523-1",
+        "FD T90-523-3",
+        "NF EN ISO 5667-6",
+        "NF EN ISO 5667-11"
+      ],
+      "aPreciser": "Liste et versions des protocoles applicables par type de tournée : à préciser par l’OEG."
+    },
+    "it-F2-6.3": {
+      "feuille": 2,
+      "no": "6.3",
+      "libelle": "Documents techniques sur le matériel à disposition",
+      "section": "Documentation",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les notices et modes opératoires des appareils de mesure (étalonnage, entretien) sont disponibles, ainsi que le suivi des appareils (fiche de vie, registre d’étalonnage).",
+      "verification": "Le contrôleur demande la notice et le suivi d’un appareil utilisé.",
+      "C": "Notices et suivi disponibles.",
+      "P": "Notice disponible mais suivi incomplet.",
+      "NC": "Aucun document sur le matériel.",
+      "refs": []
+    },
+    "it-F2-6.4": {
+      "feuille": 2,
+      "no": "6.4",
+      "libelle": "Support d’informations sur stations et sites",
+      "section": "Documentation",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’équipe dispose des informations sur chaque station : localisation et coordonnées, accès, point de prélèvement précis, photos, contacts et rendez-vous éventuels (fiches stations ou fiches de localisation).",
+      "verification": "Le contrôleur demande les fiches des stations de la tournée.",
+      "C": "Fiches disponibles pour toutes les stations.",
+      "P": "Fiches incomplètes ou anciennes pour une partie des stations.",
+      "NC": "Aucune information sur les stations : localisation faite au jugé.",
+      "refs": []
+    },
+    "it-F2-7.1": {
+      "feuille": 2,
+      "no": "7.1",
+      "libelle": "Support de notation des données terrain",
+      "section": "Traçabilité et expédition",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les données de terrain (mesures, observations, heures, conditions) sont notées sur place, au fil des opérations, sur un support adapté (fiche papier, tablette, application) qui reprend toutes les rubriques demandées par le protocole.",
+      "verification": "Le contrôleur relève le support utilisé (« Valeur / réponse ») et vérifie qu’il est rempli au fur et à mesure.",
+      "C": "Support complet, rempli au fil des opérations.",
+      "P": "Support adapté mais rempli en différé, ou rubriques laissées vides.",
+      "NC": "Pas de notation sur place (données notées de mémoire après coup) ou support inadapté.",
+      "refs": [
+        "NF EN ISO 5667-14"
+      ]
+    },
+    "it-F2-7.2": {
+      "feuille": 2,
+      "no": "7.2",
+      "libelle": "Support papier disponible (secours)",
+      "section": "Traçabilité et expédition",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Un support papier (fiches terrain vierges, crayon) est disponible en secours en cas de panne de la tablette ou de l’application.",
+      "verification": "Le contrôleur demande à voir le support de secours.",
+      "C": "Support papier de secours disponible.",
+      "P": "Support de secours partiel (quelques fiches seulement).",
+      "NC": "Aucun support de secours alors que la notation est numérique.",
+      "NA": "La notation se fait déjà sur papier.",
+      "refs": []
+    },
+    "it-F2-7.3": {
+      "feuille": 2,
+      "no": "7.3",
+      "libelle": "Dépôt / expédition des échantillons le jour même",
+      "section": "Traçabilité et expédition",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les échantillons sont déposés au laboratoire ou remis au transporteur le jour même du prélèvement, en respectant le délai de prise en charge fixé par le CCTP et le laboratoire et en maintenant la chaîne du froid.",
+      "verification": "Le contrôleur demande l’organisation prévue (lieu, heure, transporteur) et, si possible, constate le dépôt ou l’expédition.",
+      "C": "Dépôt ou expédition le jour même, organisé et confirmé.",
+      "P": "Dépôt le jour même mais organisation fragile (heure limite tout juste respectée).",
+      "NC": "Échantillons gardés jusqu’au lendemain sans justification, ou délai du laboratoire dépassé.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "CCTP du marché",
+        "Consignes du laboratoire"
+      ],
+      "aPreciser": "Délai maximal entre prélèvement et prise en charge par le laboratoire, et cas admis de stockage intermédiaire (F5.17, F5.18) : à préciser par l’OEG d’après le CCTP et les consignes du laboratoire."
+    },
+    "it-F3-1": {
+      "feuille": 3,
+      "no": "1",
+      "libelle": "Nom du bassin versant",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le nom du bassin versant, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": []
+    },
+    "it-F3-2": {
+      "feuille": 3,
+      "no": "2",
+      "libelle": "Nom du cours d’eau",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le nom du cours d’eau, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": []
+    },
+    "it-F3-3": {
+      "feuille": 3,
+      "no": "3",
+      "libelle": "Nom de la station",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le nom de la station (eaux souterraines : libellé du point d’eau), conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": []
+    },
+    "it-F3-4": {
+      "feuille": 3,
+      "no": "4",
+      "libelle": "Code SANDRE station",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le code SANDRE de la station, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (échantillons et résultats rattachés à une mauvaise station).",
+      "refs": []
+    },
+    "it-F3-5": {
+      "feuille": 3,
+      "no": "5",
+      "libelle": "Rang de Strahler",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le rang de Strahler du cours d’eau à la station, lorsque le protocole le demande, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ]
+    },
+    "it-F3-6": {
+      "feuille": 3,
+      "no": "6",
+      "libelle": "Pression (RCO)",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur connaît les pressions identifiées sur la station (réseau de contrôle opérationnel, RCO) et note sur sa fiche les pressions observées le jour du prélèvement (orpaillage, rejet, travaux, déboisement…), ou l’absence de pression observée.",
+      "verification": "Le contrôleur compare la fiche terrain avec les pressions connues (pré-remplies) et avec ce qu’il observe.",
+      "C": "Pressions connues et observations du jour notées.",
+      "P": "Pressions connues mais observations du jour non notées.",
+      "NC": "Pression visible et importante non relevée (eau très turbide liée à un chantier ou à un site d’orpaillage en amont).",
+      "refs": []
+    },
+    "it-F3-7": {
+      "feuille": 3,
+      "no": "7",
+      "libelle": "Conditions météo",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain mentionne les conditions météorologiques du jour et, si le protocole le demande, celles des jours précédents (pluies qui peuvent modifier la qualité de l’eau).",
+      "verification": "Le contrôleur compare la fiche terrain avec les conditions observées (voir aussi F3.27 et F3.28).",
+      "C": "Conditions notées et exactes.",
+      "P": "Conditions notées de façon sommaire.",
+      "NC": "Conditions non notées ou erronées.",
+      "refs": []
+    },
+    "it-F3-8": {
+      "feuille": 3,
+      "no": "8",
+      "libelle": "Physico-chimie générale",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les paramètres physico-chimiques généraux prévus par le protocole sont mesurés et reportés sur la fiche terrain de la station. La façon de mesurer est contrôlée en feuille 4.",
+      "verification": "Le contrôleur vérifie que les valeurs figurent sur la fiche terrain (voir aussi F3.27 et F3.28).",
+      "C": "Paramètres mesurés et reportés.",
+      "P": "Paramètres mesurés mais reportés de façon incomplète (unité manquante).",
+      "NC": "Paramètres prévus non mesurés ou non reportés.",
+      "refs": []
+    },
+    "it-F3-9": {
+      "feuille": 3,
+      "no": "9",
+      "libelle": "Commune",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique la commune, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": []
+    },
+    "it-F3-10": {
+      "feuille": 3,
+      "no": "10",
+      "libelle": "Hydro-écorégion",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique l’hydro-écorégion de la station, lorsque le protocole le demande, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (risque de confusion entre stations).",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ]
+    },
+    "it-F3-11": {
+      "feuille": 3,
+      "no": "11",
+      "libelle": "Schéma général des habitats",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur réalise le schéma de la station demandé par le protocole : limites du tronçon, faciès, habitats et substrats, emplacement des prélèvements.",
+      "verification": "Le contrôleur consulte le schéma et le compare au terrain.",
+      "C": "Schéma complet, lisible et cohérent avec le terrain.",
+      "P": "Schéma sommaire mais exploitable.",
+      "NC": "Pas de schéma alors que le protocole l’exige, ou schéma sans rapport avec la station.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ],
+      "aPreciser": "Contenu attendu du schéma des habitats : à préciser par l’OEG d’après le protocole PEZADA."
+    },
+    "it-F3-12": {
+      "feuille": 3,
+      "no": "12",
+      "libelle": "Membres de l’équipe",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique les noms des membres de l’équipe présents, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (intervenants non tracés).",
+      "refs": []
+    },
+    "it-F3-13": {
+      "feuille": 3,
+      "no": "13",
+      "libelle": "Protocoles utilisés",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain indique le ou les protocoles appliqués, avec leur intitulé et leur version ; ce sont ceux prévus par le marché pour cette station.",
+      "verification": "Le contrôleur compare les protocoles indiqués avec ceux prévus (« Valeur / réponse »).",
+      "C": "Protocoles indiqués et conformes.",
+      "P": "Protocole conforme mais version non indiquée.",
+      "NC": "Protocole non indiqué, ou différent de celui prévu sans accord de l’OEG.",
+      "refs": [
+        "CCTP du marché",
+        "Protocole du marché"
+      ]
+    },
+    "it-F3-14": {
+      "feuille": 3,
+      "no": "14",
+      "libelle": "Date des prélèvements",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique la date des prélèvements, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (échantillons non datés ou mal datés).",
+      "refs": []
+    },
+    "it-F3-15": {
+      "feuille": 3,
+      "no": "15",
+      "libelle": "Coordonnées GPS des points de prélèvement",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur relève les coordonnées des points de prélèvement avec un appareil de positionnement, en précisant le système de coordonnées, et les reporte sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes avec la station.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou point éloigné de la station sans justification.",
+      "refs": []
+    },
+    "it-F3-16": {
+      "feuille": 3,
+      "no": "16",
+      "libelle": "Prise de photos",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur photographie la station et ses opérations comme le demande le protocole (vues de la station, point de prélèvement, anomalies éventuelles). Les photos sont identifiables (station, date).",
+      "verification": "Le contrôleur vérifie que les photos sont prises. Ses propres photos sont jointes en preuve aux critères ou dans l’encadré « Prise de photos / références / commentaires ».",
+      "C": "Photos prises et identifiables.",
+      "P": "Photos prises mais incomplètes (point de prélèvement non photographié).",
+      "NC": "Aucune photo alors que le protocole l’exige.",
+      "NA": "Photos non exigées pour cette prestation.",
+      "refs": [],
+      "aPreciser": "Photos exigées du prestataire par type de tournée : à préciser par l’OEG d’après le CCTP et les protocoles."
+    },
+    "it-F3-17": {
+      "feuille": 3,
+      "no": "17",
+      "libelle": "Station représentative de la ME",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur vérifie que la station reste représentative de la masse d’eau (pas de nouvelle perturbation locale, tronçon conforme à sa description) et signale tout changement à l’OEG.",
+      "verification": "Le contrôleur donne son appréciation (« Oui », « Non », « Partiellement ») et la justifie en observation.",
+      "C": "Station représentative ; changements éventuels signalés.",
+      "P": "Changement mineur constaté mais non noté.",
+      "NC": "Changement majeur (travaux, modification du lit) non signalé, ou prélèvement sur un tronçon non représentatif.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ]
+    },
+    "it-F3-18": {
+      "feuille": 3,
+      "no": "18",
+      "libelle": "Code BSS du point",
+      "section": "Prise d’informations de terrain",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du préleveur indique le code BSS du point d’eau, conforme au référentiel de la station.",
+      "verification": "Le contrôleur compare la fiche terrain du préleveur avec la valeur attendue (pré-remplie dans l’application quand elle est connue du référentiel).",
+      "C": "Information présente et exacte.",
+      "P": "Information présente mais incomplète ou approximative (abréviation, orthographe), sans risque de confusion.",
+      "NC": "Information absente ou erronée (échantillons et résultats rattachés à un autre point d’eau).",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F3-19": {
+      "feuille": 3,
+      "no": "19",
+      "libelle": "Respect de la localisation prévue (station / bordereau)",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement est réalisé sur la station prévue (cours d’eau) ou sur le point d’eau prévu au bordereau (eaux souterraines), et non sur un point voisin.",
+      "verification": "Le contrôleur compare le lieu de prélèvement avec la fiche station, le bordereau et les coordonnées théoriques.",
+      "C": "Lieu conforme.",
+      "P": "Léger décalage justifié par les conditions du jour (accès, niveau d’eau) et noté sur la fiche.",
+      "NC": "Prélèvement sur un autre point que celui prévu, sans justification ni information de l’OEG.",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F3-20": {
+      "feuille": 3,
+      "no": "20",
+      "libelle": "Site de prélèvement indiqué respecté",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur respecte l’emplacement précis du site de prélèvement indiqué sur la fiche station (amont du pont, aval du pont ou autre emplacement décrit).",
+      "verification": "Le contrôleur relève l’emplacement utilisé (« Valeur / réponse ») et le compare à la fiche station.",
+      "C": "Emplacement conforme.",
+      "P": "Emplacement voisin justifié et noté (accès, sécurité).",
+      "NC": "Autre côté du pont ou autre emplacement sans justification : l’eau prélevée peut être influencée par l’ouvrage ou par un rejet.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ]
+    },
+    "it-F3-21": {
+      "feuille": 3,
+      "no": "21",
+      "libelle": "Pertinence des modifications apportées le cas échéant",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Si la localisation est modifiée (accès impossible, sécurité, conditions hydrologiques), la modification est pertinente, aussi limitée que possible, notée sur la fiche (raison, nouvelles coordonnées) et signalée à l’OEG.",
+      "verification": "Le contrôleur apprécie la raison et l’ampleur de la modification.",
+      "C": "Modification pertinente, documentée et signalée.",
+      "P": "Modification pertinente mais documentation incomplète.",
+      "NC": "Modification injustifiée ou non documentée.",
+      "NA": "Aucune modification de localisation.",
+      "refs": []
+    },
+    "it-F3-22": {
+      "feuille": 3,
+      "no": "22",
+      "libelle": "Fiche de localisation tenue à jour par le préleveur",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur vérifie que la fiche de localisation est à jour (accès, repères, photos, coordonnées) et signale les changements constatés (nouvel accès, repère disparu, travaux).",
+      "verification": "Le contrôleur demande au préleveur s’il a consulté et mis à jour la fiche.",
+      "C": "Fiche vérifiée et mise à jour si nécessaire.",
+      "P": "Fiche consultée mais changements constatés non notés.",
+      "NC": "Fiche non consultée, ou erreurs connues non signalées.",
+      "refs": []
+    },
+    "it-F3-23": {
+      "feuille": 3,
+      "no": "23",
+      "libelle": "Observation de la station et du site",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Avant d’intervenir, le préleveur observe la station et le site : état du cours d’eau ou de l’ouvrage, conditions hydrologiques, accès, sécurité, éléments inhabituels.",
+      "verification": "Le contrôleur observe le comportement de l’équipe à son arrivée sur la station.",
+      "C": "Observation préalable faite.",
+      "P": "Observation rapide ou incomplète.",
+      "NC": "Intervention immédiate sans observation ; élément important non vu (rejet, pollution visible).",
+      "refs": []
+    },
+    "it-F3-24": {
+      "feuille": 3,
+      "no": "24",
+      "libelle": "Appréhension du contexte",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur tient compte du contexte du jour (crue ou étiage, influence de la marée, travaux, rejet, orpaillage, pluie récente) pour adapter son intervention dans le respect du protocole, et il le note.",
+      "verification": "Le contrôleur échange avec le préleveur sur le contexte et vérifie qu’il est noté.",
+      "C": "Contexte pris en compte et noté.",
+      "P": "Contexte perçu mais non noté.",
+      "NC": "Contexte ignoré au point de compromettre la représentativité (prélèvement dans le panache d’un rejet sans le signaler).",
+      "refs": []
+    },
+    "it-F3-25": {
+      "feuille": 3,
+      "no": "25",
+      "libelle": "Gestion des particularités",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Face à une situation particulière (accès difficile, matériel défaillant, présence de tiers, conditions hydrologiques inhabituelles), le préleveur trouve une solution conforme au protocole ou reporte l’opération, et il en garde la trace.",
+      "verification": "Le contrôleur observe la gestion de la situation et sa traçabilité.",
+      "C": "Particularité bien gérée et documentée.",
+      "P": "Solution acceptable mais non documentée.",
+      "NC": "Solution contraire au protocole ou à la sécurité.",
+      "NA": "Aucune particularité sur cette station.",
+      "refs": []
+    },
+    "it-F3-26": {
+      "feuille": 3,
+      "no": "26",
+      "libelle": "Logique d’enchaînement des différentes opérations",
+      "section": "Localisation et approche",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les opérations s’enchaînent dans un ordre qui protège les échantillons, conformément au protocole : par exemple, mesures et prélèvements d’eau avant de piétiner le lit ou avant les prélèvements biologiques qui remettent les sédiments en suspension.",
+      "verification": "Le contrôleur observe l’ordre des opérations sur la station.",
+      "C": "Ordre logique respecté.",
+      "P": "Ordre perfectible sans incidence constatée sur les échantillons.",
+      "NC": "Ordre qui perturbe l’échantillon (eau prélevée juste en aval d’une zone piétinée).",
+      "refs": [
+        "Protocole du marché"
+      ]
+    },
+    "it-F3-27": {
+      "feuille": 3,
+      "no": "27",
+      "libelle": "Complétude des observations",
+      "section": "Observations environnementales",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur renseigne toutes les observations environnementales prévues par la fiche terrain (aspect de l’eau, couleur, odeur, débit apparent, végétation, sources de perturbation…).",
+      "verification": "Le contrôleur vérifie les rubriques de la fiche terrain.",
+      "C": "Observations complètes.",
+      "P": "Rubriques secondaires laissées vides.",
+      "NC": "Observations absentes.",
+      "refs": []
+    },
+    "it-F3-28": {
+      "feuille": 3,
+      "no": "28",
+      "libelle": "Qualité des observations (couleur, limpidité…)",
+      "section": "Observations environnementales",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les observations sont exactes et précises, en particulier la couleur et la limpidité de l’eau, décrites avec les termes de la fiche terrain.",
+      "verification": "Le contrôleur compare les observations notées avec ce qu’il constate.",
+      "C": "Observations exactes.",
+      "P": "Observations imprécises (termes vagues).",
+      "NC": "Observations erronées (eau notée claire alors qu’elle est turbide).",
+      "refs": []
+    },
+    "it-F3-29": {
+      "feuille": 3,
+      "no": "29",
+      "libelle": "Préleveur accompagné",
+      "section": "Accès au site et rendez-vous",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : le préleveur est-il accompagné (gestionnaire, exploitant, propriétaire) ? Oui / Non."
+    },
+    "it-F3-30": {
+      "feuille": 3,
+      "no": "30",
+      "libelle": "Autorisation d’entrer sur le site et de prélever",
+      "section": "Accès au site et rendez-vous",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur a l’autorisation d’accéder au site et de prélever (accord du propriétaire ou de l’exploitant, rendez-vous pris) et peut le justifier.",
+      "verification": "Le contrôleur demande comment l’accès a été autorisé.",
+      "C": "Autorisation obtenue.",
+      "P": "Autorisation orale non tracée.",
+      "NC": "Accès ou prélèvement sans autorisation.",
+      "NA": "Site en accès libre, sans autorisation nécessaire.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F3-31": {
+      "feuille": 3,
+      "no": "31",
+      "libelle": "Préleveur à l’heure au RDV",
+      "section": "Accès au site et rendez-vous",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur est présent à l’heure convenue avec le gestionnaire ou le contrôleur ; en cas de retard, il prévient.",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Sans objet » et, si « Non », le retard en minutes.",
+      "C": "À l’heure.",
+      "P": "Retard limité et annoncé.",
+      "NC": "Retard important non annoncé, ou rendez-vous manqué.",
+      "NA": "Pas de rendez-vous.",
+      "refs": []
+    },
+    "it-F3-32": {
+      "feuille": 3,
+      "no": "32",
+      "libelle": "Gestionnaire à l’heure au RDV",
+      "section": "Accès au site et rendez-vous",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur a pris et confirmé le rendez-vous avec le gestionnaire. Le retard éventuel du gestionnaire est noté ; il n’est reproché au prestataire que si le rendez-vous n’a pas été organisé ou confirmé.",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Sans objet » et, si « Non », le retard du gestionnaire en minutes.",
+      "C": "Gestionnaire présent à l’heure, ou retard sans lien avec l’organisation du prestataire.",
+      "P": "Rendez-vous pris mais non reconfirmé, ce qui entraîne une attente.",
+      "NC": "Rendez-vous non pris ou mal communiqué, ce qui empêche l’accès au site.",
+      "NA": "Pas de gestionnaire attendu.",
+      "refs": []
+    },
+    "it-F3-33": {
+      "feuille": 3,
+      "no": "33",
+      "libelle": "Échanges entre l’accompagnant et le préleveur",
+      "section": "Accès au site et rendez-vous",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : commentaires sur les échanges entre l’accompagnant et le préleveur (« Rien à signaler » ou commentaire ; sans objet si le préleveur n’est pas accompagné)."
+    },
+    "it-F10-1": {
+      "feuille": 10,
+      "no": "1",
+      "libelle": "Configuration de l’ouvrage",
+      "section": "Caractéristiques du point de prélèvement",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : configuration de l’ouvrage qui donne accès à l’eau (robinet, puits réservoir, émergence de la source, piézomètre, autre)."
+    },
+    "it-F10-2": {
+      "feuille": 10,
+      "no": "2",
+      "libelle": "Pompe à demeure",
+      "section": "Caractéristiques du point de prélèvement",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "valeur": true,
+      "attendu": "Information à relever : présence d’une pompe à demeure, son état à l’arrivée (en fonctionnement, mise en route par le gestionnaire ou par le préleveur, non fonctionnelle, fonctionnelle mais non utilisée et pourquoi) et, à défaut, le mode d’accès à l’eau."
+    },
+    "it-F10-3": {
+      "feuille": 10,
+      "no": "3",
+      "libelle": "Pompe installée par le préleveur",
+      "section": "Caractéristiques du point de prélèvement",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Lorsque l’ouvrage n’a pas de pompe utilisable, le préleveur installe une pompe propre, adaptée à l’ouvrage, avec une alimentation adaptée (batterie portative, véhicule, groupe électrogène). S’il n’en installe pas, il en donne la raison.",
+      "verification": "Le contrôleur relève si une pompe est installée, son alimentation ou la raison de l’absence de pompe.",
+      "C": "Pompe propre et adaptée installée quand elle est nécessaire.",
+      "P": "Pompe adaptée mais installation perfectible (tuyau posé au sol, au contact de la terre).",
+      "NC": "Pompe nécessaire non installée sans raison valable, ou pompe sale ou inadaptée.",
+      "NA": "Ouvrage équipé d’une pompe à demeure utilisée, ou accès direct à l’eau (source, robinet).",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F10-4": {
+      "feuille": 10,
+      "no": "4",
+      "libelle": "Vigilance vis-à-vis des gaz d’échappement (contamination)",
+      "section": "Caractéristiques du point de prélèvement",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Si la pompe est alimentée par le véhicule ou par un groupe électrogène, le préleveur éloigne la source de gaz d’échappement de l’ouvrage et des flacons et la place de façon que les gaz ne soient pas rabattus vers le point de prélèvement (sous le vent).",
+      "verification": "Point affiché seulement si la pompe est branchée sur le véhicule ou sur un groupe électrogène (F10.3). Le contrôleur observe la position du véhicule ou du groupe.",
+      "C": "Source éloignée et placée sous le vent.",
+      "P": "Source proche mais gaz non dirigés vers l’ouvrage ni vers les flacons.",
+      "NC": "Échappement à proximité immédiate de la tête d’ouvrage ou des flacons ouverts.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F10-5": {
+      "feuille": 10,
+      "no": "5",
+      "libelle": "Purge de l’ouvrage et/ou des canalisations",
+      "section": "Purge",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Avant de prélever, le préleveur purge l’ouvrage ou les canalisations selon le protocole du marché. Il note la durée et le type de purge. Pour un piézomètre, il calcule le volume d’eau de l’ouvrage (π × r² × hauteur d’eau) et le débit de pompage pour connaître le volume renouvelé. S’il ne purge pas, il en donne la raison.",
+      "verification": "Le contrôleur relève si la purge est réalisée, sa durée, son type, les calculs faits, ou la raison de l’absence de purge.",
+      "C": "Purge réalisée et documentée conformément au protocole.",
+      "P": "Purge réalisée mais durée ou calculs non notés.",
+      "NC": "Pas de purge alors qu’elle est nécessaire, ou purge manifestement insuffisante au regard du protocole.",
+      "NA": "Purge sans objet (source à écoulement libre, pompe à demeure en fonctionnement continu) : préciser pourquoi en observation.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ],
+      "aPreciser": "Critère de fin de purge attendu (volume à renouveler, stabilisation des paramètres, durée minimale) : à préciser par l’OEG d’après le protocole du marché."
+    },
+    "it-F10-6": {
+      "feuille": 10,
+      "no": "6",
+      "libelle": "Technique de purge adaptée à la configuration du point d’eau",
+      "section": "Purge",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La technique de purge est adaptée à la configuration du point d’eau : robinet laissé en écoulement continu (tuyau fixe, ou tuyau adapté par le préleveur), pompe en fonctionnement continu à débit connu, pompe placée à la position prévue dans la colonne d’eau (milieu, tiers inférieur…).",
+      "verification": "Le contrôleur relève les modalités observées dans les champs de la valeur.",
+      "C": "Technique adaptée.",
+      "P": "Technique adaptée mais débit non calculé ou position de la pompe non justifiée.",
+      "NC": "Technique inadaptée (robinet ouvert puis fermé de façon intermittente, pompe posée au fond de l’ouvrage qui remet les dépôts en suspension).",
+      "NA": "Pas de purge (voir F10.5).",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ],
+      "aPreciser": "Position de la pompe et débit attendus selon le type d’ouvrage : à préciser par l’OEG d’après le protocole du marché."
+    },
+    "it-F10-7": {
+      "feuille": 10,
+      "no": "7",
+      "libelle": "Mesure du niveau piézométrique",
+      "section": "Niveau piézométrique",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Quand l’ouvrage le permet, le préleveur mesure le niveau d’eau avec une sonde piézométrique propre, depuis un repère identifié : niveau statique avant pompage, puis niveau dynamique pendant le pompage. À défaut, il relève le niveau communiqué par l’exploitant. Les niveaux sont notés avec leur unité.",
+      "verification": "Le contrôleur relève la source de la mesure et les niveaux notés.",
+      "C": "Niveaux mesurés et notés.",
+      "P": "Niveau statique seul, ou repère de mesure non précisé.",
+      "NC": "Mesure prévue non réalisée, ou sonde sale introduite dans l’ouvrage.",
+      "NA": "Mesure impossible (ouvrage fermé, robinet, source) ou non prévue.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F4-1": {
+      "feuille": 4,
+      "no": "1",
+      "libelle": "Préleveur(s) / fonction",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le ou les préleveurs qui réalisent les mesures et le flaconnage sont identifiés, avec leur fonction, et sont formés à ces opérations.",
+      "verification": "Le contrôleur relève les noms et fonctions (« Valeur / réponse »).",
+      "C": "Préleveur identifié et formé.",
+      "P": "Fonction imprécise.",
+      "NC": "Mesures ou flaconnage réalisés par une personne non formée.",
+      "refs": []
+    },
+    "it-F4-2": {
+      "feuille": 4,
+      "no": "2",
+      "libelle": "Calibration des sondes",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Chaque appareil (pH, oxygène, conductivité, turbidité ; potentiel redox pour les eaux souterraines) est étalonné selon la procédure du fabricant et la fréquence fixée par le protocole du marché, avec des solutions étalons valides, puis vérifié en début et en fin de journée. Les résultats sont tracés.",
+      "verification": "Le contrôleur renseigne le module « Appareils de mesure » (dernière calibration, étalonnage hebdomadaire, étalons utilisés, vérifications du matin et du soir) et demande la procédure appliquée. L’application signale une dernière calibration de plus de 30 jours (seuil d’alerte de la grille). Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Étalonnages et vérifications réalisés, tracés et dans les délais du protocole.",
+      "P": "Étalonnage réalisé mais vérification du matin ou du soir non faite ou non notée.",
+      "NC": "Appareil non étalonné dans les délais, étalons périmés, ou dérive constatée non corrigée.",
+      "refs": [
+        "NF EN ISO 10523",
+        "NF EN 27888",
+        "NF EN ISO 5814",
+        "NF EN ISO 7027-1",
+        "NF EN ISO 5667-14"
+      ],
+      "aPreciser": "Fréquence d’étalonnage et de vérification exigée par appareil, et tolérances acceptées : à préciser par l’OEG d’après le CCTP et le protocole."
+    },
+    "it-F4-3": {
+      "feuille": 4,
+      "no": "3",
+      "libelle": "Respect des normes de mesure",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les mesures sont réalisées selon les méthodes normalisées citées par le CCTP et les notices des appareils : sonde plongée dans l’eau à mesurer, temps de stabilisation respecté, compensation de température active, lecture d’une valeur stable.",
+      "verification": "Le contrôleur observe la réalisation des mesures sur la station.",
+      "C": "Modalités conformes.",
+      "P": "Modalités globalement conformes, avec une hésitation (lecture un peu rapide).",
+      "NC": "Mesure non conforme (lecture avant stabilisation, sonde hors de l’eau ou dans une eau stagnante).",
+      "refs": [
+        "NF EN ISO 10523",
+        "NF EN 27888",
+        "NF EN ISO 5814",
+        "NF EN ISO 7027-1"
+      ]
+    },
+    "it-F4-4": {
+      "feuille": 4,
+      "no": "4",
+      "libelle": "pH (in situ)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le pH est mesuré sur place avec une sonde étalonnée, plongée dans l’eau de la station (ou dans un prélèvement qui vient d’être fait), après stabilisation et avec compensation de température. La valeur est notée sur la fiche terrain (unité pH).",
+      "verification": "Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.",
+      "C": "Mesure conforme, valeur stable notée avec son unité.",
+      "P": "Mesure correcte mais valeur notée en différé, arrondie ou sans unité.",
+      "NC": "Mesure non réalisée, lue avant stabilisation, ou valeur incohérente non vérifiée par le préleveur.",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "NF EN ISO 10523"
+      ]
+    },
+    "it-F4-5": {
+      "feuille": 4,
+      "no": "5",
+      "libelle": "Oxygène dissous (in situ)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "L’oxygène dissous est mesuré sur place de préférence directement dans l’eau, en respectant les conditions d’utilisation de la sonde (écoulement ou agitation si elle l’exige), après stabilisation. La valeur est notée sur la fiche terrain en mg/L.",
+      "verification": "Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.",
+      "C": "Mesure conforme, valeur stable notée avec son unité.",
+      "P": "Mesure correcte mais valeur notée en différé, arrondie ou sans unité.",
+      "NC": "Mesure non réalisée, lue avant stabilisation, ou mesure faussée (seau laissé au soleil, eau qui a barboté).",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "NF EN ISO 5814"
+      ]
+    },
+    "it-F4-6": {
+      "feuille": 4,
+      "no": "6",
+      "libelle": "Saturation en O₂ (in situ)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La saturation en oxygène (%) est relevée en même temps que la concentration ; l’appareil tient compte de la température et, si nécessaire, de la pression atmosphérique et de la salinité.",
+      "verification": "Le contrôleur saisit la valeur lue (« Valeur / réponse ») et vérifie sa cohérence avec la concentration.",
+      "C": "Saturation relevée et cohérente.",
+      "P": "Saturation relevée mais réglages de l’appareil non vérifiés (pression, salinité).",
+      "NC": "Saturation non relevée, ou incohérente avec la concentration sans réaction du préleveur.",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "NF EN ISO 5814"
+      ]
+    },
+    "it-F4-7": {
+      "feuille": 4,
+      "no": "7",
+      "libelle": "Température eau (in situ)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La température de l’eau est mesurée sur place directement dans l’eau, ou dans un récipient rempli à l’instant et non exposé au soleil. La valeur est notée sur la fiche terrain en °C.",
+      "verification": "Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.",
+      "C": "Mesure conforme, valeur stable notée avec son unité.",
+      "P": "Mesure correcte mais valeur notée en différé, arrondie ou sans unité.",
+      "NC": "Mesure non réalisée, lue avant stabilisation, ou température prise dans un récipient réchauffé.",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "FD T90-523-1",
+        "NF EN ISO 5667-6"
+      ]
+    },
+    "it-F4-8": {
+      "feuille": 4,
+      "no": "8",
+      "libelle": "Conductivité (in situ)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La conductivité est mesurée sur place avec une sonde étalonnée, après stabilisation, avec compensation à la température de référence de la norme. La valeur est notée sur la fiche terrain en µS/cm.",
+      "verification": "Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.",
+      "C": "Mesure conforme, valeur stable notée avec son unité.",
+      "P": "Mesure correcte mais valeur notée en différé, arrondie ou sans unité.",
+      "NC": "Mesure non réalisée, lue avant stabilisation, ou compensation de température désactivée sans le noter.",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "NF EN 27888"
+      ]
+    },
+    "it-F4-9": {
+      "feuille": 4,
+      "no": "9",
+      "libelle": "Turbidité (in situ, triplicat)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La turbidité est mesurée en triplicat (trois mesures) : cuve propre, sans rayure ni bulle, échantillon homogénéisé doucement juste avant chaque mesure. Les trois valeurs sont notées en NTU.",
+      "verification": "Le contrôleur observe les mesures et saisit les trois valeurs lues.",
+      "C": "Trois mesures conformes et notées.",
+      "P": "Trois mesures, mais cuve essuyée sommairement ou homogénéisation irrégulière.",
+      "NC": "Une seule mesure, cuve sale ou rayée, ou échantillon non homogénéisé.",
+      "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
+      "refs": [
+        "NF EN ISO 7027-1"
+      ]
+    },
+    "it-F4-10": {
+      "feuille": 4,
+      "no": "10",
+      "libelle": "Salinité (si applicable)",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Lorsque la station est soumise à une influence saline (estuaire, marée), la salinité est mesurée et notée.",
+      "verification": "Le contrôleur saisit la valeur lue (« Valeur / réponse »).",
+      "C": "Salinité mesurée et notée.",
+      "P": "Salinité mesurée mais non notée sur la fiche.",
+      "NC": "Salinité non mesurée alors que la station est sous influence saline et que le protocole la demande.",
+      "NA": "Station sans influence saline.",
+      "refs": []
+    },
+    "it-F4-11": {
+      "feuille": 4,
+      "no": "11",
+      "libelle": "Position de mesure",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "Les mesures sont faites dans une zone représentative : eau courante, hors zone stagnante et hors bordure, au même endroit que le prélèvement (ou tout près), sans influence d’un rejet ou d’un affluent.",
+      "verification": "Le contrôleur observe l’emplacement des mesures.",
+      "C": "Position représentative.",
+      "P": "Position acceptable mais proche du bord ou d’un remous.",
+      "NC": "Mesure dans une zone stagnante, sous l’influence d’un rejet, ou loin du point de prélèvement.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ]
+    },
+    "it-F4-12": {
+      "feuille": 4,
+      "no": "12",
+      "libelle": "Flaconnage conforme",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le flaconnage utilisé correspond au programme analytique de la station : nombre et types de flacons (matériau, volume, conservateur) fournis ou prescrits par le laboratoire.",
+      "verification": "Le contrôleur compare les flacons préparés au descriptif du laboratoire ou au programme analytique.",
+      "C": "Flaconnage complet et conforme.",
+      "P": "Flaconnage conforme avec un flacon de remplacement équivalent, non prévu au descriptif.",
+      "NC": "Flacon manquant, de mauvais type ou sans le conservateur requis.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F4-13": {
+      "feuille": 4,
+      "no": "13",
+      "libelle": "Présence ou ajout de réactif",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les flacons qui doivent contenir un réactif ou un conservateur le contiennent (fourni par le laboratoire ou ajouté sur place selon ses consignes). Ces flacons ne sont pas rincés et sont remplis sans débordement, jusqu’au niveau indiqué, pour ne pas perdre le réactif.",
+      "verification": "Le contrôleur observe le remplissage des flacons avec réactif et l’éventuel ajout sur place (gants, dosage).",
+      "C": "Réactif présent ; flacons remplis sans rinçage ni débordement.",
+      "P": "Remplissage correct mais niveau approximatif.",
+      "NC": "Flacon avec réactif rincé ou qui déborde ; réactif absent ou ajouté sans respecter les consignes.",
+      "NA": "Aucun flacon avec réactif au programme de la station.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F4-14": {
+      "feuille": 4,
+      "no": "14",
+      "libelle": "Flaconnage supplémentaire",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur dispose de flacons de réserve de chaque type pour remplacer un flacon cassé, souillé ou mal rempli.",
+      "verification": "Le contrôleur demande à voir les flacons de réserve.",
+      "C": "Réserve disponible pour chaque type de flacon.",
+      "P": "Réserve partielle.",
+      "NC": "Aucune réserve : un flacon perdu ne peut pas être remplacé.",
+      "refs": []
+    },
+    "it-F4-15": {
+      "feuille": 4,
+      "no": "15",
+      "libelle": "Casse de flaconnage",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Aucune casse ni perte de flacon. En cas d’incident, le flacon est remplacé, le prélèvement refait si nécessaire et l’incident noté.",
+      "verification": "Le contrôleur constate les éventuelles casses et leur gestion.",
+      "C": "Aucune casse, ou casse gérée correctement.",
+      "P": "Casse gérée mais non notée.",
+      "NC": "Casse non gérée : paramètre perdu, ou échantillon reconstitué de façon non conforme.",
+      "refs": []
+    },
+    "it-F4-16": {
+      "feuille": 4,
+      "no": "16",
+      "libelle": "Transport adapté du flaconnage",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les flacons vides sont transportés fermés, propres, protégés des chocs et de la poussière, à l’écart du carburant, des produits et du matériel sale.",
+      "verification": "Observation du rangement des flacons dans le véhicule ou l’embarcation.",
+      "C": "Transport adapté.",
+      "P": "Transport perfectible (caisse non fermée) sans souillure constatée.",
+      "NC": "Flacons ouverts, souillés ou au contact de carburant ou de produits.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F4-17": {
+      "feuille": 4,
+      "no": "17",
+      "libelle": "Rinçage des flacons",
+      "section": "Contrôle terrain – Physico-chimie, mesures in situ et flaconnage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Sauf consigne contraire du laboratoire, chaque flacon et son bouchon sont rincés trois fois avec l’eau à prélever avant le remplissage. Les flacons qui contiennent un réactif ou un conservateur, et ceux que le laboratoire demande de ne pas rincer, ne sont pas rincés. Le rinçage du matériel de prélèvement est jugé en F5.9.",
+      "verification": "Le contrôleur observe le rinçage et coche « Rinçage trois fois » et « Rinçage des bouchons ».",
+      "C": "Rinçage conforme pour tous les flacons concernés.",
+      "P": "Rinçage fait mais moins de trois fois, ou bouchon oublié pour un flacon.",
+      "NC": "Aucun rinçage, ou rinçage d’un flacon qui contient un réactif.",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F4-18": {
+      "feuille": 4,
+      "no": "18",
+      "libelle": "Sondes utilisées (type, état, propreté)",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les sondes utilisées sont adaptées aux paramètres à mesurer, en bon état (câble, membrane, électrode) et propres. Elles sont rangées et protégées entre les stations.",
+      "verification": "Le contrôleur observe les appareils et relève leurs références dans le module « Appareils de mesure ». Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Sondes adaptées, en bon état et propres.",
+      "P": "Sonde en état correct mais propreté ou rangement à améliorer.",
+      "NC": "Sonde endommagée, encrassée ou inadaptée utilisée pour les mesures.",
+      "refs": [
+        "NF EN ISO 10523",
+        "NF EN 27888",
+        "NF EN ISO 5814",
+        "NF EN ISO 7027-1"
+      ]
+    },
+    "it-F4-19": {
+      "feuille": 4,
+      "no": "19",
+      "libelle": "Traçabilité des procédures / sondes",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Chaque appareil est identifié (marque, modèle, numéro de série) et suivi : fiche de vie ou registre qui indique les étalonnages, vérifications, entretiens et pannes.",
+      "verification": "Le contrôleur demande la fiche de vie ou le registre et le rapproche des numéros de série. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Suivi complet et à jour.",
+      "P": "Suivi existant mais incomplet.",
+      "NC": "Aucun suivi des appareils.",
+      "refs": [
+        "NF EN ISO 5667-14"
+      ]
+    },
+    "it-F4-20": {
+      "feuille": 4,
+      "no": "20",
+      "libelle": "Disponibilité de consommables pour l’étalonnage (solutions, piles)",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le préleveur dispose sur le terrain des solutions étalons nécessaires (dans leur date de validité, bien fermées) et de piles ou batteries de rechange.",
+      "verification": "Le contrôleur vérifie la présence et la date de validité des étalons. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Consommables présents et valides.",
+      "P": "Consommables présents mais en quantité juste.",
+      "NC": "Étalons périmés ou absents, ou appareil inutilisable faute de piles.",
+      "refs": []
+    },
+    "it-F4-21": {
+      "feuille": 4,
+      "no": "21",
+      "libelle": "Sondes de secours disponibles",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Un appareil ou une sonde de secours est disponible pour poursuivre les mesures en cas de panne.",
+      "verification": "Le contrôleur demande à voir le matériel de secours. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Appareil de secours disponible.",
+      "P": "Secours disponible pour une partie des paramètres seulement.",
+      "NC": "Aucun secours : une panne fait perdre les mesures de la tournée.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Exigence de matériel de secours (tous les paramètres ou certains) : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F4-22": {
+      "feuille": 4,
+      "no": "22",
+      "libelle": "Organisme fournisseur du flaconnage",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le flaconnage est fourni par le laboratoire d’analyses chargé des échantillons, ou préparé selon ses prescriptions, ce qui garantit des flacons adaptés et propres.",
+      "verification": "Le contrôleur relève l’organisme fournisseur (« Valeur / réponse »). Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Flaconnage fourni par le laboratoire prévu.",
+      "P": "Flaconnage d’une autre origine mais conforme aux prescriptions du laboratoire.",
+      "NC": "Flaconnage d’origine inconnue ou non conforme aux prescriptions du laboratoire.",
+      "refs": [
+        "Consignes du laboratoire",
+        "NF EN ISO/IEC 17025"
+      ]
+    },
+    "it-F4-23": {
+      "feuille": 4,
+      "no": "23",
+      "libelle": "Propreté des flacons",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les flacons sont propres, neufs ou préparés par le laboratoire, fermés jusqu’à leur utilisation et stockés à l’abri des salissures.",
+      "verification": "Observation du flaconnage. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Flacons propres et fermés.",
+      "P": "Flacons propres mais stockage peu protégé.",
+      "NC": "Flacons sales, ouverts ou réutilisés sans préparation par le laboratoire.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F4-24": {
+      "feuille": 4,
+      "no": "24",
+      "libelle": "Étiquetage des flacons / descriptif disponible",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les flacons sont étiquetés (ou pré-étiquetés par le laboratoire) et un descriptif indique quel flacon utiliser pour quel paramètre, avec quel conservateur.",
+      "verification": "Le contrôleur demande le descriptif du flaconnage. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Étiquettes et descriptif disponibles.",
+      "P": "Descriptif absent, mais flacons clairement étiquetés.",
+      "NC": "Flacons non identifiables : risque d’erreur d’attribution.",
+      "refs": [
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F4-25": {
+      "feuille": 4,
+      "no": "25",
+      "libelle": "Traçabilité vers le laboratoire (scan, fiche…)",
+      "section": "Sondes, étalonnage et flaconnage – commun à la tournée",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les flacons fournis sont identifiés et rattachés au laboratoire (code-barres scanné, fiche ou bordereau) : chaque échantillon est relié sans ambiguïté à sa station et à sa demande d’analyse. La transmission des données avec les échantillons est jugée en F5.28.",
+      "verification": "Le contrôleur vérifie le mode de rattachement (scan, fiche). Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Traçabilité assurée pour tous les flacons.",
+      "P": "Traçabilité assurée mais par un moyen fragile (mention manuscrite peu lisible).",
+      "NC": "Flacons non rattachés : risque d’inversion d’échantillons.",
+      "refs": [
+        "Consignes du laboratoire",
+        "NF EN ISO 5667-14"
+      ]
+    },
+    "it-F4-26": {
+      "feuille": 4,
+      "no": "26",
+      "libelle": "Regard critique sur les résultats des mesures",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur vérifie la cohérence de ses mesures (valeurs habituelles de la station, cohérence entre paramètres, état de l’appareil). En cas de valeur anormale, il refait la mesure ou contrôle l’appareil.",
+      "verification": "Le contrôleur observe la réaction du préleveur et lui demande son avis sur les valeurs ; il ne fait pas de contre-mesure.",
+      "C": "Regard critique exercé.",
+      "P": "Valeurs relues mais sans comparaison avec les valeurs attendues.",
+      "NC": "Valeur manifestement aberrante acceptée sans vérification.",
+      "refs": []
+    },
+    "it-F4-27": {
+      "feuille": 4,
+      "no": "27",
+      "libelle": "Fiabilité apparente des mesures",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les mesures paraissent fiables : valeurs stables, plausibles pour la station et le contexte, appareils en bon état et étalonnés.",
+      "verification": "Appréciation du contrôleur à partir de ses observations (stabilité, plausibilité, état des appareils), sans contre-mesure.",
+      "C": "Mesures fiables en apparence.",
+      "P": "Doute ponctuel levé par le préleveur (nouvelle mesure).",
+      "NC": "Mesures peu fiables (valeurs instables ou invraisemblables, appareil défaillant).",
+      "refs": []
+    },
+    "it-F4-28": {
+      "feuille": 4,
+      "no": "28",
+      "libelle": "Complétude des mesures in situ",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Toutes les mesures in situ prévues sont réalisées : température, pH, conductivité, oxygène dissous et turbidité, plus le potentiel redox pour les eaux souterraines (F4.29). Une mesure manquante est notée avec sa cause.",
+      "verification": "Le contrôleur relève l’instrument utilisé (sondes monoparamètres ou multiparamètres) et les mesures manquantes avec leur cause.",
+      "C": "Mesures complètes.",
+      "P": "Mesure manquante pour une cause justifiée et notée (panne signalée).",
+      "NC": "Mesure manquante sans justification (oubli).",
+      "refs": []
+    },
+    "it-F4-29": {
+      "feuille": 4,
+      "no": "29",
+      "libelle": "Potentiel redox (in situ)",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le potentiel redox est mesuré sur place, de préférence sans contact avec l’air (cellule de mesure en circulation ou sonde plongée dans l’écoulement), après stabilisation, et noté en mV.",
+      "verification": "Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse »).",
+      "C": "Mesure conforme et notée.",
+      "P": "Mesure réalisée mais stabilisation incertaine.",
+      "NC": "Mesure non réalisée, ou réalisée dans une eau aérée par barbotage.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F4-30": {
+      "feuille": 4,
+      "no": "30",
+      "libelle": "Technique de prise des mesures adaptée au point d’eau",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "La technique de mesure est adaptée au point d’eau : directement dans la ressource, au plus près de l’émergence, ou dans un seau ou récipient alimenté en écoulement continu, en limitant le barbotage, le tuyau placé au fond du récipient.",
+      "verification": "Le contrôleur relève les modalités observées dans les champs de la valeur.",
+      "C": "Technique adaptée.",
+      "P": "Technique adaptée mais barbotage mal maîtrisé.",
+      "NC": "Mesure dans un seau rempli puis laissé au repos, ou avec un barbotage important qui fausse l’oxygène et le redox.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F4-31": {
+      "feuille": 4,
+      "no": "31",
+      "libelle": "Vérification de la stabilité des paramètres",
+      "section": "Appréciation des mesures in situ",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Avant de prélever, le préleveur vérifie que les paramètres sont stabilisés : plusieurs mesures successives à intervalle régulier, selon le critère du protocole. Il note le nombre de mesures, l’intervalle et le délai avant la première mesure.",
+      "verification": "Le contrôleur relève si la vérification est faite, avec le nombre de mesures, l’intervalle et le délai, ou la raison de l’absence de vérification.",
+      "C": "Stabilité vérifiée et notée.",
+      "P": "Stabilité vérifiée mais non notée.",
+      "NC": "Aucune vérification : prélèvement sans attendre la stabilisation.",
+      "NA": "Sans objet selon le protocole pour ce type de point d’eau : préciser pourquoi en observation.",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ],
+      "aPreciser": "Nombre de mesures, intervalle et critère de stabilité attendus : à préciser par l’OEG d’après le protocole du marché."
+    },
+    "it-F5-1": {
+      "feuille": 5,
+      "no": "1",
+      "libelle": "Lieu de prélèvement",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement est fait à un endroit représentatif. Cours d’eau : dans l’écoulement principal, hors zone stagnante, à l’écart des berges, des ouvrages, des rejets et des confluences (sauf indication de la fiche station). Eaux souterraines : au plus près de l’ouvrage, avant tout traitement ou stockage (réservoir, filtre, chloration).",
+      "verification": "Le contrôleur observe le point de prélèvement choisi.",
+      "C": "Point représentatif.",
+      "P": "Point acceptable mais perfectible (un peu près de la berge).",
+      "NC": "Point non représentatif (zone stagnante, panache d’un rejet, eau prise après traitement ou stockage).",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1",
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-2": {
+      "feuille": 5,
+      "no": "2",
+      "libelle": "EPI pendant le prélèvement",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur porte des gants nitrile à usage unique, de longueur adaptée (manchettes longues si les mains vont sous l’eau), changés entre les stations ou après contact avec une source de contamination. Il porte les EPI adaptés au site.",
+      "verification": "Le contrôleur observe le port des gants ; s’ils sont absents ou d’un autre type, il le précise en observation.",
+      "C": "Gants nitrile à usage unique portés et changés.",
+      "P": "Gants portés mais non changés entre les stations, ou longueur insuffisante.",
+      "NC": "Prélèvement sans gants, ou avec des gants inadaptés (gants de travail réutilisés).",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-3": {
+      "feuille": 5,
+      "no": "3",
+      "libelle": "Matériel intermédiaire",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le remplissage direct des flacons est privilégié. Quand un matériel intermédiaire est nécessaire (seau, canne, bouteille, tuyau), il est en matériau compatible avec les paramètres analysés, propre et rincé. Eaux souterraines : les flacons sont remplis avec le minimum d’intermédiaire et les intermédiaires utilisés pour le renouvellement de l’eau (tuyau…) sont retirés quand c’est possible.",
+      "verification": "Le contrôleur observe le matériel utilisé entre l’eau et le flacon.",
+      "C": "Intermédiaires limités, adaptés et propres.",
+      "P": "Intermédiaire adapté mais dont l’usage pouvait être évité.",
+      "NC": "Intermédiaire sale ou en matériau incompatible (récipient métallique pour les métaux), ou tuyau de purge conservé alors qu’un remplissage direct était possible.",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3",
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-4": {
+      "feuille": 5,
+      "no": "4",
+      "libelle": "Prélèvement face au courant",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "Le flacon ou le récipient est plongé ouverture face au courant, le préleveur se tenant en aval du point de prélèvement, pour ne pas contaminer l’eau prélevée (sédiments remis en suspension, mains, vêtements).",
+      "verification": "Observation du geste de prélèvement.",
+      "C": "Prélèvement face au courant, préleveur en aval.",
+      "P": "Orientation hésitante, sans contamination visible.",
+      "NC": "Prélèvement dos au courant, ou en aval immédiat du préleveur (eau troublée).",
+      "NA": "Eau sans courant notable (plan d’eau) : préciser en observation.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ]
+    },
+    "it-F5-5": {
+      "feuille": 5,
+      "no": "5",
+      "libelle": "Prélèvement en sub-surface",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "L’eau est prélevée sous la surface (pour éviter le film de surface et les débris flottants) et sans toucher le fond (pour éviter les sédiments), à la profondeur prévue par le protocole.",
+      "verification": "Observation de la profondeur de prélèvement.",
+      "C": "Profondeur conforme.",
+      "P": "Profondeur approximative, sans incidence visible.",
+      "NC": "Prélèvement en surface avec débris, ou au contact du fond avec remise en suspension des sédiments.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ],
+      "aPreciser": "Profondeur de prélèvement attendue : à préciser par l’OEG d’après le protocole du marché."
+    },
+    "it-F5-6": {
+      "feuille": 5,
+      "no": "6",
+      "libelle": "Distance à la berge",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement est fait assez loin de la berge pour représenter l’écoulement principal (l’eau de bord est souvent stagnante ou influencée), dans la limite de la sécurité. La distance est estimée et notée.",
+      "verification": "Le contrôleur saisit la distance estimée en mètres (« Valeur / réponse »).",
+      "C": "Distance adaptée.",
+      "P": "Distance un peu faible, justifiée par la sécurité ou l’accès.",
+      "NC": "Prélèvement au bord, dans une eau non représentative, sans justification.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ],
+      "aPreciser": "Distance à la berge attendue (ou règle de choix du point dans la section) : à préciser par l’OEG d’après le protocole du marché."
+    },
+    "it-F5-7": {
+      "feuille": 5,
+      "no": "7",
+      "libelle": "Sources de contamination",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur identifie les sources possibles de contamination sur le site et pendant ses opérations : gaz d’échappement (moteur, groupe), carburant, crème solaire, répulsif anti-insectes, tabac, matériel sale, poussière, ruissellement d’un pont ou d’une route, sédiments remis en suspension, objets métalliques pour les métaux.",
+      "verification": "Le contrôleur demande au préleveur quelles sources il a identifiées et les compare à ses propres constats. Les moyens d’évitement sont jugés en F5.8.",
+      "C": "Sources identifiées.",
+      "P": "Identification partielle.",
+      "NC": "Source évidente ignorée (moteur qui tourne à proximité immédiate).",
+      "refs": [
+        "NF EN ISO 5667-14",
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-8": {
+      "feuille": 5,
+      "no": "8",
+      "libelle": "Moyens d’évitement",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur protège l’intégrité de l’échantillon : moteur coupé ou éloigné, pas de tabac, mains gantées, crème ou répulsif appliqués loin des flacons, flacons ouverts le moins longtemps possible, bouchons protégés (jamais posés au sol), eau prélevée avant d’entrer dans le lit.",
+      "verification": "Le contrôleur observe les précautions prises.",
+      "C": "Précautions adaptées.",
+      "P": "Précaution oubliée sans contamination probable (flacon resté ouvert un moment).",
+      "NC": "Contamination probable de l’échantillon (bouchon posé au sol, intérieur du flacon touché).",
+      "refs": [
+        "NF EN ISO 5667-14",
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-9": {
+      "feuille": 5,
+      "no": "9",
+      "libelle": "Rinçage du matériel",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le matériel de prélèvement (seau, canne, bouteille) est rincé avec l’eau du site avant le prélèvement, pour éliminer les traces de la station précédente. Le rinçage des flacons et des bouchons est jugé en F4.17.",
+      "verification": "Observation du rinçage du matériel.",
+      "C": "Matériel rincé avant usage.",
+      "P": "Rinçage sommaire.",
+      "NC": "Matériel non rincé, encore souillé par la station précédente.",
+      "NA": "Remplissage direct des flacons, sans matériel de prélèvement.",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-10": {
+      "feuille": 5,
+      "no": "10",
+      "libelle": "Nombre de flacons",
+      "section": "Prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le nombre de flacons remplis correspond au programme analytique de la station, y compris les éventuels flacons de contrôle qualité demandés.",
+      "verification": "Le contrôleur compte les flacons remplis (« Valeur / réponse ») et compare au programme.",
+      "C": "Nombre conforme.",
+      "P": "Flacon complémentaire non prévu, sans incidence.",
+      "NC": "Flacon manquant : paramètre non analysable.",
+      "refs": [
+        "Consignes du laboratoire",
+        "NF EN ISO 5667-14"
+      ]
+    },
+    "it-F5-11": {
+      "feuille": 5,
+      "no": "11",
+      "libelle": "Type / nombre de glacières",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les glacières sont en nombre suffisant pour tous les échantillons de la tournée, isothermes, propres, en bon état (couvercle et fermeture) et réservées aux échantillons.",
+      "verification": "Observation des glacières. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Glacières adaptées et en nombre suffisant.",
+      "P": "Glacières adaptées mais usées ou pleines au maximum.",
+      "NC": "Glacières insuffisantes, sales ou endommagées, ou utilisées aussi pour d’autres usages (nourriture, produits).",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-12": {
+      "feuille": 5,
+      "no": "12",
+      "libelle": "Pré-réfrigération",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Les glacières sont refroidies avant d’y placer les échantillons (accumulateurs de froid mis en place à l’avance), pour que les échantillons soient mis au froid sans attendre.",
+      "verification": "Le contrôleur vérifie l’état des glacières avant le premier conditionnement. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Glacières pré-réfrigérées.",
+      "P": "Pré-réfrigération partielle.",
+      "NC": "Glacières chaudes au moment d’y placer les échantillons.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-13": {
+      "feuille": 5,
+      "no": "13",
+      "libelle": "Température de conservation",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont conservés au froid, à 5 ± 3 °C, du prélèvement jusqu’au laboratoire (NF EN ISO 5667-3).",
+      "verification": "Le contrôleur relève la température des échantillons de la station (thermomètre, enregistreur ou flacon témoin) et la saisit ; l’application signale une température hors de la plage 2–8 °C. Le mode de réfrigération est jugé en F5.14 (commun à la tournée).",
+      "C": "Température dans la plage.",
+      "P": "Température légèrement hors plage, expliquée par un prélèvement très récent, avec une glacière correctement préparée.",
+      "NC": "Température hors plage sans mesure corrective, ou échantillons laissés hors de la glacière.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-14": {
+      "feuille": 5,
+      "no": "14",
+      "libelle": "Réfrigérant / glace",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le mode de réfrigération est adapté et suffisant pour toute la durée de la tournée et du transport : accumulateurs de froid en nombre suffisant, ou glace en sacs fermés sans contact de l’eau de fonte avec les flacons ; réfrigérateur dédié en cas de stockage.",
+      "verification": "Le contrôleur observe les moyens de réfrigération. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Réfrigération adaptée et suffisante.",
+      "P": "Réfrigération juste suffisante (accumulateurs en nombre limité).",
+      "NC": "Réfrigération absente ou insuffisante, ou flacons baignant dans l’eau de fonte.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-15": {
+      "feuille": 5,
+      "no": "15",
+      "libelle": "Thermobouton / traceur",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "La température est suivie pendant la conservation et le transport : enregistreur, thermobouton ou flacon témoin dans chaque glacière ou enceinte (y compris le réfrigérateur de stockage). Les relevés accompagnent les échantillons ou sont tenus à disposition.",
+      "verification": "Le contrôleur vérifie la présence du dispositif de suivi. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Suivi thermique en place pour toutes les enceintes.",
+      "P": "Suivi thermique partiel (une glacière sans témoin).",
+      "NC": "Aucun suivi de la température.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ],
+      "aPreciser": "Dispositif de suivi thermique exigé (enregistreur, flacon témoin) : à préciser par l’OEG d’après le CCTP et les consignes du laboratoire."
+    },
+    "it-F5-16": {
+      "feuille": 5,
+      "no": "16",
+      "libelle": "Positionnement du thermobouton",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le témoin de température est placé au milieu des échantillons, de façon à représenter leur température (pas collé contre un accumulateur, pas posé sur le couvercle).",
+      "verification": "Le contrôleur observe la position du témoin dans la glacière de la station.",
+      "C": "Témoin bien placé.",
+      "P": "Témoin placé en bordure des échantillons.",
+      "NC": "Témoin collé contre un accumulateur ou hors de la zone des échantillons : mesure non représentative.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-17": {
+      "feuille": 5,
+      "no": "17",
+      "libelle": "Lieu de stockage intermédiaire",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Si les échantillons sont stockés avant leur envoi (base, hébergement, local), le lieu est propre, sûr, à l’abri de la chaleur et des contaminations, et réservé à l’équipe.",
+      "verification": "Le contrôleur demande où les échantillons seront stockés et, si possible, le constate. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Lieu de stockage adapté.",
+      "P": "Lieu acceptable mais peu protégé.",
+      "NC": "Stockage dans un lieu inadapté (chaleur, produits, accès libre).",
+      "NA": "Pas de stockage intermédiaire : dépôt ou expédition directs.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-18": {
+      "feuille": 5,
+      "no": "18",
+      "libelle": "Moyen de stockage intermédiaire",
+      "section": "Conditionnement et chaîne du froid",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le stockage intermédiaire se fait dans un moyen réfrigéré adapté (réfrigérateur réservé aux échantillons, glacière rechargée en froid), avec suivi de la température.",
+      "verification": "Le contrôleur demande le moyen de stockage prévu et, si possible, le constate. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Moyen de stockage réfrigéré et suivi.",
+      "P": "Moyen réfrigéré sans suivi de la température.",
+      "NC": "Stockage sans réfrigération.",
+      "NA": "Pas de stockage intermédiaire : dépôt ou expédition directs.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-19": {
+      "feuille": 5,
+      "no": "19",
+      "libelle": "Technique de prélèvement utilisée / adaptée",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "La technique de prélèvement est adaptée au site : directement dans le cours d’eau quand c’est possible, sinon canne, seau ou bouteille (depuis un pont, une berge haute, en eau profonde), selon le protocole.",
+      "verification": "Le contrôleur relève la technique utilisée (« Valeur / réponse »).",
+      "C": "Technique adaptée.",
+      "P": "Technique acceptable mais pas la plus adaptée au site.",
+      "NC": "Technique inadaptée qui compromet la représentativité ou la sécurité.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1"
+      ]
+    },
+    "it-F5-20": {
+      "feuille": 5,
+      "no": "20",
+      "libelle": "Mode opératoire (fractionnement si besoin)",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce"
+      ],
+      "tournee": false,
+      "attendu": "Le mode opératoire suit le protocole : ordre de remplissage des flacons et, si l’eau est prélevée en plusieurs fois (fractionnement), répartition homogène entre les flacons pour qu’ils représentent tous la même eau.",
+      "verification": "Le contrôleur observe le mode opératoire.",
+      "C": "Mode opératoire conforme.",
+      "P": "Mode opératoire conforme avec une hésitation sans incidence.",
+      "NC": "Fractionnement nécessaire non fait, ou flacons remplis avec des eaux différentes.",
+      "refs": [
+        "NF EN ISO 5667-6",
+        "FD T90-523-1",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F5-21": {
+      "feuille": 5,
+      "no": "21",
+      "libelle": "Remplissage des flacons (barbotage…)",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les flacons sont remplis doucement, sans barbotage ni bulles, jusqu’au niveau demandé par le laboratoire (à ras bord et sans bulle d’air pour les flacons qui l’exigent), puis bouchés aussitôt.",
+      "verification": "Le contrôleur observe le remplissage ; une photo du remplissage peut servir de preuve.",
+      "C": "Remplissage conforme.",
+      "P": "Léger barbotage ou niveau approximatif.",
+      "NC": "Barbotage important, bulle d’air dans un flacon qui l’interdit, ou flacon laissé ouvert.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F5-22": {
+      "feuille": 5,
+      "no": "22",
+      "libelle": "Conditions de sécurité pendant l’opération",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "L’opération se déroule en sécurité : position stable, EPI portés, pas de prise de risque (courant, berge instable, circulation), équipier présent en situation à risque.",
+      "verification": "Observation pendant le prélèvement.",
+      "C": "Opération en sécurité.",
+      "P": "Prise de risque limitée, corrigée.",
+      "NC": "Prise de risque sérieuse (seul dans le courant, sur une berge instable, sur la chaussée).",
+      "refs": [
+        "Consignes de sécurité du prestataire"
+      ]
+    },
+    "it-F5-23": {
+      "feuille": 5,
+      "no": "23",
+      "libelle": "Conditionnement des échantillons en glacières (calage…)",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les flacons sont placés debout et calés dans la glacière, protégés des chocs (verre protégé), entourés d’accumulateurs, sans contact avec la glace fondue. La glacière est refermée rapidement.",
+      "verification": "Le contrôleur observe le conditionnement des échantillons de la station.",
+      "C": "Conditionnement conforme.",
+      "P": "Calage perfectible sans risque de casse immédiat.",
+      "NC": "Flacons couchés ou non calés, verre non protégé, flacons dans l’eau de fonte.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-24": {
+      "feuille": 5,
+      "no": "24",
+      "libelle": "Prélèvement après purge ou renouvellement de l’eau",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement est réalisé après la purge ou le renouvellement de l’eau prévu (F10.5), sans interruption de l’écoulement. La durée de renouvellement avant le prélèvement est notée.",
+      "verification": "Le contrôleur saisit la durée de renouvellement en minutes.",
+      "C": "Prélèvement après renouvellement, durée notée.",
+      "P": "Renouvellement fait mais durée non notée.",
+      "NC": "Prélèvement sans renouvellement de l’eau, ou après arrêt de l’écoulement.",
+      "NA": "Purge sans objet (voir F10.5).",
+      "refs": [
+        "NF EN ISO 5667-11",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-25": {
+      "feuille": 5,
+      "no": "25",
+      "libelle": "Respect des consignes du laboratoire lors du remplissage des flacons",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Le préleveur applique les consignes du laboratoire pour chaque flacon : flacon prévu, rinçage ou non, niveau de remplissage, ajout de conservateur, ordre de remplissage, protection contre la lumière.",
+      "verification": "Le contrôleur compare les gestes observés avec les consignes du laboratoire.",
+      "C": "Consignes respectées.",
+      "P": "Écart mineur sans incidence probable sur l’analyse.",
+      "NC": "Consigne non respectée qui peut fausser l’analyse.",
+      "refs": [
+        "Consignes du laboratoire",
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-26": {
+      "feuille": 5,
+      "no": "26",
+      "libelle": "Filtration pour les analyses de métaux",
+      "section": "Technique de prélèvement et remplissage",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Si des métaux dissous sont analysés, l’eau est filtrée sur place selon les consignes du laboratoire : kit de filtration (seringue et filtre) propre et rincé avec l’eau à prélever, seringue remplie sans intermédiaire, filtre neuf pour chaque échantillon.",
+      "verification": "Le contrôleur observe la filtration et coche « Rinçage du kit » et « Seringue remplie sans intermédiaire ».",
+      "C": "Filtration conforme.",
+      "P": "Filtration correcte mais rinçage du kit sommaire.",
+      "NC": "Filtration non faite alors qu’elle est demandée, filtre réutilisé, ou seringue remplie avec un intermédiaire sale.",
+      "NA": "Aucune analyse de métaux dissous au programme.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ],
+      "aPreciser": "Porosité du filtre, rinçage et ordre des opérations de filtration : à préciser par l’OEG d’après les consignes du laboratoire."
+    },
+    "it-F5-27": {
+      "feuille": 5,
+      "no": "27",
+      "libelle": "Étiquetage suffisant des échantillons (à minima code station / BSS, date, heure)",
+      "section": "Identification et transmission des échantillons",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Chaque flacon porte une étiquette lisible et résistante à l’eau, sur le corps du flacon, avec au minimum le code de la station (code BSS pour les eaux souterraines), la date et l’heure du prélèvement.",
+      "verification": "Le contrôleur vérifie les étiquettes des flacons de la station.",
+      "C": "Étiquetage complet et lisible.",
+      "P": "Étiquetage complet mais peu lisible ou posé seulement sur le bouchon.",
+      "NC": "Flacon non étiqueté ou illisible, ou information obligatoire manquante.",
+      "refs": [
+        "NF EN ISO 5667-3"
+      ]
+    },
+    "it-F5-28": {
+      "feuille": 5,
+      "no": "28",
+      "libelle": "Données transmises au laboratoire avec les échantillons",
+      "section": "Identification et transmission des échantillons",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont accompagnés d’un bordereau (papier ou application) avec les informations demandées par le laboratoire : station, date et heure de prélèvement, préleveur, liste des flacons, observations utiles et, si demandé, mesures in situ.",
+      "verification": "Le contrôleur relève le support (bordereau papier, application mobile, autre) et vérifie son contenu.",
+      "C": "Bordereau complet.",
+      "P": "Bordereau incomplet sur une information secondaire.",
+      "NC": "Aucun bordereau, ou bordereau sans les informations nécessaires au laboratoire.",
+      "refs": [
+        "NF EN ISO 5667-3",
+        "Consignes du laboratoire"
+      ]
+    },
+    "it-F5-29": {
+      "feuille": 5,
+      "no": "29",
+      "libelle": "Matériel de prélèvement disponible et adapté",
+      "section": "Matériel de prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "L’équipe dispose de tout le matériel de prélèvement nécessaire aux configurations de la tournée (seau inox ou plastique, chaîne et corde, canne, bouteille…), diversifié, en matériaux compatibles avec les paramètres analysés et propre.",
+      "verification": "Le contrôleur relève le matériel disponible (« Valeur / réponse »). Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Matériel complet, adapté et propre.",
+      "P": "Matériel suffisant mais peu diversifié (une seule solution pour les prélèvements depuis un pont).",
+      "NC": "Matériel manquant qui empêche un prélèvement conforme, ou matériau incompatible (seau métallique pour les métaux).",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F5-30": {
+      "feuille": 5,
+      "no": "30",
+      "libelle": "État et propreté du matériel de prélèvement",
+      "section": "Matériel de prélèvement",
+      "types": [
+        "bio",
+        "ce",
+        "eso"
+      ],
+      "tournee": true,
+      "attendu": "Le matériel de prélèvement est en bon état, propre, nettoyé et rangé à l’abri des salissures entre les stations.",
+      "verification": "Observation du matériel. Commun à la tournée : jugé une seule fois pour toute la tournée.",
+      "C": "Matériel en bon état et propre.",
+      "P": "Usure ou propreté à améliorer, sans risque de contamination.",
+      "NC": "Matériel sale ou détérioré (corde souillée, seau fissuré) utilisé pour les prélèvements.",
+      "refs": [
+        "FD T90-523-1",
+        "FD T90-523-3"
+      ]
+    },
+    "it-F6-1": {
+      "feuille": 6,
+      "no": "1",
+      "libelle": "Agent prestataire & fonction",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’agent qui réalise le prélèvement est identifié, avec sa fonction, et formé au protocole PEZADA.",
+      "verification": "Le contrôleur relève le nom et la fonction (« Valeur / réponse ») et demande la formation suivie.",
+      "C": "Agent identifié et formé.",
+      "P": "Formation déclarée mais non justifiable sur place.",
+      "NC": "Prélèvement réalisé par une personne non formée au protocole PEZADA.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Qualification exigée des agents (formation au protocole, expérience) : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F6-2": {
+      "feuille": 6,
+      "no": "2",
+      "libelle": "Fiche terrain complétée",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.",
+      "C": "Fiche complète et lisible.",
+      "P": "Fiche partielle (rubriques secondaires vides) ou remplie en différé.",
+      "NC": "Fiche absente ou inexploitable.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ]
+    },
+    "it-F6-3": {
+      "feuille": 6,
+      "no": "3",
+      "libelle": "Coordonnées amont (X / Y)",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les coordonnées de la limite amont de la station sont relevées avec un appareil de positionnement et notées sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou incohérentes avec la station sans justification.",
+      "refs": []
+    },
+    "it-F6-4": {
+      "feuille": 6,
+      "no": "4",
+      "libelle": "Coordonnées aval (X / Y)",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les coordonnées de la limite aval de la station sont relevées avec un appareil de positionnement et notées sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou incohérentes avec la station sans justification.",
+      "refs": []
+    },
+    "it-F6-5": {
+      "feuille": 6,
+      "no": "5",
+      "libelle": "Nombre de prélèvements Surber",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le nombre de prélèvements au Surber est celui fixé par le protocole PEZADA pour la station.",
+      "verification": "Le contrôleur compte les prélèvements réalisés (« Valeur / réponse »).",
+      "C": "Nombre conforme au protocole.",
+      "P": "Écart justifié par les conditions (habitat absent) et noté sur la fiche.",
+      "NC": "Nombre inférieur au protocole sans justification.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ],
+      "aPreciser": "Nombre de prélèvements Surber attendu : à préciser par l’OEG d’après le protocole PEZADA."
+    },
+    "it-F6-6": {
+      "feuille": 6,
+      "no": "6",
+      "libelle": "Répartition des prélèvements",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les prélèvements sont répartis entre les habitats selon les règles du protocole (substrats et vitesses de courant représentés), et cette répartition est notée sur la fiche.",
+      "verification": "Le contrôleur compare la répartition réalisée avec les habitats présents et le protocole.",
+      "C": "Répartition conforme et notée.",
+      "P": "Répartition conforme mais non notée.",
+      "NC": "Répartition contraire au protocole (habitats dominants oubliés, prélèvements concentrés au même endroit).",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ],
+      "aPreciser": "Règles de répartition des prélèvements par habitat : à préciser par l’OEG d’après le protocole PEZADA."
+    },
+    "it-F6-7": {
+      "feuille": 6,
+      "no": "7",
+      "libelle": "Autre matériel utilisé",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le matériel utilisé (Surber et autres outils prévus par le protocole : tamis, bacs, pinces…) est conforme au protocole, en bon état (filet sans trou) et propre, sans organismes de la station précédente.",
+      "verification": "Le contrôleur observe le matériel.",
+      "C": "Matériel conforme, en bon état et propre.",
+      "P": "Matériel conforme mais usé ou mal nettoyé, sans organismes résiduels.",
+      "NC": "Matériel non conforme ou troué, ou organismes d’une autre station présents.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ],
+      "aPreciser": "Caractéristiques du matériel exigé (surface du Surber, vide de maille) : à préciser par l’OEG d’après le protocole PEZADA."
+    },
+    "it-F6-8": {
+      "feuille": 6,
+      "no": "8",
+      "libelle": "Récipients de stockage",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont placés dans des récipients étanches, propres, résistants au produit de conservation et de volume adapté.",
+      "verification": "Observation des récipients.",
+      "C": "Récipients adaptés.",
+      "P": "Récipients adaptés mais trop remplis ou mal fermés.",
+      "NC": "Récipients non étanches ou inadaptés (fuite, risque de perte de l’échantillon).",
+      "refs": []
+    },
+    "it-F6-9": {
+      "feuille": 6,
+      "no": "9",
+      "libelle": "Nature du produit de conservation",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le produit de conservation et sa concentration sont ceux prescrits par le protocole. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.",
+      "verification": "Le contrôleur demande le produit utilisé et observe sa manipulation.",
+      "C": "Produit conforme, manipulé en sécurité.",
+      "P": "Produit conforme mais dosage approximatif ou fiche de données de sécurité absente.",
+      "NC": "Produit non conforme ou insuffisant (échantillon mal conservé), ou manipulation sans protection.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ],
+      "aPreciser": "Produit de conservation et concentration attendus : à préciser par l’OEG d’après le protocole PEZADA."
+    },
+    "it-F6-10": {
+      "feuille": 6,
+      "no": "10",
+      "libelle": "Traçabilité des flacons",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.",
+      "verification": "Le contrôleur vérifie la numérotation et la fiche de suivi.",
+      "C": "Traçabilité complète.",
+      "P": "Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).",
+      "NC": "Récipients non rattachés à la station ou au prélèvement.",
+      "refs": []
+    },
+    "it-F6-11": {
+      "feuille": 6,
+      "no": "11",
+      "libelle": "Respect des normes de prélèvement",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement suit le protocole PEZADA en vigueur (choix des placettes, technique de prélèvement au Surber, traitement de l’échantillon sur place).",
+      "verification": "Synthèse du contrôleur sur l’ensemble des opérations observées.",
+      "C": "Protocole respecté.",
+      "P": "Écart mineur sans incidence sur le résultat.",
+      "NC": "Écart au protocole qui peut fausser le résultat.",
+      "refs": [
+        "Protocole PEZADA en vigueur"
+      ]
+    },
+    "it-F6-12": {
+      "feuille": 6,
+      "no": "12",
+      "libelle": "Échantillons correctement identifiés",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Chaque récipient porte une identification lisible et durable (station, date, n° de prélèvement), résistante au produit de conservation, par exemple une étiquette intérieure et une étiquette extérieure.",
+      "verification": "Le contrôleur vérifie l’étiquetage des récipients.",
+      "C": "Identification complète et durable.",
+      "P": "Identification complète mais fragile (étiquette extérieure seule).",
+      "NC": "Récipient non identifié ou illisible.",
+      "refs": []
+    },
+    "it-F6-13": {
+      "feuille": 6,
+      "no": "13",
+      "libelle": "Transport / conservation",
+      "section": "Invertébrés aquatiques – protocole PEZADA",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont transportés fermés, calés, à l’abri de la chaleur, et remis au laboratoire dans les conditions et délais prévus.",
+      "verification": "Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.",
+      "C": "Transport conforme.",
+      "P": "Transport correct mais calage ou protection perfectible.",
+      "NC": "Échantillons exposés à la chaleur, mal fermés, ou remise hors délai.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Conditions et délai de remise au laboratoire de détermination : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F7-1": {
+      "feuille": 7,
+      "no": "1",
+      "libelle": "Agent prestataire & fonction",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’agent qui réalise le prélèvement est identifié, avec sa fonction, et formé au protocole IDGF.",
+      "verification": "Le contrôleur relève le nom et la fonction (« Valeur / réponse ») et demande la formation suivie.",
+      "C": "Agent identifié et formé.",
+      "P": "Formation déclarée mais non justifiable sur place.",
+      "NC": "Prélèvement réalisé par une personne non formée au protocole IDGF.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Qualification exigée des agents (formation au protocole, expérience) : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F7-2": {
+      "feuille": 7,
+      "no": "2",
+      "libelle": "Fiche terrain complétée",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.",
+      "C": "Fiche complète et lisible.",
+      "P": "Fiche partielle (rubriques secondaires vides) ou remplie en différé.",
+      "NC": "Fiche absente ou inexploitable.",
+      "refs": [
+        "Protocole IDGF en vigueur"
+      ]
+    },
+    "it-F7-3": {
+      "feuille": 7,
+      "no": "3",
+      "libelle": "Coordonnées",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les coordonnées du point d’échantillonnage sont relevées avec un appareil de positionnement et notées sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou incohérentes avec la station sans justification.",
+      "refs": []
+    },
+    "it-F7-4": {
+      "feuille": 7,
+      "no": "4",
+      "libelle": "Nature du substrat échantillonné",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les diatomées sont prélevées sur les substrats prescrits par le protocole : de préférence des substrats durs naturels et stables (blocs, galets), immergés dans la zone courante et éclairée. Le substrat utilisé est noté, ainsi que tout substrat de remplacement.",
+      "verification": "Le contrôleur observe les substrats choisis.",
+      "C": "Substrats conformes et notés.",
+      "P": "Substrats acceptables mais choix non noté ou partiellement hors zone courante.",
+      "NC": "Substrats inadaptés (vase, substrat instable, zone hors d’eau récemment) sans justification.",
+      "refs": [
+        "NF EN 13946",
+        "Protocole IDGF en vigueur"
+      ]
+    },
+    "it-F7-5": {
+      "feuille": 7,
+      "no": "5",
+      "libelle": "Matériel d’échantillonnage",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le matériel est adapté et propre : brosse ou grattoir propre (neuf, ou nettoyé entre les stations pour éviter tout transfert de diatomées), bac, pissette d’eau du site, récipients.",
+      "verification": "Le contrôleur observe le matériel et son nettoyage.",
+      "C": "Matériel adapté et propre.",
+      "P": "Matériel adapté mais nettoyage sommaire.",
+      "NC": "Brosse non nettoyée réutilisée d’une station à l’autre (contamination croisée).",
+      "refs": [
+        "NF EN 13946",
+        "Protocole IDGF en vigueur"
+      ]
+    },
+    "it-F7-6": {
+      "feuille": 7,
+      "no": "6",
+      "libelle": "Nombre de blocs échantillonnés",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le nombre de blocs ou de supports brossés est celui prévu par le protocole, répartis sur la station.",
+      "verification": "Le contrôleur compte les blocs brossés (« Valeur / réponse »).",
+      "C": "Nombre conforme.",
+      "P": "Écart justifié (substrats rares) et noté.",
+      "NC": "Nombre insuffisant sans justification.",
+      "refs": [
+        "NF EN 13946",
+        "Protocole IDGF en vigueur"
+      ],
+      "aPreciser": "Nombre de blocs attendu : à préciser par l’OEG d’après le protocole IDGF."
+    },
+    "it-F7-7": {
+      "feuille": 7,
+      "no": "7",
+      "libelle": "Prélèvements en doublon",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Un prélèvement en doublon est réalisé lorsque le protocole ou le CCTP le demande.",
+      "verification": "Le contrôleur indique « Oui » ou « Non ».",
+      "C": "Doublon réalisé comme prévu.",
+      "P": "Doublon réalisé mais mal identifié.",
+      "NC": "Doublon demandé non réalisé.",
+      "NA": "Doublon non demandé pour cette station.",
+      "refs": [
+        "Protocole IDGF en vigueur",
+        "CCTP du marché"
+      ],
+      "aPreciser": "Stations et fréquence des doublons attendus : à préciser par l’OEG d’après le protocole IDGF et le CCTP."
+    },
+    "it-F7-8": {
+      "feuille": 7,
+      "no": "8",
+      "libelle": "Autre matériel utilisé",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Tout autre matériel utilisé (couteau, seringue, filet…) est prévu ou admis par le protocole, et propre.",
+      "verification": "Le contrôleur relève le matériel complémentaire (« Valeur / réponse »).",
+      "C": "Matériel admis et propre.",
+      "P": "Matériel admis mais mal nettoyé.",
+      "NC": "Matériel non admis par le protocole ou contaminant.",
+      "NA": "Aucun autre matériel utilisé.",
+      "refs": [
+        "Protocole IDGF en vigueur"
+      ]
+    },
+    "it-F7-9": {
+      "feuille": 7,
+      "no": "9",
+      "libelle": "Récipients de stockage",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont placés dans des récipients étanches, propres, résistants au produit de conservation et de volume adapté.",
+      "verification": "Observation des récipients.",
+      "C": "Récipients adaptés.",
+      "P": "Récipients adaptés mais trop remplis ou mal fermés.",
+      "NC": "Récipients non étanches ou inadaptés (fuite, risque de perte de l’échantillon).",
+      "refs": []
+    },
+    "it-F7-10": {
+      "feuille": 7,
+      "no": "10",
+      "libelle": "Nature du produit de conservation",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le produit de conservation et sa concentration sont ceux prescrits par le protocole. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.",
+      "verification": "Le contrôleur demande le produit utilisé et observe sa manipulation.",
+      "C": "Produit conforme, manipulé en sécurité.",
+      "P": "Produit conforme mais dosage approximatif ou fiche de données de sécurité absente.",
+      "NC": "Produit non conforme ou insuffisant (échantillon mal conservé), ou manipulation sans protection.",
+      "refs": [
+        "Protocole IDGF en vigueur"
+      ],
+      "aPreciser": "Produit de conservation et concentration attendus : à préciser par l’OEG d’après le protocole IDGF."
+    },
+    "it-F7-11": {
+      "feuille": 7,
+      "no": "11",
+      "libelle": "Traçabilité des flacons",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.",
+      "verification": "Le contrôleur vérifie la numérotation et la fiche de suivi.",
+      "C": "Traçabilité complète.",
+      "P": "Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).",
+      "NC": "Récipients non rattachés à la station ou au prélèvement.",
+      "refs": []
+    },
+    "it-F7-12": {
+      "feuille": 7,
+      "no": "12",
+      "libelle": "Respect des normes de prélèvement",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement suit le protocole IDGF en vigueur et les principes de la norme NF EN 13946 (choix des substrats, brossage de la face supérieure, rinçage, récupération du prélèvement).",
+      "verification": "Synthèse du contrôleur sur l’ensemble des opérations observées.",
+      "C": "Protocole respecté.",
+      "P": "Écart mineur sans incidence sur le résultat.",
+      "NC": "Écart au protocole qui peut fausser le résultat.",
+      "refs": [
+        "NF EN 13946",
+        "Protocole IDGF en vigueur"
+      ]
+    },
+    "it-F7-13": {
+      "feuille": 7,
+      "no": "13",
+      "libelle": "Conditionnement / transport",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont transportés fermés, calés, à l’abri de la chaleur et de la lumière, et remis au laboratoire dans les conditions et délais prévus.",
+      "verification": "Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.",
+      "C": "Transport conforme.",
+      "P": "Transport correct mais calage ou protection perfectible.",
+      "NC": "Échantillons exposés à la chaleur, mal fermés, ou remise hors délai.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Conditions et délai de remise au laboratoire : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F7-14": {
+      "feuille": 7,
+      "no": "14",
+      "libelle": "Autre point à préciser",
+      "section": "Diatomées – IDGF",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Point libre : tout autre élément utile du contrôle des diatomées (difficulté particulière, écart au protocole non couvert ci-dessus).",
+      "verification": "Point facultatif : le contrôleur le laisse vide s’il n’a rien à signaler, ou décrit l’élément observé en observation avant de le coter.",
+      "C": "Élément observé satisfaisant.",
+      "P": "Élément perfectible, décrit en observation.",
+      "NC": "Écart décrit en observation.",
+      "NA": "Rien à signaler.",
+      "refs": []
+    },
+    "it-F8-A1": {
+      "feuille": 8,
+      "no": "A1",
+      "libelle": "Agent prestataire & fonction",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’agent qui réalise le prélèvement est identifié, avec sa fonction, et formé au protocole de pêche et à l’identification des poissons de Guyane.",
+      "verification": "Le contrôleur relève le nom et la fonction (« Valeur / réponse ») et demande la formation suivie.",
+      "C": "Agent identifié et formé.",
+      "P": "Formation déclarée mais non justifiable sur place.",
+      "NC": "Prélèvement réalisé par une personne non formée au protocole de pêche et à l’identification des poissons de Guyane.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Qualification exigée des agents (formation, expérience en identification) : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F8-A2": {
+      "feuille": 8,
+      "no": "A2",
+      "libelle": "Filets maillants / batteries",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La batterie de filets maillants utilisée est celle prévue par le protocole (nombre, longueur, hauteur, mailles) et elle est complète.",
+      "verification": "Le contrôleur compare la batterie posée avec le protocole.",
+      "C": "Batterie conforme et complète.",
+      "P": "Batterie conforme avec un filet remplacé par un équivalent, noté.",
+      "NC": "Batterie incomplète ou différente du protocole sans justification.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ],
+      "aPreciser": "Composition de la batterie de filets (nombre, dimensions) : à préciser par l’OEG d’après le protocole de pêche."
+    },
+    "it-F8-A3": {
+      "feuille": 8,
+      "no": "A3",
+      "libelle": "Mailles utilisées",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les mailles utilisées correspondent à celles du protocole et sont notées sur la fiche.",
+      "verification": "Le contrôleur relève les mailles utilisées (« Valeur / réponse »).",
+      "C": "Mailles conformes et notées.",
+      "P": "Mailles conformes mais non notées.",
+      "NC": "Mailles différentes du protocole.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ],
+      "aPreciser": "Mailles attendues : à préciser par l’OEG d’après le protocole de pêche."
+    },
+    "it-F8-A4": {
+      "feuille": 8,
+      "no": "A4",
+      "libelle": "Heure de pose",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’heure de pose de chaque filet est notée sur la fiche terrain.",
+      "verification": "Le contrôleur saisit l’heure de pose observée ou notée (« Valeur / réponse »).",
+      "C": "Heure de pose notée.",
+      "P": "Heure notée de façon approximative.",
+      "NC": "Heure de pose non notée : durée de pêche inconnue.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ]
+    },
+    "it-F8-A5": {
+      "feuille": 8,
+      "no": "A5",
+      "libelle": "Heure de relève",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’heure de relève est notée ; la durée de pose respecte le protocole.",
+      "verification": "Le contrôleur saisit l’heure de relève (« Valeur / réponse ») et calcule la durée de pose.",
+      "C": "Durée de pose conforme et heures notées.",
+      "P": "Écart de durée limité et justifié.",
+      "NC": "Durée de pose non conforme au protocole, ou heure de relève non notée.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ],
+      "aPreciser": "Durée et période de pose attendues : à préciser par l’OEG d’après le protocole de pêche."
+    },
+    "it-F8-A6": {
+      "feuille": 8,
+      "no": "A6",
+      "libelle": "État des filets",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les filets sont en bon état (pas de trou ni de déchirure importante), propres et démêlés.",
+      "verification": "Observation des filets.",
+      "C": "Filets en bon état.",
+      "P": "Usure limitée sans effet sur la capture.",
+      "NC": "Filets troués ou emmêlés qui faussent l’effort de pêche.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ]
+    },
+    "it-F8-A7": {
+      "feuille": 8,
+      "no": "A7",
+      "libelle": "Géoréférencement",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les coordonnées de chaque filet sont relevées avec un appareil de positionnement et notées sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou incohérentes avec la station sans justification.",
+      "refs": []
+    },
+    "it-F8-A8": {
+      "feuille": 8,
+      "no": "A8",
+      "libelle": "Biométrie / identification",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les poissons sont identifiés à l’espèce par une personne compétente, mesurés et pesés selon le protocole ; les données sont notées au fur et à mesure. Le devenir des poissons (remise à l’eau, conservation) suit le protocole.",
+      "verification": "Le contrôleur observe la biométrie et l’identification.",
+      "C": "Biométrie et identification conformes.",
+      "P": "Mesures conformes mais notation en différé.",
+      "NC": "Identification douteuse non vérifiée, ou mesures prévues non réalisées.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ],
+      "aPreciser": "Mesures biométriques attendues et devenir des poissons : à préciser par l’OEG d’après le protocole de pêche."
+    },
+    "it-F8-A9": {
+      "feuille": 8,
+      "no": "A9",
+      "libelle": "Fiche terrain complétée",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.",
+      "C": "Fiche complète et lisible.",
+      "P": "Fiche partielle (rubriques secondaires vides) ou remplie en différé.",
+      "NC": "Fiche absente ou inexploitable.",
+      "refs": [
+        "Protocole de pêche du marché"
+      ]
+    },
+    "it-F8-A10": {
+      "feuille": 8,
+      "no": "A10",
+      "libelle": "Conditionnement",
+      "section": "Ichtyologie",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les poissons ou échantillons conservés (collection, analyses) sont conditionnés selon le protocole : sachets ou récipients identifiés, conservation au froid ou dans le conservateur prévu.",
+      "verification": "Le contrôleur observe le conditionnement.",
+      "C": "Conditionnement conforme.",
+      "P": "Conditionnement correct mais identification fragile.",
+      "NC": "Conditionnement non conforme (échantillons dégradés ou non identifiés).",
+      "refs": [
+        "Protocole de pêche du marché"
+      ],
+      "aPreciser": "Mode de conditionnement et de conservation attendu : à préciser par l’OEG d’après le protocole de pêche."
+    },
+    "it-F8-B1": {
+      "feuille": 8,
+      "no": "B1",
+      "libelle": "Nombre d’individus retenus",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le nombre d’individus retenus pour l’analyse du mercure est celui prévu par le protocole.",
+      "verification": "Le contrôleur compte les individus retenus (« Valeur / réponse »).",
+      "C": "Nombre conforme.",
+      "P": "Nombre inférieur justifié par les captures et noté.",
+      "NC": "Nombre insuffisant sans justification.",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ],
+      "aPreciser": "Nombre d’individus attendu par espèce et par station : à préciser par l’OEG d’après le protocole mercure."
+    },
+    "it-F8-B2": {
+      "feuille": 8,
+      "no": "B2",
+      "libelle": "Espèces retenues",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les espèces retenues sont celles ciblées par le protocole mercure ; un remplacement suit les règles du protocole.",
+      "verification": "Le contrôleur relève les espèces retenues (« Valeur / réponse »).",
+      "C": "Espèces conformes.",
+      "P": "Espèce de remplacement admise, justifiée et notée.",
+      "NC": "Espèces non prévues sans justification.",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ],
+      "aPreciser": "Espèces cibles et règles de remplacement : à préciser par l’OEG d’après le protocole mercure."
+    },
+    "it-F8-B3": {
+      "feuille": 8,
+      "no": "B3",
+      "libelle": "Critères de sélection",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les individus sont choisis selon les critères du protocole (espèce, taille, état) et le choix est noté.",
+      "verification": "Le contrôleur demande les critères appliqués.",
+      "C": "Critères respectés et notés.",
+      "P": "Critères respectés mais non notés.",
+      "NC": "Sélection contraire aux critères du protocole.",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ],
+      "aPreciser": "Critères de sélection (classes de taille, état) : à préciser par l’OEG d’après le protocole mercure."
+    },
+    "it-F8-B4": {
+      "feuille": 8,
+      "no": "B4",
+      "libelle": "Étiquetage / traçabilité",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Chaque individu ou échantillon est identifié (code station, date, espèce, n° d’individu) et relié à ses données biométriques jusqu’au laboratoire.",
+      "verification": "Le contrôleur vérifie l’étiquetage et le lien avec la fiche biométrique.",
+      "C": "Identification et traçabilité complètes.",
+      "P": "Identification complète mais fragile.",
+      "NC": "Échantillon non identifié ou non relié à ses données.",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ]
+    },
+    "it-F8-B5": {
+      "feuille": 8,
+      "no": "B5",
+      "libelle": "Conservation",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont conservés selon le protocole (réfrigération ou congélation), dans des emballages propres et fermés, sans risque de contamination ni de dégradation.",
+      "verification": "Le contrôleur observe le mode de conservation.",
+      "C": "Conservation conforme.",
+      "P": "Conservation correcte mais emballage perfectible.",
+      "NC": "Conservation non conforme (échantillons au chaud, emballage ouvert).",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ],
+      "aPreciser": "Mode de conservation attendu (réfrigération, congélation) et délais : à préciser par l’OEG d’après le protocole mercure."
+    },
+    "it-F8-B6": {
+      "feuille": 8,
+      "no": "B6",
+      "libelle": "Glacière / température",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La glacière est adaptée et refroidie ; la température est suivie jusqu’à la remise au laboratoire.",
+      "verification": "Le contrôleur vérifie la glacière et le suivi de température.",
+      "C": "Glacière adaptée, température suivie.",
+      "P": "Glacière adaptée sans suivi de température.",
+      "NC": "Glacière absente ou chaude.",
+      "refs": [
+        "Protocole mercure (biote) du marché"
+      ]
+    },
+    "it-F8-B7": {
+      "feuille": 8,
+      "no": "B7",
+      "libelle": "Expédition / remise au laboratoire",
+      "section": "Mercure / biote",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont remis ou expédiés au laboratoire dans les conditions et délais prévus, avec un bordereau de transmission.",
+      "verification": "Le contrôleur demande l’organisation de la remise et le bordereau.",
+      "C": "Remise organisée, avec bordereau.",
+      "P": "Remise organisée mais bordereau incomplet.",
+      "NC": "Remise non organisée ou hors délai, ou sans bordereau.",
+      "refs": [
+        "Protocole mercure (biote) du marché",
+        "CCTP du marché"
+      ],
+      "aPreciser": "Délai et conditions de remise au laboratoire : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F9-1": {
+      "feuille": 9,
+      "no": "1",
+      "libelle": "Agent prestataire & fonction",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "L’agent qui réalise le prélèvement est identifié, avec sa fonction, et formé au protocole phytoplancton.",
+      "verification": "Le contrôleur relève le nom et la fonction (« Valeur / réponse ») et demande la formation suivie.",
+      "C": "Agent identifié et formé.",
+      "P": "Formation déclarée mais non justifiable sur place.",
+      "NC": "Prélèvement réalisé par une personne non formée au protocole phytoplancton.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Qualification exigée des agents : à préciser par l’OEG d’après le CCTP."
+    },
+    "it-F9-2": {
+      "feuille": 9,
+      "no": "2",
+      "libelle": "Fiche terrain complétée",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.",
+      "C": "Fiche complète et lisible.",
+      "P": "Fiche partielle (rubriques secondaires vides) ou remplie en différé.",
+      "NC": "Fiche absente ou inexploitable.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ]
+    },
+    "it-F9-3": {
+      "feuille": 9,
+      "no": "3",
+      "libelle": "Coordonnées du point",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les coordonnées du point de prélèvement sont relevées avec un appareil de positionnement et notées sur la fiche terrain.",
+      "verification": "Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).",
+      "C": "Coordonnées relevées et cohérentes.",
+      "P": "Coordonnées relevées mais système non précisé, ou précision médiocre.",
+      "NC": "Coordonnées non relevées, ou incohérentes avec la station sans justification.",
+      "refs": []
+    },
+    "it-F9-4": {
+      "feuille": 9,
+      "no": "4",
+      "libelle": "Type de prélèvement",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le type de prélèvement (intégré sur la colonne d’eau ou ponctuel) est celui prévu par le protocole pour la station, et il est noté.",
+      "verification": "Le contrôleur relève le type de prélèvement (« Valeur / réponse »).",
+      "C": "Type conforme et noté.",
+      "P": "Type conforme mais non noté.",
+      "NC": "Type différent du protocole sans justification.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ],
+      "aPreciser": "Type de prélèvement attendu par station : à préciser par l’OEG d’après le protocole phytoplancton."
+    },
+    "it-F9-5": {
+      "feuille": 9,
+      "no": "5",
+      "libelle": "Volume prélevé",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le volume prélevé est celui prévu par le protocole, noté avec son unité.",
+      "verification": "Le contrôleur saisit le volume prélevé et son unité.",
+      "C": "Volume conforme et noté.",
+      "P": "Volume conforme mais non noté.",
+      "NC": "Volume insuffisant pour l’analyse.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ],
+      "aPreciser": "Volume à prélever : à préciser par l’OEG d’après le protocole phytoplancton."
+    },
+    "it-F9-6": {
+      "feuille": 9,
+      "no": "6",
+      "libelle": "Nombre de prélèvements / doublons",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le nombre de prélèvements et de doublons est celui prévu par le protocole ou le CCTP.",
+      "verification": "Le contrôleur saisit le nombre de prélèvements et de doublons.",
+      "C": "Nombres conformes.",
+      "P": "Écart justifié et noté.",
+      "NC": "Prélèvement ou doublon demandé non réalisé.",
+      "refs": [
+        "Protocole phytoplancton du marché",
+        "CCTP du marché"
+      ],
+      "aPreciser": "Nombre de prélèvements et de doublons attendus : à préciser par l’OEG d’après le protocole phytoplancton et le CCTP."
+    },
+    "it-F9-7": {
+      "feuille": 9,
+      "no": "7",
+      "libelle": "Homogénéisation",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Avant de remplir le flacon, l’eau prélevée est homogénéisée doucement (retournements lents, sans agitation violente), pour que le sous-échantillon soit représentatif.",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Sans objet ».",
+      "C": "Homogénéisation conforme.",
+      "P": "Homogénéisation sommaire.",
+      "NC": "Pas d’homogénéisation avant sous-échantillonnage, ou agitation violente.",
+      "NA": "Flacon rempli directement, sans sous-échantillonnage.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ]
+    },
+    "it-F9-8": {
+      "feuille": 9,
+      "no": "8",
+      "libelle": "Flaconnage adapté",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les flacons sont propres, de volume et de matériau adaptés, fermés de façon étanche et protégés de la lumière (flacon teinté ou opaque, ou rangé à l’obscurité).",
+      "verification": "Le contrôleur relève le flaconnage utilisé (« Valeur / réponse »).",
+      "C": "Flaconnage adapté.",
+      "P": "Flaconnage adapté mais protection contre la lumière incomplète.",
+      "NC": "Flacon inadapté (sale, non étanche, volume insuffisant).",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ]
+    },
+    "it-F9-9": {
+      "feuille": 9,
+      "no": "9",
+      "libelle": "Produit de conservation",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le fixateur prévu (Lugol ou autre produit du protocole) est ajouté dans la proportion prescrite, aussitôt après le prélèvement. L’échantillon fixé est conservé à l’obscurité.",
+      "verification": "Le contrôleur relève le produit utilisé (« Valeur / réponse ») et observe son ajout.",
+      "C": "Fixation conforme.",
+      "P": "Fixation correcte mais dosage approximatif.",
+      "NC": "Pas de fixateur alors qu’il est prévu, ou produit non conforme.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ],
+      "aPreciser": "Fixateur et proportion attendus : à préciser par l’OEG d’après le protocole phytoplancton."
+    },
+    "it-F9-10": {
+      "feuille": 9,
+      "no": "10",
+      "libelle": "Traçabilité des flacons",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.",
+      "verification": "Le contrôleur vérifie la numérotation et la fiche de suivi.",
+      "C": "Traçabilité complète.",
+      "P": "Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).",
+      "NC": "Récipients non rattachés à la station ou au prélèvement.",
+      "refs": []
+    },
+    "it-F9-11": {
+      "feuille": 9,
+      "no": "11",
+      "libelle": "Stockage / glacière",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont stockés au frais et à l’obscurité (glacière) jusqu’au laboratoire ; la température est relevée si possible.",
+      "verification": "Le contrôleur indique « Oui » ou « Non » et saisit la température si elle est disponible.",
+      "C": "Stockage au frais et à l’obscurité.",
+      "P": "Stockage au frais mais exposé à la lumière, ou température non relevée.",
+      "NC": "Échantillons laissés au chaud ou au soleil.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ]
+    },
+    "it-F9-12": {
+      "feuille": 9,
+      "no": "12",
+      "libelle": "Respect des normes de prélèvement",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Le prélèvement suit le protocole phytoplancton du marché ; tout écart est noté.",
+      "verification": "Le contrôleur indique « Oui », « Non » ou « Écart(s) » et décrit les écarts.",
+      "C": "Protocole respecté.",
+      "P": "Écart mineur noté, sans incidence sur le résultat.",
+      "NC": "Écart au protocole qui peut fausser le résultat.",
+      "refs": [
+        "Protocole phytoplancton du marché"
+      ]
+    },
+    "it-F9-13": {
+      "feuille": 9,
+      "no": "13",
+      "libelle": "Transport / acheminement",
+      "section": "Phytoplancton d’eau douce",
+      "types": [
+        "bio"
+      ],
+      "tournee": false,
+      "attendu": "Les échantillons sont transportés fermés, calés, à l’abri de la chaleur et de la lumière, et remis au laboratoire dans les conditions et délais prévus.",
+      "verification": "Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.",
+      "C": "Transport conforme.",
+      "P": "Transport correct mais calage ou protection perfectible.",
+      "NC": "Échantillons exposés à la chaleur, mal fermés, ou remise hors délai.",
+      "refs": [
+        "CCTP du marché"
+      ],
+      "aPreciser": "Délai et conditions d’acheminement au laboratoire : à préciser par l’OEG d’après le CCTP."
+    }
+  }
+}

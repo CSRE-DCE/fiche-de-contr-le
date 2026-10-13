@@ -30,6 +30,7 @@ route('prestataire/:id', () => import('./views/providers.js').then(m => ({ defau
 route('carte', () => import('./views/map.js'));
 route('tableau-de-bord', () => import('./views/dashboard.js'));
 route('documents', () => import('./views/documents.js'));
+route('attendus', () => import('./views/attendus.js'));
 route('document/:id', () => import('./views/documents.js').then(m => ({ default: m.detailView })));
 route('grilles', () => import('./views/grids.js'));
 route('grille/:id', () => import('./views/grids.js').then(m => ({ default: m.detailView })));
