@@ -13,12 +13,13 @@ Ce document décrit l’architecture de l’application **Fiches de contrôle te
 7. [Stockage chiffré et journal d’audit](#7-stockage-chiffré-et-journal-daudit)
 8. [Service worker et version](#8-service-worker-et-version)
 9. [PDF](#9-pdf)
-10. [Échanges entre tablettes par fichier](#10-échanges-entre-tablettes-par-fichier)
-11. [Synchronisation GitHub (option avancée)](#11-synchronisation-github-option-avancée)
-12. [Conventions de code](#12-conventions-de-code)
-13. [Tests](#13-tests)
-14. [Outils et vérification automatique](#14-outils-et-vérification-automatique)
-15. [Ajouter un critère ou une feuille sans créer de doublon](#15-ajouter-un-critère-ou-une-feuille-sans-créer-de-doublon)
+10. [Échanges entre tablettes par fichier](#10-échanges-entre-tablettes-par-fichier) : format `.oegct`, envoi incrémental, fusion, règle des profils
+11. [Conventions de code](#11-conventions-de-code)
+12. [Tests](#12-tests)
+13. [Outils et vérification automatique](#13-outils-et-vérification-automatique)
+14. [Ajouter un critère ou une feuille sans créer de doublon](#14-ajouter-un-critère-ou-une-feuille-sans-créer-de-doublon)
+
+Annexe : [synchronisation GitHub (mode équipe, non utilisée à l’OEG)](#annexe--synchronisation-github-mode-équipe-non-utilisée-à-loeg)
 
 ---
 
@@ -26,7 +27,7 @@ Ce document décrit l’architecture de l’application **Fiches de contrôle te
 
 - **Aucune étape de construction, ni Node ni npm.** JavaScript « vanilla » en modules ES, servi tel quel par n’importe quel serveur statique : `python tools/serve.py`, Live Server de VS Code, GitHub Pages sous le sous-chemin `/fiche-de-contr-le/`. Les outils et les tests sont en **Python** (pytest + Playwright) et dans le **navigateur**.
 - **Chemins toujours relatifs** (`js/main.js`, `./sw.js`, `new URL('../../data/…', import.meta.url)`), jamais `/js/…` : le site est publié dans un sous-dossier.
-- **Hors connexion d’abord** : tout est préchargé par le service worker ; les seules ressources réseau à l’exécution sont les tuiles de carte (OpenStreetMap par défaut) et, en option avancée non utilisée à l’OEG, l’API GitHub. Les tablettes de l’OEG échangent leurs données par fichier (section 10). Pas de CDN ; polices locales dans `fonts/`.
+- **Hors connexion d’abord** : tout est préchargé par le service worker ; les seules ressources réseau à l’exécution sont les tuiles de carte (OpenStreetMap par défaut) et, dans le mode équipe non utilisé à l’OEG (annexe), l’API GitHub. Les tablettes de l’OEG échangent leurs données par fichier (section 10). Pas de CDN ; polices locales dans `fonts/`.
 - **Interface 100 % en français**, apostrophe typographique ’. Accessibilité : cibles tactiles ≥ 48 px (≥ 56 px pour C / P / NC / N/A), contraste AA, mode « plein soleil » (`body.sun`).
 - **Jamais de non-conformité automatique** : alertes et suggestions ne font que proposer ; le contrôleur décide (cote, écart, conclusion de feuille).
 - **Pas de score global** : la synthèse ne produit que des décomptes traçables.
@@ -65,7 +66,7 @@ tools/        serve.py, check_release.py, bump_version.py
 | `crypto.js` | AES-GCM 256 bits ; clé de données (DEK) enveloppée par mot de passe (PBKDF2-SHA256, 310 000 itérations) ; `passwordKey` (clé dérivée d’un mot de passe dédié : sauvegardes, fichiers d’échange) |
 | `session.js` | état de la session en mémoire (DEK, utilisateur, appareil, mode, jeton) ; `appVersion()` |
 | `store.js` | magasin de données en mémoire + persistance chiffrée, file d’envoi (`outbox` : modifications pas encore envoyées), vecteurs de versions `_vv`, journal d’audit chaîné ; `applyExchange` (réception d’un fichier : une transaction, sans journal par élément), `dropOutbox`, `getLazy` / `getLazyMany` (types lus à la demande, `LAZY_TYPES`) |
-| `auth.js` | agents de la tablette (trousseau : `knownUsers`, `addLocalAccount` — « Ajouter un agent » : nouveau profil, identifiant unique parmi le trousseau et les profils —, `enrollAgent` — « Ajouter sur cette tablette », profil reçu de l’autre tablette, même identifiant de profil —, `removeAgentFromDevice` — entrée locale seulement, jamais l’agent connecté ni le dernier administrateur —, `assertAdminRemains` — jamais de dernier administrateur de la tablette rétrogradé ou désactivé), `setupFromProfile` — tablette supplémentaire mise en service avec un profil reçu —, `tabletHasAdmin`, déverrouillage hors connexion, droits (`can`, `canEditAudit`), mode équipe (option avancée non utilisée à l’OEG : `TEAM_MODE = 'github'`, jeton chiffré ; `setupTeam({ account: { id } })` réutilise un profil existant) |
+| `auth.js` | agents de la tablette (trousseau : `knownUsers`, `addLocalAccount` — « Ajouter un agent » : nouveau profil, identifiant unique parmi le trousseau et les profils —, `enrollAgent` — « Ajouter sur cette tablette », profil reçu de l’autre tablette, même identifiant de profil —, `removeAgentFromDevice` — entrée locale seulement, jamais l’agent connecté ni le dernier administrateur —, `assertAdminRemains` — jamais de dernier administrateur de la tablette rétrogradé ou désactivé), `setupFromProfile` — tablette supplémentaire mise en service avec un profil reçu —, `tabletHasAdmin`, déverrouillage hors connexion, droits (`can`, `canEditAudit`), mode équipe (annexe, non utilisé à l’OEG : `TEAM_MODE = 'github'`, jeton chiffré ; `setupTeam({ account: { id } })` réutilise un profil existant) |
 | `media.js` | photos, signatures, pièces jointes (binaire chiffré + entité `media` avec empreinte SHA-256) |
 | `util.js` | gabarit `html` / `raw` (échappement), dates, JSON canonique, `sha256Hex`, `diff`, tris |
 
@@ -96,10 +97,10 @@ tools/        serve.py, check_release.py, bump_version.py
 | `report.js` | rapport d’audit détaillé (PDF) |
 | `attendus-pdf.js` | attendus des prestataires : chargement de `data/attendus-ct-2026.json`, modèle d’affichage par type de tournée, PDF « Fiche des attendus » et « Liste de préparation » (écran : `js/views/attendus.js`, route `#/attendus`, fenêtre « Attendu » ouverte depuis les feuilles par `openAttendu(itemId)`) |
 | `static-map.js` | carte statique de la feuille 1 pour les PDF (tuiles en cache ou schéma hors connexion) |
-| `github.js` | client REST GitHub, arborescence du dépôt de données, erreurs en français, empreintes git |
-| `exchange-file.js` | format du fichier d’échange `.oegct` : texte ASCII, chiffrement AES-GCM avec le mot de passe d’échange, compression gzip, médias joints, empreintes SHA-256 (`encodeExchange`, `decodeExchange`, `ExchangeError`) |
-| `exchange.js` | échanges entre tablettes : mot de passe d’échange, modifications à envoyer (`pendingChanges`, `exchangeState`), `prepareSend` / `markSent`, `readExchange` / `previewExchange` / `receiveExchange`, changements de profils en attente (`acceptHeld`, `refuseHeld`), historique, mise en service d’une tablette supplémentaire (`setupFromExchange`) |
-| `sync.js` | moteur de synchronisation d’équipe (option avancée) |
+| `github.js` | mode équipe (annexe) : client REST GitHub, arborescence du dépôt de données, erreurs en français, empreintes git |
+| `exchange-file.js` | format du fichier d’échange `.oegct` (section 10) : texte ASCII, chiffrement AES-GCM avec le mot de passe d’échange, compression gzip, médias joints, empreintes SHA-256 (`encodeExchange`, `decodeExchange`, `ExchangeError`) |
+| `exchange.js` | échanges entre tablettes (section 10) : mot de passe d’échange, modifications à envoyer (`pendingChanges`, `exchangeState`), `prepareSend` / `markSent`, `readExchange` / `previewExchange` / `receiveExchange`, changements de profils en attente (`acceptHeld`, `refuseHeld`), historique, mise en service d’une tablette supplémentaire (`setupFromExchange`) |
+| `sync.js` | moteur de synchronisation du mode équipe (annexe, non utilisé à l’OEG) |
 | `numbering.js` | numéros d’audit uniques `AUD-AAAA-NNNNNN` (blocs réservés en mode équipe, plage par appareil sinon) |
 | `documents.js`, `imports.js`, `exports.js`, `settings.js` | documents applicables, imports (Excel, CSV, ICS…), exports et sauvegardes, réglages et préférences |
 
@@ -295,23 +296,68 @@ audit = {
 
 ## 10. Échanges entre tablettes par fichier
 
-Mode autonome, **celui de l’OEG** : aucun serveur, aucun jeton, hors connexion. Les tablettes s’échangent un **fichier unique** (`js/app/exchange.js`, écrans `js/views/exchange.js`).
+Mode autonome (`session.mode = 'standalone'`), **celui de l’OEG** : une session par agent sur chaque tablette (trousseau, section 7), aucun serveur, aucun jeton, aucune connexion nécessaire. Les tablettes s’échangent **un fichier unique**, chiffré, que les agents font passer par Quick Share, Bluetooth, e-mail, Teams ou clé USB. Parcours utilisateur : README, section « Deux tablettes pour quatre agents ».
 
-**Fichier `.oegct`** (`js/app/exchange-file.js`) — texte ASCII, pour traverser e-mail, Teams, Quick Share, Bluetooth, clé USB :
+### Modules
+
+| Fichier | Rôle |
+|---|---|
+| `js/app/exchange-file.js` | format du fichier `.oegct`, sans stockage : `encodeExchange` (`packExchange` + `sealExchange`), `decodeExchange` (`readHeader`, déchiffrement, `openPlain`), `bodyHash`, `isExchangeText`, `ExchangeError` |
+| `js/domain/exchange.js` | règles pures : vecteurs de versions (`vvLeq`, `vvCompare`, `vvMax`, `vvBump`), décision de réception (`planEntity`), version commune (`chooseBase`, `nextCandidates`), règle des profils (`guardProfile`, `heldLabel`), choix des données à envoyer (`selectForSend`), nom du fichier (`exchangeFileName`), n° libre (`freeDeviceNumber`), décomptes (`countEntities`, `countsLabel`) |
+| `js/app/exchange.js` | mot de passe d’échange (`setExchangePassword`, `exchangePasswordInfo`, `validateExchangePassword`), modifications à envoyer (`pendingChanges`, `exchangeState`, `watchExchange`), envoi (`prepareSend`, `markSent`), réception (`readExchange`, `previewExchange`, `receiveExchange`, `receiveSummary`), changements de profils en attente (`heldChanges`, `acceptHeld`, `refuseHeld`), historique et tablettes connues (`exchangeHistory`, `knownDevices`), mise en service d’une tablette supplémentaire (`setupProfiles`, `proposedDeviceNumber`, `setupFromExchange`) |
+| `js/views/exchange.js` | fenêtres et cartes : « Envoyer à l’autre tablette » (`sendDialog`), « Recevoir un fichier » (`receiveFile`), mot de passe d’échange (`passwordDialog`), bandeau de l’accueil (`homeBanner`), `exchangeCard`, `historyCard`, `heldCard` |
+| écrans | `views/sync.js` (`standaloneView` : écran « Échanges entre tablettes », route `#/synchronisation`), `views/auth.js` (mise en service : `#setupFirst`, `#setupExtra` ; `renderLogin` : rappel des modifications non envoyées), `views/admin.js` (Cette tablette, Échanges entre tablettes, changements de profils à valider, « Aucun administrateur sur cette tablette »), `views/home.js` (bandeau), `views/shell.js` (pastille « n à envoyer ») |
+| `js/core/store.js` | vecteurs de versions `_vv`, file d’envoi `outbox`, `applyExchange` (une transaction), `dropOutbox`, `getLazy` / `getLazyMany` (versions déjà échangées, type `xbase`) |
+
+### Le fichier `.oegct` : enveloppe chiffrée
+
+Un **texte ASCII** (rien de binaire), pour traverser sans dommage e-mail, Teams, Quick Share, Bluetooth et clé USB ; fins de ligne CRLF et espaces tolérés :
 
 ```text
 OEG-CT-ECHANGE 1
-{"format":"oeg-ct-echange","v":1,"kdf":"PBKDF2-SHA256","iterations":310000,"salt":…,"iv":…,"check":{iv,ct},"z":"gzip"}
+{"format":"oeg-ct-echange","v":1,"kdf":"PBKDF2-SHA256","iterations":310000,"salt":…,"iv":…,"check":{"iv":…,"ct":…},"z":"gzip"}
 <contenu chiffré AES-GCM 256, en base64, lignes de 76 caractères>
 ```
 
-Contenu déchiffré : `[longueur du corps : 4 octets][corps JSON compressé gzip][octets des médias]`. Corps : `{ format, v, id, createdAt, scope ('changes'|'all'), from: { id, name, number }, sentBy: { id, name, role, username }, devices, counts, entities: { type: [versions] }, media: [{ id, size, sha256 }], sha256 }` ; `sha256` = empreinte du JSON canonique du corps sans elle ; chaque média a la sienne. Erreurs (`ExchangeError.code`) : `password` (autre mot de passe d’échange : `check` ne se déchiffre pas), `altered` (authentification AES-GCM en échec), `integrity` (empreinte), `format`, `version`. Nom : `OEG-echange_<tablette>_<AAAA-MM-JJ_HHhMM>.oegct` (`exchangeFileName`).
+- **Chiffrement toujours** : clé AES-GCM 256 bits dérivée du **mot de passe d’échange** (`passwordKey` de `js/core/crypto.js` : PBKDF2-SHA256, 310 000 itérations, sel aléatoire de 16 octets propre à chaque fichier, IV de 12 octets). L’en-tête (ligne 2) n’est pas secret.
+- **`check`** : le texte connu `OEG-CT-ECHANGE` chiffré avec la même clé et un autre IV. Il distingue un **mauvais mot de passe** (`check` ne se déchiffre pas : code `password`) d’un **fichier altéré** (`check` correct, mais authentification AES-GCM du contenu en échec : code `altered`).
+- **`z`** : `'gzip'` si le corps JSON est compressé (`CompressionStream`), sinon `null`.
+- Nom : `OEG-echange_<tablette>_<AAAA-MM-JJ_HHhMM>.oegct` (`exchangeFileName` : nom de la tablette sans accents ni espaces). Si Android refuse de partager l’extension, le même fichier est partagé sous le nom `….oegct.txt` (`text/plain`) ; la réception reconnaît le contenu, pas l’extension (`isExchangeText`).
 
-**Mot de passe d’échange** : défini par un administrateur sur chaque tablette (10 caractères minimum ; à la mise en service de la première tablette, puis repris à la mise en service des suivantes), conservé chiffré (`localSecret` `exchange:password`), jamais dans un fichier.
+### Contenu
 
-**Envoyer** (`prepareSend`, `markSent`) : `selectForSend` prend les entrées de la file d’envoi (`outbox`, alimentée par toute écriture locale ; `__bin:<id>` = contenu d’un média) ou tout (`scope: 'all'`), jamais les types `LOCAL_ONLY` ni `LAZY_TYPES` ; pierres tombales `_deleted` comprises (suppressions) ; `_rev` et `_lv` retirés. Le fichier n’est marqué envoyé qu’une fois partagé (API Web Share : `navigator.canShare({ files })`, nom `….oegct.txt` / `text/plain` si Android refuse l’extension) ou enregistré (téléchargement) : `dropOutbox` retire de la file les entrées inchangées depuis la préparation, et les versions envoyées sont mémorisées (`xbase`). Au-delà de `LARGE_FILE` (20 Mo) : envoi proposé sans les photos déjà envoyées (« Tout envoyer ») ou avec les photos au prochain envoi.
+Contenu déchiffré : `[longueur du corps : 4 octets, gros-boutiste][corps JSON, compressé ou non][octets des médias, à la suite, dans l’ordre de l’index]`.
 
-**Recevoir** (`readExchange`, `previewExchange`, `receiveExchange`) : rien n’est modifié avant la confirmation de l’aperçu ; un fichier venant de la tablette elle-même est refusé ; les anciens paquets JSON (`oeg-audit-package-v1`, éventuellement chiffrés) sont convertis. Pour chaque donnée, `planEntity` (`js/domain/exchange.js`) compare les vecteurs de versions :
+```js
+corps = {
+  format: 'oeg-ct-echange', v: 1, id, createdAt,
+  scope: 'changes' | 'all',                  // modifications depuis le dernier envoi, ou « Tout envoyer »
+  mediaScope: 'unsent' | 'all' | 'none',     // photos jointes : pas encore envoyées, toutes, aucune
+  from: { id, name, number },                // tablette d'origine
+  sentBy: { id, name, role, username },      // agent connecté à l'envoi (règle des profils)
+  appVersion, org,
+  devices: [{ id, name, number }],           // tablettes connues de l'expéditeur (n° libre proposé à la mise en service)
+  counts: { total, byType, journal, media, mediaBytes },
+  entities: { [type]: [versions] },          // versions échangées : _vv compris, _rev et _lv retirés ; pierres tombales _deleted
+  media: [{ id, size, sha256 }],             // index des photos, signatures et documents joints
+  sha256                                     // empreinte SHA-256 du JSON canonique du corps sans elle
+}
+```
+
+- **Jamais dans le fichier** : les types locaux (`LOCAL_ONLY` : `conflict`, `syncLog`, `localSecret` — mot de passe d’échange, jeton —, `syncBase`, `exchangeLog`, `heldChange`), les versions déjà échangées (`LAZY_TYPES` : `xbase`), le trousseau (`meta.keyring` : clé de données enveloppée par les mots de passe des agents), la clé de données, les préférences. Les profils `user` circulent, jamais un mot de passe.
+- **Médias** : contenu déchiffré avec la clé de la tablette qui envoie, placé dans l’enveloppe (donc chiffré par le mot de passe d’échange), puis rechiffré avec la clé de la tablette qui reçoit (`storeRemoteBytes`). La fiche `media` (empreinte, horodatage, GPS) accompagne toujours son contenu.
+
+### Intégrité
+
+Tout est vérifié **à l’ouverture, avant toute modification** (`openPlain`) : authentification AES-GCM du contenu, empreinte du corps (`bodyHash`), puis taille et empreinte SHA-256 de chaque média, et longueur totale exacte. Erreurs (`ExchangeError.code`) : `format` (pas un fichier d’échange), `version` (créé par une version plus récente : mettre l’application à jour), `password`, `altered`, `integrity`, `browser` (navigateur sans `DecompressionStream`) ; à la lecture (`readExchange`) : `nopassword`, `password-backup` (ancien paquet chiffré), `self` (fichier envoyé par cette même tablette). Les audits signés gardent leur propre scellé (empreinte de `auditContent`, dont `_vv` est exclu) : il reste vérifiable après échange.
+
+### Envoi incrémental
+
+`prepareSend` / `markSent` : `selectForSend` prend les entrées de la file d’envoi (`outbox`, alimentée par toute écriture locale d’une donnée partagée ; `__bin:<id>` = contenu d’un média pas encore envoyé), ou toutes les données partagées (`scope: 'all'`). Une donnée antérieure aux vecteurs de versions reçoit sa première version (`{ tablette: 1 }`) au premier envoi. Le fichier n’est **marqué envoyé** qu’une fois partagé (API Web Share : `navigator.canShare({ files })`) ou enregistré (téléchargement) : `dropOutbox` retire de la file les entrées **inchangées depuis la préparation**, les versions envoyées sont mémorisées (`xbase`, bases des fusions suivantes), puis historique (`exchangeLog`), `meta xch:lastSent` et journal (`exchange-send`). Au-delà de `LARGE_FILE` (20 Mo) : envoi proposé sans les photos (elles restent dans la file pour le prochain envoi) ou, pour « Tout envoyer », sans les photos déjà envoyées. L’envoi incrémental est pensé pour **deux tablettes** : une tablette ne retransmet pas à une troisième ce qu’elle a reçu, sauf « Tout envoyer ».
+
+### Réception et fusion
+
+`readExchange` (déchiffrement et vérifications ; ancien paquet JSON `oeg-audit-package-v1`, éventuellement chiffré, converti), `previewExchange` (aperçu : tablette d’origine, agent, agents et tournées, décomptes, « déjà reçu le … »), puis, après confirmation, `receiveExchange`. Pour chaque donnée, `planEntity` (`js/domain/exchange.js`) compare les vecteurs de versions :
 
 | Cas | Décision |
 |---|---|
@@ -319,47 +365,31 @@ Contenu déchiffré : `[longueur du corps : 4 octets][corps JSON compressé gzip
 | version reçue contenue dans la version locale (fichier ancien, déjà reçu) | `known` : ignorée (idempotence ; jamais d’écrasement d’une saisie plus récente) |
 | même contenu | `same` : versions réunies |
 | version reçue contenant la version locale | `replace` |
-| concurrentes | `merge` : `mergeEntity` à trois versions avec la dernière version commune (`chooseBase` parmi les versions déjà échangées, sinon `presumedBase`) ; conflits → entité `conflict` ; nouvelle version `_vv` incrémentée et renvoyée |
+| concurrentes | `merge` : `mergeEntity` à trois versions avec la dernière version commune (`chooseBase` parmi les versions déjà échangées, sinon `presumedBase`) ; même champ modifié des deux côtés : la valeur la plus récente (horodatage) est retenue, l’autre va dans une entité `conflict` ; nouvelle version `_vv` incrémentée, renvoyée au prochain envoi |
 | audit signé d’un seul côté (ou des deux, différemment) | `signed` : version signée gardée telle quelle (scellé et empreinte intacts), l’autre dans le rapport de conflit |
 
-Journal d’audit : entrées absentes ajoutées telles quelles (chaîne vérifiable par appareil). Médias : contenu stocké chiffré avec la clé de la tablette. Le tout en une transaction (`store.applyExchange`), puis rapport de conflit, changements de profils en attente, historique (`exchangeLog`), journal (`exchange-receive`), fichiers déjà reçus (`meta xch:received`), tablettes connues (`meta xch:devices` : n° proposé à la mise en service d’une tablette supplémentaire, avertissement si deux tablettes ont le même n°).
+Journal d’audit : entrées absentes ajoutées telles quelles (la chaîne de chaque tablette reste vérifiable). Le tout en **une transaction** (`store.applyExchange` : données, journal, file d’envoi, versions communes), puis médias, rapport de conflit, changements de profils en attente, trousseau (`syncKeyringProfile` : nom, initiales et profil affichés ; jamais les mots de passe), tablettes connues (`meta xch:devices` : n° proposé à la mise en service d’une tablette supplémentaire, avertissement si deux tablettes ont le même n°), fichiers déjà reçus (`meta xch:received`), historique (`exchangeLog`) et journal (`exchange-receive`).
 
-**Règle des profils** (`guardProfile`) : rôle, statut actif ou suppression d’un agent, et nouveau profil administrateur, ne sont appliqués d’office que si l’expéditeur du fichier (`sentBy`) est un administrateur actif **selon les données de la tablette qui reçoit** (avant réception) ; sinon la valeur locale est gardée et une entité `heldChange` attend la validation d’un administrateur (Administration › « Changements de profils reçus à valider » : `acceptHeld`, `refuseHeld`). Le dernier administrateur de la tablette n’est jamais retiré par un fichier. Le trousseau n’est jamais remplacé (`syncKeyringProfile` : nom, initiales, profil affichés). La frontière de sécurité réelle est le mot de passe d’échange : le documenter honnêtement.
+### Règle de sécurité des profils
 
-**Mise en service d’une tablette supplémentaire** (`setupFromExchange`) : fichier + mot de passe d’échange, n° libre proposé, « Qui êtes-vous ? » parmi les agents actifs reçus (administrateurs d’abord) : `setupFromProfile` crée l’entrée du trousseau avec le MÊME identifiant de profil, puis tout le fichier est reçu (sans règle des profils). Mise en service par un agent qui n’est pas administrateur : un administrateur s’ajoute ensuite lui-même (`enrollAgent` autorise l’ajout d’un administrateur sur une tablette qui n’en a pas).
+`guardProfile` : un changement de **rôle**, de **statut actif**, la **suppression** d’un agent et un **nouveau profil administrateur** ne sont appliqués d’office que si l’expéditeur du fichier (`sentBy`) est un administrateur actif **selon les données de la tablette qui reçoit** (avant réception, `senderTrusted`). Sinon la valeur locale est gardée (un nouveau profil administrateur est créé « auditeur ») et une entité `heldChange` attend la décision d’un administrateur (Administration › « Changements de profils reçus à valider » : `acceptHeld`, `refuseHeld` ; un refus ne vaut que sur cette tablette). Même d’un administrateur, le retrait du **dernier administrateur** de la tablette attend. Le trousseau n’est jamais remplacé.
 
-## 11. Synchronisation GitHub (option avancée)
+**Limite à documenter honnêtement** : la vraie frontière de sécurité est le **mot de passe d’échange**. `sentBy` est déclaré par la tablette qui envoie et n’est pas signé individuellement : quiconque connaît le mot de passe d’échange et dispose d’un fichier peut en lire le contenu, fabriquer un fichier, ou mettre une tablette en service en choisissant n’importe quel profil reçu. Tablette perdue : changer le mot de passe d’échange sur les autres tablettes.
 
-Modes (`session.mode`) : `standalone` (autonome, **le mode de l’OEG** : échanges entre tablettes par fichier) et `github` (équipe : `TEAM_MODE` de `core/auth.js` ; option avancée, nécessite un jeton GitHub, non utilisée à l’OEG — code et tests conservés). Paramètres d’équipe : `{ apiUrl, owner, repo, branch: 'main', prefix: 'donnees/' }` ; jeton fine-grained **de la tablette** conservé chiffré (entité locale `localSecret`) : un jeton par tablette, créé par l’administrateur ; les agents n’ont pas de compte GitHub. `session.githubLogin` est le login du **propriétaire du jeton**, pas celui de l’agent connecté.
+### Mot de passe d’échange et mise en service
 
-### Arborescence du dépôt de données
+- **Mot de passe d’échange** : 10 caractères minimum (`EXCHANGE_PASSWORD_MIN`), défini par un administrateur à la mise en service de la première tablette puis repris à la mise en service des suivantes ; conservé chiffré avec la clé de la tablette (`localSecret` `exchange:password`), jamais dans un fichier ; changé par un administrateur (Administration › Échanges entre tablettes, journal `exchange-password`). Fichier chiffré avec un autre mot de passe : il est demandé, rien n’est modifié, et un administrateur peut l’adopter.
+- **Tablette supplémentaire** (`setupFromExchange`) : fichier + mot de passe d’échange, n° libre proposé, « Qui êtes-vous ? » parmi les agents actifs reçus (administrateurs d’abord) : `setupFromProfile` crée l’entrée du trousseau avec le **même identifiant de profil**, puis tout le fichier est reçu (sans règle des profils : `setup: true`). Mise en service par un agent qui n’est pas administrateur : un administrateur s’ajoute ensuite lui-même (`enrollAgent` autorise l’ajout d’un administrateur sur une tablette qui n’en a aucun).
 
-```text
-donnees/                                  (préfixe configurable)
-  config/equipe.json                      { format: 'oeg-ct-donnees-v1', createdAt, orgName }
-  config/utilisateurs.json                { users: [{ login, name, role, active }] }
-  config/appareils.json                   { devices: [{ id, no, name, registeredAt, registeredBy, revoked, revokedAt, revokedBy }] }
-  config/sequences.json                   { "AUD-2026": 12 }   (dernier numéro réservé)
-  entites/<type>/<id>.json                une entité par fichier, JSON stable (clés triées)
-  journal/<AAAA-MM>/<AAAA-MM-JJ>_<appareil>.json   journal d’audit d’un appareil pour un jour
-  medias/<id>                             contenu binaire des photos, signatures, documents
-```
+### Tests
 
-### Algorithme (`js/app/sync.js`)
-
-1. **Réception différentielle** : la tête de branche est comparée à la dernière reçue ; seuls les sous-arbres dont l’empreinte a changé sont parcourus, seuls les fichiers dont l’empreinte git (SHA-1 de `blob <taille>\0<contenu>`, mémorisée localement) a changé sont téléchargés.
-2. **Fusion à trois versions** (`domain/merge.js`, version commune `syncBase`) : champ par champ ; même champ modifié des deux côtés ⇒ valeur la plus récente retenue, l’autre conservée dans une entité `conflict` consultable et restaurable.
-3. **Envoi atomique** : toutes les modifications en attente forment **un** commit (API Git Data : blobs → arbre(s) → commit → mise à jour de la référence **sans forçage**). Refus « non fast-forward » (autre appareil passé entre-temps) ⇒ relire, fusionner, réessayer (6 tentatives).
-4. **Numéros d’audit** réservés par blocs de 25 dans `config/sequences.json` (dans le même commit) ; plage de secours propre à l’appareil si le bloc est épuisé hors connexion. **Appareils** : n° unique attribué par `config/appareils.json` ; appareil révoqué ⇒ effacement local. **Rôles** (`applyTeamRoles`) : `config/utilisateurs.json`, appliqué seulement aux agents explicitement rattachés à un login (`githubLogin` du profil, qui fait foi, à défaut du trousseau) ; les autres agents gardent leur profil local — le login du jeton de la tablette n’est jamais attribué à un autre agent ; membre désactivé ⇒ session fermée. `replaceToken` ne rattache l’agent connecté au login du nouveau jeton que s’il était déjà rattaché au login du jeton remplacé. `probeTeam(…, { profiles: true })` lit aussi les profils rattachés au login du jeton (écran « Rejoindre une équipe » : « C’est moi »).
-5. Déclencheurs : ouverture de session, 8 s après une modification, toutes les 5 minutes en ligne, retour du réseau, bouton « Synchroniser maintenant ». Chaque synchronisation est tracée (`syncLog`).
-
-**Sécurité** : les droits sont appliqués par l’application ; la vraie frontière est l’accès au dépôt privé (qui détient un jeton peut tout lire et écrire). Les fichiers du dépôt de données sont en clair pour ceux qui y ont accès. L’application refuse un dépôt public et n’accepte qu’une API en HTTPS (sauf `localhost` pour les tests).
-
-`js/app/github.js` ne dépend ni du stockage ni de la session : il est testé seul avec un `fetch` simulé (`tests/unit/github.test.js`). Les scénarios de bout en bout à deux appareils utilisent un faux serveur de l’API (`tests/fake_github.py`, empreintes git exactes, refus « non fast-forward ») : `tests/test_sync_github.py`.
+- `tests/unit/exchange.test.js` (navigateur) : format `.oegct` (texte ASCII, en-tête, rien en clair, CRLF, corps compressé ou non), mauvais mot de passe, fichier altéré, empreinte du corps ou d’un média incorrecte, version plus récente, vecteurs de versions, décisions de réception, fusion avec la version commune et conflit réel, tournée signée gardée scellée, deux tablettes simulées (fichiers croisés d’un binôme, fichier ancien, idempotence, suppression propagée), envoi incrémental, « Tout envoyer », envoi sans les photos, règle des profils, nom du fichier, n° libre, invariants (`_vv` métadonnée, types locaux jamais échangés, empreinte scellée indépendante des versions).
+- `tests/test_echange_tablettes.py` (pytest + Playwright, **deux contextes de navigateur** = deux tablettes au stockage séparé, Web Share retiré : fichier téléchargé puis choisi) : mise en service « Tablette supplémentaire » (mauvais mot de passe refusé, n° proposé, même profil), binôme sur deux tablettes, photo reçue intacte, signature et retour (empreinte scellée identique), autre mot de passe d’échange puis adoption, double réception sans effet, fichier de la tablette elle-même refusé, règle des profils (mise en attente, acceptation, application d’office), envoi incrémental, ancien paquet JSON.
+- `tests/test_tablette_partagee.py` : sessions des agents sur une tablette partagée (voir section 12).
 
 ---
 
-## 12. Conventions de code
+## 11. Conventions de code
 
 - En-tête de fichier en commentaire, **en français**, décrivant le rôle du module ; densité de commentaires comparable à l’existant ; noms de fonctions et de variables en anglais ou en français selon le module voisin.
 - Gabarits : `html\`…\`` échappe toutes les valeurs interpolées ; `raw()` uniquement pour du HTML déjà sûr. Jamais de concaténation de HTML avec des données saisies.
@@ -371,12 +401,12 @@ donnees/                                  (préfixe configurable)
 
 ---
 
-## 13. Tests
+## 12. Tests
 
 ### Tests unitaires dans le navigateur
 
 - Page : `tests/unit/index.html` (servie par `python tools/serve.py` : <http://localhost:8000/tests/unit/index.html>) ; paramètre `?files=grid-ct-2026,core` pour n’exécuter que certains fichiers.
-- `tests/unit/all.js` liste les fichiers : `core.test.js`, `domain.test.js`, `formats.test.js`, `grid-ct-2026.test.js`, `pdf-sheets.test.js`, `github.test.js`, `attendus.test.js`, `exchange.test.js` (un fichier absent ou en erreur est compté comme un échec). `exchange.test.js` : format `.oegct`, mauvais mot de passe, fichier altéré, empreinte incorrecte, versions, fusion, tournée signée, deux tablettes simulées (fichiers croisés, fichier ancien, idempotence), envoi incrémental, règle des profils.
+- `tests/unit/all.js` liste les fichiers : `core.test.js`, `domain.test.js`, `formats.test.js`, `grid-ct-2026.test.js`, `pdf-sheets.test.js`, `github.test.js`, `attendus.test.js`, `exchange.test.js` (un fichier absent ou en erreur est compté comme un échec). `exchange.test.js` : voir section 10 ; `github.test.js` : client GitHub du mode équipe (annexe).
 - `tests/unit/harness.js` exporte `test(name, fn)` (fn peut être asynchrone), `assert(cond, msg)`, `eq(actual, expected, msg)` (`===`), `deepEq(actual, expected, msg)` (JSON canonique), `throwsAsync(fn, msg)`. Résultat publié sur `window.__UNIT_RESULTS__ = { done, passed, failed, failures: [{ name, error }] }`.
 - Les tests importent les modules par chemins relatifs (`../../js/...`) et testent de préférence des modules purs (sans IndexedDB).
 - Nouveau fichier `tests/unit/<nom>.test.js` : l’ajouter à la liste `FILES` de `all.js` (`tests/test_unit.py` vérifie que la liste et le dossier correspondent, puis exécute chaque fichier séparément avec `?files=<nom>`).
@@ -392,25 +422,25 @@ python -m pytest -q -m "not lent"        # sans les tests longs (tournées compl
 
 - `tests/conftest.py` : fixtures `app_url` (serveur de `tools/serve.py` sur un port libre, racine du dépôt, `Cache-Control: no-store`), `app_server` (le serveur ; `offline = True` simule une coupure réseau, y compris pour le service worker), `browser` (Chromium de session ; `HEADED=1` pour voir le navigateur), `make_page(service_workers='block'|'allow', viewport=…)` et `page` (nouveau contexte par test, tuiles de carte bloquées, position GPS simulée sur la station ATHANASE, fuseau de Cayenne ; erreurs de console et exceptions collectées : le test échoue s’il en reste, sauf marqueur `@pytest.mark.allow_console_errors` — toutes, ou seulement celles qui correspondent aux motifs donnés). Marqueur `lent` pour les tests longs.
 - `tests/helpers.py` : `open_setup(page, app_url)` (écran de mise en service : `#setupFirst`, `#setupExtra`), `setup_standalone(page, app_url, …)` (« Première tablette de l’équipe » : champs `deviceName`, `deviceNumber`, `lastName`, `firstName` — `name='Prénom Nom'` —, `username`, `password`, `password2`, `exchangePassword`, `exchangePassword2` — `EXCHANGE_PASSWORD` par défaut — ; initiales proposées par l’écran ; bouton `#setupBtn`), `lock(page)`, `unlock(page, password)`, `goto_hash(page, '#/…')`, `create_tour(page, audit_type, site_ids, provider_id, …)`, `audit_state`, `answer_required`, `response`.
-- Fichiers de tests, notamment : `tests/test_unit.py` (chaque fichier de tests unitaires du navigateur, et sa présence dans `all.js`) ; `tests/test_smoke.py` (configuration, affichage de chaque écran principal sans erreur, verrouillage / déverrouillage, fonctionnement hors connexion avec le service worker) ; `tests/test_sync_github.py` couvre la synchronisation d’équipe (initialisation, réception, fusion et conflits, révocation, numéros sans doublon, rattachement / détachement, erreurs claires, mode autonome) avec `tests/fake_github.py` ; `tests/test_tablette_partagee.py` couvre la tablette partagée (tournée en binôme, « Changer d’agent », « Rejoindre la tournée », signature par le second contrôleur, « Ajouter un agent », « Ajouter sur cette tablette » pour un profil reçu d’une autre tablette par paquet de données, « Retirer de cette tablette », dernier administrateur, « Changer d’agent » sur tablette et téléphone) ; `tests/test_echange_tablettes.py` couvre l’échange par fichier avec **deux contextes de navigateur** (deux tablettes au stockage séparé, Web Share retiré : fichier téléchargé puis choisi) : mise en service « Tablette supplémentaire », binôme sur deux tablettes, signature, retour, empreinte scellée identique, mauvais mot de passe d’échange, double réception, règle des profils, envoi incrémental, ancien paquet JSON.
+- Fichiers de tests, notamment : `tests/test_unit.py` (chaque fichier de tests unitaires du navigateur, et sa présence dans `all.js`) ; `tests/test_smoke.py` (configuration, affichage de chaque écran principal sans erreur, verrouillage / déverrouillage, fonctionnement hors connexion avec le service worker) ; `tests/test_sync_github.py` couvre le mode équipe (annexe ; initialisation, réception, fusion et conflits, révocation, numéros sans doublon, rattachement / détachement, erreurs claires, mode autonome) avec `tests/fake_github.py` ; `tests/test_tablette_partagee.py` couvre la tablette partagée (tournée en binôme, « Changer d’agent », « Rejoindre la tournée », signature par le second contrôleur, « Ajouter un agent », « Ajouter sur cette tablette » pour un profil reçu d’une autre tablette par paquet de données, « Retirer de cette tablette », dernier administrateur, « Changer d’agent » sur tablette et téléphone) ; `tests/test_echange_tablettes.py` couvre l’échange par fichier avec **deux contextes de navigateur** (deux tablettes au stockage séparé, Web Share retiré : fichier téléchargé puis choisi) : mise en service « Tablette supplémentaire », binôme sur deux tablettes, signature, retour, empreinte scellée identique, mauvais mot de passe d’échange, double réception, règle des profils, envoi incrémental, ancien paquet JSON.
 
 ---
 
-## 14. Outils et vérification automatique
+## 13. Outils et vérification automatique
 
 | Commande | Rôle |
 |---|---|
 | `python tools/serve.py` | serveur local sans cache sur <http://localhost:8000> (`--port`, `--open`, `--bind`) |
 | `python tools/bump_version.py` | incrémente `AUDIT_BUILD` et met `AUDIT_BUILD_DATE` à la date du jour dans `version.js` (`--dry-run` : sans modifier) |
 | `python tools/check_release.py` | vérifications statiques avant publication, sans Node ni réseau : fichiers de `SHELL` existants et fichiers de l’application tous présents dans `SHELL`, fichiers référencés et imports relatifs existants, aucun chemin absolu (`/js/…`), aucun code propre à Node dans `js/`, JSON valides, `AUDIT_BUILD` entier et incrémenté si un fichier de l’application ou `sw.js` a changé (base : `--base`, défaut `origin/main` ou `HEAD~1`) |
-| `python -m pytest` | tous les tests (unitaires navigateur, parcours, synchronisation) |
+| `python -m pytest` | tous les tests (unitaires navigateur, parcours, tablettes partagées, échange par fichier, mode équipe) |
 
 - **GitHub Actions** : `.github/workflows/verifications.yml` lance les vérifications et les tests à chaque envoi ; résultat dans l’onglet **Actions**.
 - **VS Code** : `.vscode/tasks.json` regroupe ces commandes (Terminal › Run Task…).
 
 ---
 
-## 15. Ajouter un critère ou une feuille sans créer de doublon
+## 14. Ajouter un critère ou une feuille sans créer de doublon
 
 ### Avant d’ajouter quoi que ce soit
 
@@ -445,3 +475,43 @@ Les tournées déjà commencées restent sur la version avec laquelle elles ont 
 ### Attendus des prestataires
 
 `data/attendus-ct-2026.json` contient une entrée par critère de la grille CT-2026 (attendu, vérification, exemples C / P / NC / N/A, références, points « à préciser par l’OEG »). C’est la source unique de l’écran `#/attendus`, des PDF et de [ATTENDUS-PRESTATAIRES.md](ATTENDUS-PRESTATAIRES.md). Après toute modification du JSON, lancer `python tools/attendus_md.py` pour régénérer le document ; `python tools/attendus_md.py --check` vérifie qu’il est à jour (test `tests/test_attendus.py`). Quand un critère est ajouté ou modifié dans la grille, `tests/unit/attendus.test.js` signale l’entrée à créer ou à mettre à jour.
+
+---
+
+## Annexe : synchronisation GitHub (mode équipe, non utilisée à l’OEG)
+
+> **Option technique, non utilisée à l’OEG** : l’OEG a choisi une session par agent et l’échange par fichier entre tablettes (section 10), **sans jeton**. Le mode équipe reste dans le code, avec ses tests (`tests/unit/github.test.js`, `tests/test_sync_github.py`), pour une organisation qui voudrait une synchronisation automatique par un dépôt GitHub privé. Dans l’application, il n’apparaît que dans une option avancée repliée, marquée « nécessite un jeton GitHub — non utilisé à l’OEG » : mise en service (`#setupAdvanced`, « Rejoindre une équipe ») et écran Échanges entre tablettes (`#teamAdvanced`, « Rejoindre une équipe (dépôt GitHub) »). Aucun document destiné aux agents n’en parle. Le dépôt privé `CSRE-DCE/fiche-de-controle-donn-es` de l’OEG n’est pas utilisé par l’application (archive manuelle facultative : [GUIDE-GITHUB.md, section 12](GUIDE-GITHUB.md#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)).
+
+Modes (`session.mode`) : `standalone` (autonome, celui de l’OEG) et `github` (équipe : `TEAM_MODE` de `core/auth.js`). Paramètres d’équipe : `{ apiUrl, owner, repo, branch: 'main', prefix: 'donnees/' }` ; jeton « fine-grained » **de la tablette** conservé chiffré (entité locale `localSecret` `github:token`) : un jeton par tablette, créé par l’administrateur de l’équipe ; les agents n’ont pas de compte GitHub. `session.githubLogin` est le login du **propriétaire du jeton**, pas celui de l’agent connecté. Écrans du mode équipe : « Synchronisation » (`views/sync.js` : état, file d’envoi, conflits, aide pas à pas `helpCard`, « Renouveler le jeton », « Détacher »), Administration › « Membres de l’équipe » et « Appareils de l’équipe » (`config/utilisateurs.json`, `config/appareils.json`, révocation).
+
+### Mise en place (pour mémoire)
+
+1. **Dépôt de données** : un dépôt GitHub **privé**, distinct du dépôt public de l’application, vide ou avec un simple README. L’application refuse un dépôt public et n’accepte qu’une API en HTTPS (sauf `localhost` pour les tests).
+2. **Un jeton par tablette**, créé par l’administrateur depuis son compte GitHub (Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token) : nom de la tablette (« Tablette 1 »…), Resource owner = propriétaire du dépôt de données (l’organisation doit autoriser les jetons fine-grained), expiration courte, accès limité à ce seul dépôt, permission **Contents : Read and write** et aucune autre. Le jeton (`github_pat_…`) est collé sur la tablette concernée, jamais copié ailleurs.
+3. **Première tablette** : « Rejoindre une équipe » (ou « Rattacher cet appareil » sur un appareil autonome déjà utilisé) : le dépôt vide est initialisé (`config/…`), puis le référentiel est envoyé. **Tablettes suivantes** : même dépôt, jeton de la tablette ; l’administrateur y retrouve son profil (« C’est moi », `probeTeam(…, { profiles: true })`), puis « Ajouter sur cette tablette » pour chaque agent.
+4. Tablette perdue : Administration › Appareils de l’équipe › « Désactiver (perdu) » **et** suppression du jeton de cette tablette sur GitHub (la révocation dans l’application efface les données de l’appareil à sa synchronisation suivante, mais ne désactive pas le jeton).
+
+### Arborescence du dépôt de données
+
+```text
+donnees/                                  (préfixe configurable)
+  config/equipe.json                      { format: 'oeg-ct-donnees-v1', createdAt, orgName }
+  config/utilisateurs.json                { users: [{ login, name, role, active }] }
+  config/appareils.json                   { devices: [{ id, no, name, registeredAt, registeredBy, revoked, revokedAt, revokedBy }] }
+  config/sequences.json                   { "AUD-2026": 12 }   (dernier numéro réservé)
+  entites/<type>/<id>.json                une entité par fichier, JSON stable (clés triées)
+  journal/<AAAA-MM>/<AAAA-MM-JJ>_<appareil>.json   journal d’audit d’un appareil pour un jour
+  medias/<id>                             contenu binaire des photos, signatures, documents
+```
+
+### Algorithme (`js/app/sync.js`)
+
+1. **Réception différentielle** : la tête de branche est comparée à la dernière reçue ; seuls les sous-arbres dont l’empreinte a changé sont parcourus, seuls les fichiers dont l’empreinte git (SHA-1 de `blob <taille>\0<contenu>`, mémorisée localement) a changé sont téléchargés.
+2. **Fusion à trois versions** (`domain/merge.js`, version commune `syncBase`) : champ par champ ; même champ modifié des deux côtés ⇒ valeur la plus récente retenue, l’autre conservée dans une entité `conflict` consultable et restaurable.
+3. **Envoi atomique** : toutes les modifications en attente forment **un** commit (API Git Data : blobs → arbre(s) → commit → mise à jour de la référence **sans forçage**). Refus « non fast-forward » (autre appareil passé entre-temps) ⇒ relire, fusionner, réessayer (6 tentatives).
+4. **Numéros d’audit** réservés par blocs de 25 dans `config/sequences.json` (dans le même commit) ; plage de secours propre à l’appareil si le bloc est épuisé hors connexion. **Appareils** : n° unique attribué par `config/appareils.json` ; appareil révoqué ⇒ effacement local (`onRevoked` de `main.js`). **Rôles** (`applyTeamRoles`) : `config/utilisateurs.json`, appliqué seulement aux agents explicitement rattachés à un login (`githubLogin` du profil, qui fait foi, à défaut du trousseau) ; les autres agents gardent leur profil local — le login du jeton de la tablette n’est jamais attribué à un autre agent ; membre désactivé ⇒ session fermée. `replaceToken` ne rattache l’agent connecté au login du nouveau jeton que s’il était déjà rattaché au login du jeton remplacé.
+5. Déclencheurs : ouverture de session, 8 s après une modification, toutes les 5 minutes en ligne, retour du réseau, bouton « Synchroniser maintenant ». Chaque synchronisation est tracée (`syncLog`).
+
+**Sécurité** : les droits sont appliqués par l’application ; la vraie frontière est l’accès au dépôt privé (qui détient un jeton peut tout lire et écrire). Les fichiers du dépôt de données sont en clair pour ceux qui y ont accès.
+
+**Tests** : `js/app/github.js` ne dépend ni du stockage ni de la session : il est testé seul avec un `fetch` simulé (`tests/unit/github.test.js`). Les scénarios de bout en bout à deux appareils utilisent un faux serveur de l’API (`tests/fake_github.py`, empreintes git exactes, refus « non fast-forward ») : `tests/test_sync_github.py` (initialisation, réception, fusion et conflits, révocation, numéros sans doublon, rattachement / détachement, erreurs claires, mode autonome).

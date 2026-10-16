@@ -18,7 +18,7 @@ Documents complémentaires :
 1. [Présentation](#présentation)
 2. [Fonctionnalités](#fonctionnalités)
 3. [Utiliser l’application](#utiliser-lapplication)
-4. [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents) : mise en service, au quotidien, échanges par fichier, conflits, tablette perdue
+4. [Deux tablettes pour quatre agents](#deux-tablettes-pour-quatre-agents) : une session par agent, mise en service des deux tablettes, au quotidien, échanges par fichier, conflits, tablette perdue
 5. [Publier le site avec GitHub Pages](#publier-le-site-avec-github-pages)
 6. [Travailler sans Node : VS Code ou Python](#travailler-sans-node--vs-code-ou-python)
 7. [Ajouter ou modifier des fichiers sur GitHub](#ajouter-ou-modifier-des-fichiers-sur-github)
@@ -160,7 +160,7 @@ La barre de navigation donne accès aux autres écrans : Stations, Planning, Aud
 
 ## Deux tablettes pour quatre agents
 
-L’OEG dispose de **deux tablettes pour quatre agents**. Chaque agent a **sa propre session** : un compte à son nom (le **même profil** sur les deux tablettes) et **son mot de passe** sur chaque tablette où il travaille. Les tablettes ne passent ni par GitHub ni par un serveur : elles s’échangent leurs données **par fichier** (« Envoyer à l’autre tablette », puis « Recevoir un fichier » sur l’autre), même sans connexion. Aucun agent n’a besoin de compte GitHub.
+L’OEG dispose de **deux tablettes pour quatre agents**. Chaque agent a **sa propre session** : un compte à son nom (**le même profil sur les deux tablettes**) et **son mot de passe** sur chaque tablette où il travaille. Les tablettes ne passent ni par GitHub ni par un serveur : elles s’échangent leurs données **par fichier** (« Envoyer à l’autre tablette » sur l’une, « Recevoir un fichier » sur l’autre), même sans connexion. **Aucun agent n’a besoin de compte GitHub.**
 
 Deux sortes de mots de passe, à ne pas confondre :
 
@@ -169,20 +169,27 @@ Deux sortes de mots de passe, à ne pas confondre :
 | **Mot de passe de l’agent** (8 caractères minimum) | chaque agent, pour lui seul | sur chaque tablette où il travaille (il peut être le même sur les deux) | ouvrir **sa** session ; il ne se communique à personne |
 | **Mot de passe d’échange de l’équipe** (10 caractères minimum) | un administrateur | le **même sur toutes les tablettes**, saisi une seule fois sur chacune | chiffrer les fichiers échangés entre les tablettes ; ensuite, envoyer et recevoir ne le demandent plus |
 
+### Avant de commencer
+
+- Désignez **l’administrateur** qui met les tablettes en service et, de préférence, **un second administrateur** : un mot de passe d’agent oublié ne peut être redonné que par un administrateur.
+- Choisissez le **mot de passe d’échange de l’équipe** (10 caractères minimum, différent des mots de passe des agents) et notez-le en lieu sûr.
+- Sur chaque tablette, laissez la **date et l’heure réglées automatiquement** (paramètres de la tablette) : en cas de conflit entre les deux tablettes, la valeur la plus récente est retenue.
+- Une connexion n’est nécessaire que pour la première ouverture de l’application sur chaque tablette (installation) ; ensuite, tout fonctionne hors connexion.
+
 ### Mise en service de la tablette 1 (administrateur)
 
 1. Ouvrez <https://csre-dce.github.io/fiche-de-contr-le/> **avec une connexion** et installez l’application ([Installer l’application](#installer-lapplication-sur-une-tablette-ou-un-téléphone)).
 2. Écran **« Mise en service de la tablette »** › **« Première tablette de l’équipe »**.
 3. Renseignez :
    - **Organisme** (Office de l’Eau de Guyane), **Nom de la tablette** (« Tablette 1 ») et **N° de la tablette** : **1** (un numéro différent par tablette, pour des numéros d’audit uniques) ;
-   - **votre compte** d’administrateur : nom, prénom, initiales et identifiant (proposés : initiale du prénom + nom, par exemple `adupont`), mot de passe et confirmation ;
-   - le **mot de passe d’échange de l’équipe**, deux fois : notez-le en lieu sûr, il sera demandé pour mettre en service la tablette 2 ;
+   - **votre compte** d’administrateur : nom et prénom (les initiales et l’identifiant sont proposés, par exemple `adupont`), puis votre mot de passe, deux fois ;
+   - le **mot de passe d’échange de l’équipe**, deux fois ;
    - laissez **cochée** « Reprendre le référentiel des fiches terrain OEG » et **décochée** « Ajouter des données de démonstration fictives ».
 4. Touchez **« Créer et ouvrir la session »**.
-5. **Ajoutez les agents, en leur présence** : Administration › Agents de cette tablette › **« ＋ Ajouter un agent »** : nom, prénom, initiales, **profil** (« Auditeur » en général) et identifiant (proposé, par exemple `bmartin`) ; **l’agent choisit et saisit lui-même son mot de passe**, deux fois, puis « Ajouter l’agent ». Recommencez pour chacun des quatre agents (l’administrateur qui a mis la tablette en service a déjà son compte) et **prévoyez un second administrateur**.
+5. **Ajoutez les agents, chacun en sa présence** : Administration › Agents de cette tablette › **« ＋ Ajouter un agent »** : nom et prénom (initiales et identifiant proposés, par exemple `bmartin`), **profil** (« Auditeur » en général, « Administrateur » pour le second administrateur). **L’agent choisit et saisit lui-même son mot de passe**, deux fois, puis « Ajouter l’agent ». Recommencez pour chacun des quatre agents (si l’administrateur en fait partie, il a déjà son compte).
 6. Vérifiez : bouton **« Changer d’agent »**, puis chaque agent touche son nom et ouvre sa session une fois.
 
-> **Mot de passe oublié** : il ne peut pas être récupéré, mais un administrateur peut en redonner un (Administration › Agents de cette tablette › « Modifier » › nouveau mot de passe, saisi par l’agent). D’où l’intérêt d’un second administrateur.
+> **Mot de passe oublié** : il ne peut pas être récupéré, mais un administrateur en fait choisir un nouveau à l’agent (Administration › Agents de cette tablette › « Modifier » › « Nouveau mot de passe sur cette tablette », saisi par l’agent). D’où l’intérêt d’un second administrateur.
 
 | Profil | Peut notamment |
 |---|---|
@@ -194,14 +201,19 @@ Deux sortes de mots de passe, à ne pas confondre :
 
 ### Mise en service de la tablette 2
 
+Une fois les quatre agents créés sur la tablette 1 :
+
 1. **Sur la tablette 1** : Échanges entre tablettes › **« Tout envoyer »**, puis « Partager » (Quick Share, Bluetooth…) ou « Enregistrer le fichier » (clé USB, e-mail) : voir [Faire passer le fichier](#faire-passer-le-fichier-dune-tablette-à-lautre).
 2. **Sur la tablette 2** : ouvrez l’adresse de l’application **avec une connexion**, installez-la, puis « Mise en service de la tablette » › **« Tablette supplémentaire : recevoir le fichier de l’autre tablette »**.
 3. **« Choisir le fichier »** (le fichier `OEG-echange_Tablette-1_….oegct`, en général dans Téléchargements), saisissez le **mot de passe d’échange de l’équipe**, puis **« Ouvrir le fichier »** : un aperçu affiche la tablette d’origine, la date, les agents et les tournées. Avec un mauvais mot de passe, le fichier est refusé et rien n’est créé.
 4. **Nom** (« Tablette 2 ») et **n°** de la tablette : un numéro libre est proposé (2), jamais celui de la tablette 1.
-5. **« Qui êtes-vous ? »** : touchez **votre** nom parmi les agents reçus (de préférence un administrateur), choisissez votre mot de passe pour cette tablette (deux fois ; il peut être le même que sur la tablette 1), puis **« Mettre en service la tablette »**. Vous gardez **le même profil** : vos tournées et vos saisies restent les vôtres, sans doublon.
-6. **Chaque autre agent s’ajoute avec son propre mot de passe** : un administrateur ouvre Administration › **« Agents pas encore sur cette tablette »** › **« Ajouter sur cette tablette »** ; l’agent saisit lui-même, deux fois, le mot de passe qu’il utilisera sur cette tablette. Si la tablette a été mise en service par un agent qui n’est pas administrateur, l’Administration affiche d’abord **« Aucun administrateur sur cette tablette »** : un administrateur s’y ajoute lui-même, puis ajoute les autres agents.
+5. **« Qui êtes-vous ? »** : l’administrateur touche **son** nom parmi les agents reçus, choisit son mot de passe pour cette tablette (deux fois ; il peut être le même que sur la tablette 1), puis **« Mettre en service la tablette »**. Il garde **le même profil** : ses tournées et ses saisies restent les siennes, sans doublon.
+6. **Chaque autre agent s’ajoute avec son propre mot de passe** : l’administrateur ouvre Administration › **« Agents pas encore sur cette tablette »** › **« Ajouter sur cette tablette »** en face du nom de l’agent ; l’agent saisit lui-même, deux fois, le mot de passe qu’il utilisera sur cette tablette. Recommencez pour chaque agent.
+7. Vérifiez : « Changer d’agent », puis chaque agent ouvre sa session une fois.
 
-Un agent ajouté plus tard sur une tablette arrive sur l’autre avec le fichier suivant : il apparaît alors dans « Agents pas encore sur cette tablette ». Un agent qui ne voit pas son nom à l’écran « Qui utilise la tablette ? » demande à un administrateur de l’ajouter. « Retirer de cette tablette » supprime seulement son accès à cette tablette (son profil, ses tournées et ses saisies restent ; l’agent connecté et le dernier administrateur ne peuvent pas être retirés). Pour bloquer un agent sur toutes les tablettes : « Modifier » › décocher « Compte actif » (sur l’autre tablette : dès la réception d’un fichier envoyé par un administrateur, sinon après validation dans l’Administration).
+Si la tablette 2 a été mise en service par un agent qui n’est pas administrateur, l’Administration affiche d’abord **« Aucun administrateur sur cette tablette »** : un administrateur s’y ajoute lui-même (« Ajouter sur cette tablette »), puis ajoute les autres agents.
+
+**Plus tard** : un agent créé sur une tablette arrive sur l’autre avec le fichier suivant ; il apparaît alors dans « Agents pas encore sur cette tablette ». Un agent qui ne voit pas son nom à l’écran « Qui utilise la tablette ? » demande à un administrateur de l’ajouter. **« Retirer de cette tablette »** supprime seulement son accès à cette tablette (son profil, ses tournées et ses saisies restent ; l’agent connecté et le dernier administrateur ne peuvent pas être retirés). Pour **bloquer un agent sur les deux tablettes** : « Modifier » › décocher « Compte actif » ; sur l’autre tablette, le blocage s’applique dès la réception d’un fichier envoyé par un administrateur, sinon après validation dans l’Administration.
 
 ### Au quotidien
 
@@ -209,9 +221,9 @@ Un agent ajouté plus tard sur une tablette arrive sur l’autre avec le fichier
 2. **Ouvrir sa session** : l’écran **« Qui utilise la tablette ? »** affiche les agents de la tablette avec leurs initiales ; touchez votre nom, saisissez votre mot de passe.
 3. **Tournée en binôme** : « Nouvelle tournée » › étape **« Contrôleurs OEG de la tournée »** : vous êtes coché d’office ; cochez votre binôme. « Agent(s) OEG » et « Contrôleur OEG » sont pré-remplis avec vos deux noms (« A. Dupont, B. Martin »).
 4. **Passer la tablette au collègue** : bouton **« Changer d’agent »** (en-tête ; sur téléphone, icône ou Menu). La saisie est enregistrée et **la tournée reste sur la tablette** ; le collègue ouvre sa session et arrive sur la tournée (sinon sur l’accueil, « Tournées en cours sur cette tablette »). **Chaque saisie reste attribuée à l’agent connecté** (« Saisi le … par … » sous chaque point ; onglet **Infos**, « Qui a saisi quoi »).
-5. **Rejoindre la tournée** : un agent qui ne fait pas partie des contrôleurs voit la tournée en lecture seule avec le bandeau « Tournée de … — **Rejoindre la tournée** » ; en le touchant, il devient contrôleur (tracé au journal) et peut saisir. Un contrôleur peut aussi en ajouter ou en retirer un autre (onglet Infos, retrait avec motif ; jamais le dernier).
+5. **Rejoindre la tournée** : un agent qui ne fait pas partie des contrôleurs voit la tournée en lecture seule, avec le bandeau « Tournée de … — **Rejoindre la tournée** » ; en le touchant, il devient contrôleur (tracé au journal) et peut saisir. Un contrôleur peut aussi en ajouter ou en retirer un autre (onglet Infos ; retrait avec motif, jamais le dernier).
 6. **Signer** : n’importe quel contrôleur de la tournée signe « en tant que contrôleur » ; le PDF et le rapport détaillé indiquent **tous les contrôleurs**.
-7. **Envoyer à l’autre tablette** : **en fin de journée** (l’accueil affiche « Fin de journée : n modifications à envoyer à l’autre tablette ») et **toujours avant de passer une tournée à l’autre tablette** : bouton **« Envoyer à l’autre tablette »** (accueil ou écran Échanges entre tablettes), puis faites passer le fichier.
+7. **Envoyer à l’autre tablette** : **en fin de journée** (l’accueil affiche « Fin de journée : n modifications à envoyer à l’autre tablette ») et **toujours avant de continuer une tournée sur l’autre tablette** : bouton **« Envoyer à l’autre tablette »** (accueil ou écran Échanges entre tablettes), puis faites passer le fichier.
 8. **Recevoir** : sur l’autre tablette, **« Recevoir un fichier »**, choisissez le fichier, vérifiez l’aperçu, puis **« Recevoir et fusionner »** : un compte rendu indique ce qui a changé (« 1 tournée mise à jour, 1 nouvel agent à ajouter sur cette tablette… »).
 
 **Une tournée se saisit sur une seule tablette à la fois** : pour la continuer sur l’autre, envoyez d’abord, recevez ensuite. Chaque agent garde **son** mot de passe pour lui et touche « Changer d’agent » avant de passer la tablette : chaque saisie reste ainsi attribuée à la bonne personne. Avant « Changer d’agent », l’écran « Qui utilise la tablette ? » rappelle les modifications pas encore envoyées (sans bloquer).
@@ -238,7 +250,7 @@ Sur certaines tablettes Android, le fichier est partagé sous le nom `….oegct.
 
 Un **conflit** survient quand **la même valeur** (par exemple la cote d’un même point) a été modifiée **sur les deux tablettes** entre deux échanges. À la réception :
 
-- la valeur **la plus récente est retenue** et l’autre est **conservée** ; le compte rendu indique « n conflits à examiner » ;
+- la valeur **la plus récente est retenue** (d’où l’intérêt de tablettes à l’heure) et l’autre est **conservée** ; le compte rendu indique « n conflits à examiner » ;
 - **Échanges entre tablettes › Conflits › « Examiner »** affiche, pour chaque valeur, celle de cette tablette, celle reçue et celle retenue ; **« Restaurer l’autre valeur »** remet la valeur écartée, **« Marquer comme examiné »** confirme la fusion ;
 - une tournée **signée d’un seul côté** est gardée telle qu’elle a été signée (son scellé reste valide) ; les valeurs de l’autre version restent dans le rapport de conflit. Sur un audit verrouillé, une valeur ne se restaure que par une modification motivée depuis l’audit.
 
@@ -258,17 +270,21 @@ La protection des fichiers repose sur le **mot de passe d’échange** : quiconq
 
 ### Tablette perdue ou volée
 
-Les données de la tablette perdue **restent chiffrées** (AES 256 bits) : sans le mot de passe d’un agent de cette tablette, elles sont illisibles. Rien ne peut être effacé à distance ; sur l’autre tablette :
+Les données de la tablette perdue **restent chiffrées** (AES 256 bits), mot de passe d’échange compris : sans le mot de passe d’un de ses agents, elles sont illisibles. Rien ne peut être effacé à distance ; par prudence, sur l’autre tablette, un administrateur :
 
-1. un administrateur **change le mot de passe d’échange** (Administration › Échanges entre tablettes) : les fichiers de la tablette perdue ne s’ouvriront plus ;
-2. chaque agent qui utilisait le même mot de passe sur la tablette perdue **le change** (Mon compte › « Changer mon mot de passe sur cette tablette ») ;
-3. un agent qui quitte l’équipe, ou dont le mot de passe a pu être vu, est **retiré** : « Modifier » › décocher « Compte actif » (bloqué aussi sur les autres tablettes au prochain échange), ou « Retirer de cette tablette ».
+1. **change le mot de passe d’échange** (Administration › Échanges entre tablettes › « Changer le mot de passe d’échange ») : les fichiers suivants ne pourront plus être lus avec l’ancien, et un fichier chiffré avec l’ancien n’est plus ouvert d’office (l’application demande alors un mot de passe : refusez un fichier d’origine douteuse) ;
+2. **retire les accès qui ont pu être exposés** : chaque agent qui utilisait le même mot de passe sur la tablette perdue **le change** (Mon compte › « Changer mon mot de passe sur cette tablette ») ; un agent dont le mot de passe a pu être vu (noté sur un papier rangé avec la tablette, par exemple) ou qui quitte l’équipe est **bloqué** : Administration › Agents de cette tablette › « Modifier » › décocher « Compte actif » (ou « Retirer de cette tablette »).
 
-Ce qui n’avait pas encore été envoyé est perdu : d’où l’intérêt d’envoyer chaque soir. **Tablette de remplacement** : sur l’autre tablette, « Tout envoyer » ; sur la nouvelle, « Tablette supplémentaire : recevoir le fichier de l’autre tablette » (avec le nouveau mot de passe d’échange et un nouveau n°), puis « Ajouter sur cette tablette » pour chaque agent. Tablette retrouvée : avant de la réutiliser, un administrateur y saisit le nouveau mot de passe d’échange (Administration › Échanges entre tablettes).
+Ce qui n’avait pas encore été envoyé est perdu : d’où l’intérêt d’envoyer chaque soir.
 
-### Le dépôt privé de données n’est plus nécessaire
+- **Tablette de remplacement** : sur l’autre tablette, « Tout envoyer » ; sur la nouvelle, « Tablette supplémentaire : recevoir le fichier de l’autre tablette », avec le **nouveau** mot de passe d’échange et le n° proposé, puis « Ajouter sur cette tablette » pour chaque agent.
+- **Tablette retrouvée** : avant de la réutiliser, un administrateur y saisit le nouveau mot de passe d’échange (Administration › Échanges entre tablettes), puis elle reçoit un fichier « Tout envoyer » de l’autre tablette.
 
-Le dépôt GitHub privé **`CSRE-DCE/fiche-de-controle-donn-es`** (GitHub a remplacé le « é » de « données » par « - ») ne sert plus à l’application : aucune tablette ne s’y connecte et aucun agent n’a besoin de compte GitHub. Il peut servir, si vous le souhaitez, d’**archive manuelle** : un administrateur y dépose, par le site github.com, les rapports PDF signés et, au besoin, des fichiers d’échange `.oegct` (qui restent chiffrés : pour les relire, il faut le mot de passe d’échange en vigueur à leur date). Ce dépôt doit rester **privé** ([pas à pas](docs/GUIDE-GITHUB.md#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)). **Jamais de données dans le dépôt public de l’application** (`CSRE-DCE/fiche-de-contr-le`).
+### Le dépôt privé `fiche-de-controle-donn-es` n’est plus nécessaire
+
+Le dépôt GitHub privé **`CSRE-DCE/fiche-de-controle-donn-es`** (GitHub a remplacé le « é » de « données » par « - ») ne sert plus à l’application : aucune tablette ne s’y connecte. Il peut servir, si vous le souhaitez, d’**archive manuelle** : un administrateur y dépose, par le site github.com, les rapports PDF signés et, au besoin, des fichiers d’échange `.oegct` (qui restent chiffrés : pour les relire, il faut le mot de passe d’échange en vigueur à leur date). Ce dépôt doit rester **privé** ([pas à pas](docs/GUIDE-GITHUB.md#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)). **Jamais de données dans le dépôt public de l’application** (`CSRE-DCE/fiche-de-contr-le`).
+
+La synchronisation automatique par un dépôt GitHub (« mode équipe ») existe encore dans le code, comme option technique **non utilisée à l’OEG** : elle est décrite pour les développeurs dans [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md#annexe--synchronisation-github-mode-équipe-non-utilisée-à-loeg).
 
 ---
 
@@ -397,7 +413,7 @@ python -m playwright install chromium      # une seule fois (sous Linux : --with
 python -m pytest
 ```
 
-`python -m pytest -q` donne un affichage condensé ; `python -m pytest -m "not lent"` saute les tests longs (tournées complètes, PDF) ; la variable d’environnement `HEADED=1` affiche le navigateur pendant les tests. Ces tests ouvrent l’application dans un Chromium sans fenêtre : tests unitaires, parcours de l’application, synchronisation entre deux appareils avec un faux serveur GitHub (`tests/fake_github.py`, sans réseau), tablette partagée et tournée en binôme (`tests/test_tablette_partagee.py`), échange par fichier entre deux tablettes (`tests/test_echange_tablettes.py` : deux navigateurs indépendants). Ils tournent aussi automatiquement sur GitHub à chaque envoi (onglet Actions).
+`python -m pytest -q` donne un affichage condensé ; `python -m pytest -m "not lent"` saute les tests longs (tournées complètes, PDF) ; la variable d’environnement `HEADED=1` affiche le navigateur pendant les tests. Ces tests ouvrent l’application dans un Chromium sans fenêtre : tests unitaires, parcours de l’application, tablette partagée et tournée en binôme (`tests/test_tablette_partagee.py`), échange par fichier entre deux tablettes (`tests/test_echange_tablettes.py` : deux navigateurs indépendants) et, pour le mode équipe GitHub conservé dans le code mais non utilisé à l’OEG, synchronisation entre deux appareils avec un faux serveur GitHub (`tests/test_sync_github.py`, `tests/fake_github.py`, sans réseau). Ils tournent aussi automatiquement sur GitHub à chaque envoi (onglet Actions).
 
 ---
 

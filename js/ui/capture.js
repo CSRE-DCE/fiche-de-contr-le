@@ -86,7 +86,7 @@ export async function viewMedia(id, { readOnly = false, onChange } = {}) {
   const isImg = m.mime?.startsWith('image/');
   const modal = openModal({
     title: isImg ? 'Photographie' : (m.name || 'Document'), wide: true,
-    body: html`${!url ? html`<div class="banner warn">Contenu non disponible sur cet appareil (il sera téléchargé à la prochaine synchronisation).</div>` : isImg ? html`<img src="${url}" alt="" style="width:100%;border-radius:12px;background:#111">` : html`<div class="btn-row"><a class="btn primary" href="${url}" target="_blank" rel="noopener">Ouvrir le document</a></div>`}
+    body: html`${!url ? html`<div class="banner warn">Contenu non disponible sur cette tablette (${session.mode === 'github' ? 'il sera téléchargé à la prochaine synchronisation' : 'il arrivera avec un prochain fichier de l’autre tablette, ou demandez-lui « Tout envoyer »'}).</div>` : isImg ? html`<img src="${url}" alt="" style="width:100%;border-radius:12px;background:#111">` : html`<div class="btn-row"><a class="btn primary" href="${url}" target="_blank" rel="noopener">Ouvrir le document</a></div>`}
       <div style="margin-top:12px">${kv([
         ['Date et heure', fmtDateTime(m.takenAt)], ['Auteur', m.authorName], ['Audit', audit?.number], ['Objet contrôlé', linkLabel(m.link)],
         ['Position GPS', m.gps ? `${m.gps.lat.toFixed(6)}, ${m.gps.lon.toFixed(6)} (±${Math.round(m.gps.accuracy || 0)} m)` : 'non relevée'],

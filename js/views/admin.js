@@ -218,7 +218,7 @@ export default {
       <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
         ${can('ref.manage') ? html`<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="upgrade">Mettre à niveau le référentiel</button><button class="btn ghost" data-act="seed">Compléter le référentiel de base</button><button class="btn ghost" data-act="seed-oeg">Reprendre le référentiel des fiches terrain</button><button class="btn ghost" data-act="seed-demo">Ajouter les données de démonstration</button><button class="btn ghost" data-act="purge-demo">Retirer les données de démonstration</button></div>
           <p class="note">« Mettre à niveau » ajoute ce qui manque (grille CT-2026, stations dont eaux souterraines, programmes 2026) sans jamais remplacer une saisie ; sans effet si tout est à jour.${team ? ' En mode équipe, synchronisez d’abord pour ne compléter que ce que le dépôt ne contient pas encore.' : ''}</p>` : ''}</div>
-      ${can('settings.manage') ? html`<div class="card" style="border-color:var(--nc)"><h2>Zone sensible</h2><p class="note">Efface toutes les données de cet appareil (base chiffrée, comptes locaux, cartes). Les données non synchronisées ou non exportées seront perdues.</p><button class="btn danger" data-act="wipe">Effacer les données de cet appareil</button></div>` : ''}`;
+      ${can('settings.manage') ? html`<div class="card" style="border-color:var(--nc)"><h2>Zone sensible</h2><p class="note">Efface toutes les données de cette tablette (base chiffrée, comptes des agents, cartes). ${team ? 'Les données non synchronisées ou non exportées seront perdues.' : 'Ce qui n’a pas encore été envoyé à l’autre tablette (« Envoyer à l’autre tablette ») ni exporté sera perdu.'}</p><button class="btn danger" data-act="wipe">Effacer les données de cette tablette</button></div>` : ''}`;
   },
   handlers: {
     /* Échanges entre tablettes : mot de passe d'échange, changements de profils reçus, nom et n° de la tablette. */
@@ -350,7 +350,7 @@ export default {
       toast('Données de démonstration retirées', 'ok'); this.refresh();
     },
     async wipe() {
-      const v = await promptDialog({ title: 'Effacer cet appareil', label: 'Tapez EFFACER pour confirmer', multiline: false, voice: false });
+      const v = await promptDialog({ title: 'Effacer cette tablette', label: 'Tapez EFFACER pour confirmer', multiline: false, voice: false });
       if (v !== 'EFFACER') return;
       await destroyDB();
       try { const keys = await caches.keys(); await Promise.all(keys.filter(key => key.startsWith('oeg-ct-tiles')).map(key => caches.delete(key))); } catch (e) { /* ignore */ }

@@ -114,7 +114,7 @@ export default {
     return html`
       ${pageTitle('Planning des prestations', longDate(today), html`
         ${can('audit.create') ? html`<a class="btn primary" href="#/nouvel-audit"><span class="ic">${icon('plus')}</span>Nouvelle tournée</a><a class="btn accent" href="#/nouvel-audit?kind=inopine"><span class="ic">${icon('warning')}</span>Audit inopiné</a>` : ''}
-        <button class="btn ghost" data-act="prepare" title="Synchroniser et télécharger les documents pour le terrain"><span class="ic">🧳</span>Préparer le terrain</button>
+        <button class="btn ghost" data-act="prepare" title="${isTeamMode() ? 'Synchroniser et télécharger les documents pour le terrain' : 'Avant de partir : recevoir le fichier de l’autre tablette, précharger la carte'}"><span class="ic">🧳</span>Préparer le terrain</button>
         ${can('planning.manage') ? html`<button class="btn ghost" data-act="newPrestation"><span class="ic">＋</span>Prestation</button>` : ''}`)}
       ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))} · ${controllerNamesText(a)}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
       <div class="chips" style="margin-bottom:10px">${chips.map(([k, l, n]) => html`<button class="chip ${period === k ? 'sel' : ''}" data-act="q" data-k="periode" data-v="${k}">${l}${n !== undefined ? html`<span class="count">${n}</span>` : ''}</button>`)}
@@ -167,7 +167,7 @@ export default {
     },
     async prepare() {
       const { runSync, prefetchMedia } = await import('../app/sync.js');
-      if (!isTeamMode()) { toast('Mode autonome : toutes les données sont déjà sur l’appareil. Pensez à précharger la carte (écran Carte).', '', 4500); return; }
+      if (!isTeamMode()) { toast('Toutes les données sont sur cette tablette. Avant de partir : si l’autre tablette a travaillé, « Recevoir un fichier » (accueil) ; préchargez la carte (écran Carte).', '', 6000); return; }
       if (!navigator.onLine) { toast('Hors connexion : la préparation nécessite le réseau.', 'warn'); return; }
       toast('Synchronisation et téléchargement des documents…');
       const r = await runSync({ reason: 'préparation du terrain' });

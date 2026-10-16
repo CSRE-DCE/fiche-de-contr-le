@@ -142,7 +142,7 @@ export default {
       <p class="hm-count" id="hmCount" aria-live="polite">${shown} station${shown > 1 ? 's' : ''} affichée${shown > 1 ? 's' : ''}</p>
       ${list.length ? html`<div class="hm-grid" id="hmGrid">${list.map(x => stationCard(x, grid))}</div>
         <div class="card hide" id="hmNone">${empty(icon('search', { size: 44 }), 'Aucune station ne correspond à la recherche.')}</div>`
-        : html`<div class="card">${empty(icon('station', { size: 44 }), all.length ? 'Aucune station pour ces filtres.' : 'Aucune station sur cet appareil : installez le référentiel (Administration › Données et stockage) ou synchronisez.', all.length ? html`<button class="btn ghost" data-act="reset">Effacer les filtres</button>` : '')}</div>`}`;
+        : html`<div class="card">${empty(icon('station', { size: 44 }), all.length ? 'Aucune station pour ces filtres.' : `Aucune station sur cette tablette : installez le référentiel (Administration › Données et stockage) ou ${isTeamMode() ? 'synchronisez' : 'recevez le fichier de l’autre tablette (« Recevoir un fichier »)'}.`, all.length ? html`<button class="btn ghost" data-act="reset">Effacer les filtres</button>` : '')}</div>`}`;
   },
   async mount(root, params, q) {
     if (q.q) filterCards(root, q.q);

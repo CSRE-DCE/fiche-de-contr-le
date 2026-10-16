@@ -430,7 +430,8 @@ def test_rattachement_et_detachement(devices, fake):
     c.click('[data-act=detach]')
     c.fill('#__prompt', 'Fin de mission')
     c.click('.modal [data-act=ok]')
-    c.wait_for_selector('text=Mode autonome (aucun dépôt d’équipe)')
+    c.wait_for_selector('#xchCard')            # écran « Échanges entre tablettes » du mode autonome
+    assert 'Mode autonome' in c.inner_text('#view')
     assert c.evaluate("window.AuditApp.session.mode") == 'standalone'
     assert c.evaluate("window.AuditApp.store.get('localSecret', 'github:token')") is None
     assert sync(c, ok=False).get('skipped') == 'mode autonome'

@@ -95,7 +95,7 @@ function conflictsCard(conflicts) {
 /** Écran du mode autonome : échanges entre tablettes par fichier (aucun serveur, aucun jeton). */
 async function standaloneView(conflicts, admin) {
   const devices = await knownDevices();
-  return html`${pageTitle('Échanges entre tablettes', 'Mode autonome (aucun dépôt d’équipe) : échanges par fichier, sans serveur ni jeton')}
+  return html`${pageTitle('Échanges entre tablettes', 'Mode autonome : les tablettes s’échangent un fichier chiffré, même sans connexion')}
     ${await exchangeCard()}
     ${historyCard()}
     ${conflictsCard(conflicts)}
@@ -277,8 +277,8 @@ export default {
       const m = openModal({
         title: `Conflit — ${c.label}`, wide: true,
         body: html`<p class="note">Les deux versions ont été fusionnées automatiquement ; pour chaque valeur modifiée des deux côtés, la plus récente a été retenue. Vous pouvez restaurer la valeur écartée.</p>
-          <div class="table-wrap"><table class="tbl"><thead><tr><th>Champ</th><th>Valeur de cet appareil</th><th>Valeur reçue</th><th>Retenue</th><th></th></tr></thead><tbody>
-          ${c.details.map((d, i) => html`<tr><td class="mono tiny">${d.path || '(objet)'}</td><td class="tiny">${show(d.localValue)}</td><td class="tiny">${show(d.remoteValue)}</td><td>${badge(d.kept === 'local' ? 'cet appareil' : 'reçue', 'info')}</td><td>${!c.resolved && d.path && store.get(c.entityType, c.entityId) ? html`<button class="btn ghost sm" data-act="restore" data-i="${i}">Restaurer l’autre valeur</button>` : ''}</td></tr>`)}</tbody></table></div>`,
+          <div class="table-wrap"><table class="tbl"><thead><tr><th>Champ</th><th>Valeur de cette tablette</th><th>Valeur reçue</th><th>Retenue</th><th></th></tr></thead><tbody>
+          ${c.details.map((d, i) => html`<tr><td class="mono tiny">${d.path || '(objet)'}</td><td class="tiny">${show(d.localValue)}</td><td class="tiny">${show(d.remoteValue)}</td><td>${badge(d.kept === 'local' ? 'cette tablette' : 'reçue', 'info')}</td><td>${!c.resolved && d.path && store.get(c.entityType, c.entityId) ? html`<button class="btn ghost sm" data-act="restore" data-i="${i}">Restaurer l’autre valeur</button>` : ''}</td></tr>`)}</tbody></table></div>`,
         actions: [{ label: 'Fermer' }, ...(c.resolved ? [] : [{ label: 'Marquer comme examiné', act: 'ok', cls: 'primary' }])],
         handlers: {
           async restore(btn) {
@@ -287,7 +287,7 @@ export default {
             const value = d.kept === 'local' ? d.remoteValue : d.localValue;
             try { setPath(cur, d.path, value ?? undefined); } catch (e) { toast(e.message, 'err'); return; }
             if (c.entityType === 'audit' && cur.lock?.lockedAt) { toast('Audit verrouillé : restaurez la valeur par une modification motivée depuis l’audit.', 'warn', 6000); return; }
-            await store.put(c.entityType, cur, { reason: `Résolution de conflit : restauration de la valeur ${d.kept === 'local' ? 'reçue' : 'de cet appareil'} (${d.path})` });
+            await store.put(c.entityType, cur, { reason: `Résolution de conflit : restauration de la valeur ${d.kept === 'local' ? 'reçue' : 'de cette tablette'} (${d.path})` });
             await store.put('conflict', { ...c, resolved: true, resolution: 'valeur restaurée', resolvedAt: new Date().toISOString(), resolvedBy: session.user.name });
             this.close(true);
           },

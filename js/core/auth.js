@@ -104,7 +104,7 @@ export async function setupStandalone({ deviceName, deviceNumber, admin }) {
   k.users[user.username] = { userId: user.id, name: user.name, ...(ident.initials ? { initials: ident.initials } : {}), role: user.role, wrap: await wrapDEK(dekRaw, admin.password), lastLogin: nowISO() };
   await saveKeyring(k);
   await openWithDEK(dekRaw, user);
-  await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Configuration initiale de l’appareil' });
+  await store.put('user', { ...user, source: 'local' }, { action: 'create', reason: 'Mise en service de la tablette' });
   await store.log('setup', { entityLabel: session.device.name, details: { mode: 'autonome', device: session.device } });
   return user;
 }
