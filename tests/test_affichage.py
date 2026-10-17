@@ -6,7 +6,7 @@ Mesures dans le navigateur (Playwright), sans comparaison d'images :
   - zones de texte lignées : interligne du texte = pas des pointillés (V1) ;
   - repères terrain de la feuille 1 : champs heure lisibles à 390 px, aucun débordement en 1055 px (V2, V3) ;
   - en-tête des feuilles à 1491 px (menu latéral ouvert) : slogan affiché (V6) ; F8 : parties A et B côte à côte sans
-    défilement horizontal (V7) ; unité « FNU » à côté de la valeur (V9) ; « : » final d'un titre d'encadré jamais seul
+    défilement horizontal (V7) ; unité « NTU » à côté de la valeur (V9) ; « : » final d'un titre d'encadré jamais seul
     sur sa ligne (V10) ; champ « Fonction » de F9 assez large (V11) ; libellés en bleu marine (V5) ;
   - PDF (texte et couleurs lus dans les opérations des pages) : bandeau bleu de la feuille de tournée, grand bandeau
     « Station » de F3 / F9 (V4), libellés bleu marine / brun (V5), aucun « : » isolé (V8) ; tournée modifiée après
@@ -185,7 +185,7 @@ def test_feuilles_mesures_d_affichage(make_page, app_url):
     cols = page.eval_on_selector('.as-frame .sheet-split', 'e => getComputedStyle(e).gridTemplateColumns.split(" ").length')
     assert cols == 1
 
-    # V9 — F4.9 : l'unité FNU suit chaque valeur sur la même ligne (tableau et carte)
+    # V9 — F4.9 : l'unité NTU (CCTP 2026, grille CT-2026 1.1) suit chaque valeur sur la même ligne (tableau et carte)
     for vp in (WIDE, PHONE):
         show(page, vp, aid, f'feuille-4@{key}')
         sel = f'[id={attr("row-it-F4-9@" + key)}]' if vp is WIDE else f'.st-row-card[id*={attr("it-F4-9@" + key)}]'
@@ -193,6 +193,7 @@ def test_feuilles_mesures_d_affichage(make_page, app_url):
             return [u.top < i.bottom && u.bottom > i.top, u.left >= i.right - 1, f.querySelector('.st-unit').textContent]; })""")
         assert len(fields) == 3, fields
         assert all(same and after for same, after, _ in fields), f'{vp["width"]} px : unité sous la valeur {fields}'
+        assert all(u == 'NTU' for *_, u in fields), f'{vp["width"]} px : turbidité en NTU attendue {fields}'
 
     # V11 — F9 A1 : « Technicien de rivière » lisible en entier dans le champ « Fonction »
     for vp in (WIDE, PHONE):

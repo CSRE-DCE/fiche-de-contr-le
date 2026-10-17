@@ -2278,7 +2278,8 @@
       "NA": "Paramètre non prévu au programme de la station : préciser en observation.",
       "refs": [
         "NF EN ISO 7027-1"
-      ]
+      ],
+      "aPreciser": "Unité NTU demandée par l’OEG et par les CCTP, alors que la norme NF EN ISO 7027-1 citée en référence exprime ses résultats dans une autre unité : méthode de mesure et type de turbidimètre à préciser au CCTP."
     },
     "it-F4-10": {
       "feuille": 4,

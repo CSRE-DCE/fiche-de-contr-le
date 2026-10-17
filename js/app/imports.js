@@ -1,7 +1,12 @@
 /* Imports : calendriers de prestations et référentiels, depuis Excel, CSV, iCalendar, une API JSON,
  * un calendrier partagé (URL .ics), le programme des fiches terrain OEG ou une saisie manuelle.
  * Étapes : lecture → correspondance des colonnes → prévisualisation (nouveau / modifié / inchangé /
- * erreur) → application. Chaque import est enregistré (lot d'import tracé, empreinte du fichier). */
+ * erreur) → application. Chaque import est enregistré (lot d'import tracé, empreinte du fichier).
+ * Sites : une colonne non associée (ou une cellule vide) ne modifie jamais la valeur enregistrée d'une station
+ * existante (réseaux, commune, bassin, masse d'eau, coordonnées…). Réseaux : codes ramenés au référentiel « Réseaux »
+ * (casse, accents, libellé : « rco », « Eaux littorales » → RCO, EL) ; une station présente sur plusieurs lignes (une par
+ * réseau) cumule ses réseaux sur sa première ligne ; un code inconnu est signalé puis ajouté au référentiel à
+ * l'application de l'import. */
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { uuid, nowISO, normalize, sha256Hex, deepEqual } from '../core/util.js';
@@ -12,6 +17,9 @@ import { readXLSX, sheetToTable } from '../formats/xlsx.js';
 import { parseDate, parseTime, parseNumber, parseList, parseBool, guessMapping, resolveRef } from '../domain/normalize.js';
 import { PRESTATION_STATUS, CONTROL_LEVELS, PROVIDER_KINDS, DOC_TYPES, DOC_STATUS, EQUIPMENT_STATUS } from '../domain/model.js';
 import { utmToLatLon } from '../lib/geo.js';
+import { stationTypes, stationCompartments } from '../domain/seed.js';
+import { normalizeNetworkCodes, sameNetworks, sortNetworkCodes, AUDIT_TYPE_KEYS } from '../domain/networks.js';
+import { currentNetworkIndex, ensureNetworks } from './networks.js';
 
 const statusFromLabel = (map, v) => { const n = normalize(v); return Object.keys(map).find(k => normalize(k) === n || normalize(map[k]?.label || map[k]) === n) || null; };
 
@@ -226,7 +234,7 @@ function buildPrestation(row, mapping, ctx) {
   const existing = store.find('prestation', p => p.source?.externalId === externalId) || store.find('prestation', p => p.ref === ref && p.siteId === entity.siteId);
   return { entity, existing, errors, warnings, keepFromExisting: ['statusHistory', 'status'] };
 }
-function buildSite(row, mapping) {
+function buildSite(row, mapping, ctx = {}) {
   const errors = [];
   const code = String(get(row, mapping, 'code')).trim(), name = String(get(row, mapping, 'name')).trim();
   if (!code) errors.push('code manquant'); if (!name) errors.push('nom manquant');
@@ -235,7 +243,25 @@ function buildSite(row, mapping) {
   if ((lat === null || lon === null) && x !== null && y !== null) [lat, lon] = utmToLatLon(x, y, 22);
   const existing = store.find('site', s => s.code === code);
   const warnings = [];
-  const entity = { id: existing?.id || 'site-' + code, code, name, networks: parseList(get(row, mapping, 'networks')), kind: String(get(row, mapping, 'kind') || existing?.kind || ''), commune: String(get(row, mapping, 'commune') || ''), bassin: String(get(row, mapping, 'bassin') || ''), masseEau: String(get(row, mapping, 'masseEau') || ''), lat: lat !== null ? +lat.toFixed(6) : null, lon: lon !== null ? +lon.toFixed(6) : null, x, y };
+  const idx = ctx.networkIndex || currentNetworkIndex();
+  // Valeur du fichier ; colonne non associée ou cellule vide : valeur enregistrée conservée (jamais effacée).
+  const text = k => String(get(row, mapping, k) ?? '').trim();
+  const kept = k => text(k) || String(existing?.[k] ?? '');
+  // Réseaux : codes du référentiel (codes inconnus gardés tels quels, ajoutés au référentiel à l'application).
+  const netRaw = text('networks');
+  let networks = [...(existing?.networks || [])];
+  if (netRaw) {
+    const n = normalizeNetworkCodes(netRaw, idx);
+    if (n.unknown.length) warnings.push(`réseau(x) absent(s) du référentiel, ajouté(s) à l’application : ${n.unknown.join(', ')}`);
+    const removed = (existing?.networks || []).filter(c => !n.codes.includes(c));
+    if (removed.length) warnings.push(`réseau(x) retiré(s) de la station : ${removed.join(', ')}`);
+    networks = existing && sameNetworks(existing.networks, n.codes) ? [...existing.networks] : sortNetworkCodes(n.codes, idx);
+  }
+  // Coordonnées : remplacées seulement si le fichier donne une position (WGS84 ou RGFG95), sinon celles de la station.
+  const pos = lat !== null && lon !== null
+    ? { lat: +lat.toFixed(6), lon: +lon.toFixed(6), x, y }
+    : { lat: existing?.lat ?? null, lon: existing?.lon ?? null, x: existing ? existing.x ?? null : x, y: existing ? existing.y ?? null : y };
+  const entity = { id: existing?.id || 'site-' + code, code, name, networks, kind: String(get(row, mapping, 'kind') || existing?.kind || ''), commune: kept('commune'), bassin: kept('bassin'), masseEau: kept('masseEau'), ...pos };
   // Champs de la fiche station (grille CT-2026) : conservés s'ils ne sont pas fournis par le fichier.
   for (const k of ['riverName', 'her', 'strahler', 'nature', 'usage', 'aquifere']) { const v = String(get(row, mapping, k) ?? '').trim(); if (v || existing?.[k] === undefined) entity[k] = v || existing?.[k] || ''; }
   // Type de code : BSS pour un point d'eau souterraine (code « BSS… »), sinon SANDRE.
@@ -253,7 +279,15 @@ function buildSite(row, mapping) {
     const bad = types.filter(t => !alias[t]);
     if (bad.length) warnings.push(`type(s) de tournée inconnu(s) ignoré(s) : ${bad.join(', ')}`);
     entity.types = ['bio', 'ce', 'eso'].filter(k => types.some(t => alias[t] === k));
-  } else if (existing?.types === undefined && entity.codeType === 'BSS') entity.types = ['eso'];
+  } else if (!existing || !Array.isArray(existing.types) || !existing.types.length) {
+    // Sans colonne « Types de tournée » : types déduits des réseaux (référentiel) et des listes biologiques pour une
+    // station nouvelle ou sans types ; code BSS ⇒ eaux souterraines.
+    const t = stationTypes({ ...(existing || {}), ...entity }, idx);
+    if (entity.codeType === 'BSS') t.push('eso');
+    if (t.length || existing?.types === undefined) entity.types = AUDIT_TYPE_KEYS.filter(k => t.includes(k));
+  }
+  // Station nouvelle sans colonne « Compartiments » : compartiments déduits de ses types.
+  if (!existing && !entity.compartments) entity.compartments = stationCompartments({ ...entity, bioLists: [] });
   return { entity, existing, errors, warnings, extra: existing ? null : { type: 'point', entity: { id: 'pt-' + code, siteId: entity.id, code, name: 'Point de prélèvement ' + name, lat: entity.lat, lon: entity.lon } } };
 }
 function buildPoint(row, mapping) {
@@ -318,20 +352,47 @@ const BUILDERS = { prestation: buildPrestation, site: buildSite, point: buildPoi
 function sameContent(existing, entity, keep = []) {
   const a = {}, b = {};
   for (const k of Object.keys(entity)) { if (META_FIELDS.includes(k) || k === 'id' || k === 'source' || keep.includes(k)) continue; a[k] = existing?.[k] ?? null; b[k] = entity[k] ?? null; }
+  // Réseaux d'une station : comparés comme des ensembles (l'ordre est sans importance).
+  if (Array.isArray(a.networks) && Array.isArray(b.networks) && sameNetworks(a.networks, b.networks)) b.networks = a.networks;
   return deepEqual(a, b);
 }
 
-/** Prévisualisation : [{row, status:'new'|'update'|'same'|'error', entity, existing, errors, warnings}] */
+/**
+ * Sites : une station listée sur plusieurs lignes (une par réseau) cumule les réseaux de toutes ses lignes sur la
+ * première ; les lignes suivantes sont marquées « cumulée » (rien à appliquer). Retourne les lignes à construire
+ * ({ row, index, mergedInto? }).
+ */
+function cumulateSiteRows(source, mapping) {
+  const col = k => (mapping[k] === undefined || mapping[k] === '' || mapping[k] === null ? null : Number(mapping[k]));
+  const codeCol = col('code'), netCol = col('networks');
+  const rows = source.rows.map((row, i) => ({ row, index: i + 1 }));
+  if (codeCol === null || netCol === null) return rows;
+  const first = new Map();
+  for (const r of rows) {
+    const code = String(r.row[codeCol] ?? '').trim();
+    if (!code) continue;
+    const f = first.get(code);
+    if (!f) { first.set(code, r); continue; }
+    const extra = String(r.row[netCol] ?? '').trim();
+    if (extra) { const merged = [...f.row]; merged[netCol] = [String(f.row[netCol] ?? '').trim(), extra].filter(Boolean).join(' ; '); f.row = merged; }
+    r.mergedInto = f.index;
+  }
+  return rows;
+}
+
+/** Prévisualisation : [{row, status:'new'|'update'|'same'|'merged'|'error', entity, existing, errors, warnings}] */
 export function previewImport(target, source, mapping) {
-  const ctx = { kind: source.kind, name: source.name, sourceKey: source.sourceKey || normalize(source.name).replace(/\s+/g, '-') };
+  const ctx = { kind: source.kind, name: source.name, sourceKey: source.sourceKey || normalize(source.name).replace(/\s+/g, '-'), networkIndex: currentNetworkIndex() };
   const seen = new Set();
-  return source.rows.map((row, i) => {
+  const lines = target === 'site' ? cumulateSiteRows(source, mapping) : source.rows.map((row, i) => ({ row, index: i + 1 }));
+  return lines.map(({ row, index, mergedInto }) => {
     const r = BUILDERS[target](row, mapping, ctx);
+    if (mergedInto) return { index, row: source.rows[index - 1], status: 'merged', ...r, errors: [], warnings: [`station déjà présente ligne ${mergedInto} : réseaux cumulés sur cette ligne (autres colonnes ignorées)`] };
     let status = r.errors.length ? 'error' : !r.existing ? 'new' : sameContent(r.existing, r.entity, r.keepFromExisting) ? 'same' : 'update';
     const dupKey = JSON.stringify([r.entity.ref, r.entity.code, r.entity.inventoryNo, r.entity.docKey, r.entity.version, r.entity.siteId, r.entity.plannedDate]);
     if (status !== 'error' && seen.has(dupKey)) { r.errors.push('ligne en double dans le fichier'); status = 'error'; }
     seen.add(dupKey);
-    return { index: i + 1, row, status, ...r };
+    return { index, row, status, ...r };
   });
 }
 
@@ -350,9 +411,11 @@ export async function applyImport(target, source, preview, selected = null) {
     if (p.extra) extras.push(p.extra);
   }
   const reason = `Import ${TARGETS[target].label} depuis ${source.name}`;
+  // Réseaux rencontrés sans réseau au référentiel : créés avant les stations (journal : motif de l'import).
+  const networks = type === 'site' ? await ensureNetworks(list.flatMap(e => e.networks || []), { reason: `${reason} : réseau(x) absent(s) du référentiel`, action: 'import' }) : [];
   await store.bulkPut(type, list, { reason, label: `${list.length} ${TARGETS[target].label.toLowerCase()}` });
   for (const x of extras) await store.bulkPut(x.type, [x.entity], { reason });
-  const counts = { new: rows.filter(r => r.status === 'new').length, update: rows.filter(r => r.status === 'update').length, same: preview.filter(r => r.status === 'same').length, error: preview.filter(r => r.status === 'error').length };
+  const counts = { new: rows.filter(r => r.status === 'new').length, update: rows.filter(r => r.status === 'update').length, same: preview.filter(r => r.status === 'same').length, error: preview.filter(r => r.status === 'error').length, merged: preview.filter(r => r.status === 'merged').length, networks: networks.map(n => n.code) };
   await store.put('importBatch', { id: batchId, at: nowISO(), by: session.user.name, target, source: { kind: source.kind, name: source.name, sha256: source.sha256, sheet: source.sheet || null, url: source.url || null }, counts, ids: list.map(e => e.id) }, { action: 'import', reason });
   return counts;
 }

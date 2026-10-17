@@ -1,29 +1,40 @@
 /* Carte des stations (#/carte) : une pastille par station aux couleurs de son type de tournée (biologie :
  * vert, cours d'eau : bleu, eaux souterraines : ardoise ; deux couleurs si plusieurs types), anneau selon le
  * statut de contrôle (tournée en cours : orange ; contrôlée dans l'année : coche verte), légende, filtres par
- * type et par statut ; un clic ouvre la fiche station. Ma position, préchargement des tuiles pour le terrain
- * (zones limitées), fonctionnement hors connexion (stations affichées même sans fond de carte). */
+ * type, par réseau de surveillance (?reseau=<code>|aucun : une station sur deux réseaux est affichée sous chacun) et
+ * par statut ; info-bulle « Réseaux : BIO, Chimie » ; un clic ouvre la fiche station. Ma position, préchargement
+ * des tuiles pour le terrain (zones limitées), fonctionnement hors connexion (stations affichées même sans fond de
+ * carte). */
 import { html, esc } from '../core/util.js';
 import { store } from '../core/store.js';
 import { navigate } from '../ui/router.js';
 import { toast, confirmDialog } from '../ui/dom.js';
-import { pageTitle } from '../ui/components.js';
+import { pageTitle, networkDot, networkVars } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { siteLatLon } from '../ui/sheet-chrome.js';
 import { createMap, tileUrls, preloadTiles, tileCacheCount, clearTileCache, tilesUsable, watchTiles, stationIcon, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { getPosition } from '../ui/gps.js';
 import { orgSettings } from '../app/settings.js';
 import { siteTypes, stationStatus } from './station-sheet.js';
+import { NO_NETWORK, inNetwork, siteNetworkCodes, sortNetworkCodes } from '../domain/networks.js';
+import { currentNetworkIndex, currentNetworkOf } from '../app/networks.js';
 
 let map = null, layer = null, meMarker = null;
 
-/** Stations à afficher (filtres ?type= et ?statut=) : [{site, ll, types, status}]. */
+/** Stations à afficher (filtres ?type=, ?reseau= et ?statut=) : [{site, ll, types, networks, status}]. */
 function stations(q) {
-  const year = new Date().getFullYear();
-  return store.all('site').map(site => ({ site, ll: siteLatLon(site), types: siteTypes(site) }))
-    .filter(x => x.ll && (!q.type || x.types.includes(q.type)))
+  const year = new Date().getFullYear(), idx = currentNetworkIndex();
+  return store.all('site').map(site => ({ site, ll: siteLatLon(site), types: siteTypes(site), networks: siteNetworkCodes(site, idx) }))
+    .filter(x => x.ll && (!q.type || x.types.includes(q.type)) && (!q.reseau || inNetwork(x.networks, q.reseau)))
     .map(x => ({ ...x, status: stationStatus(x.site.id, { year }) }))
     .filter(x => !q.statut || x.status.key === q.statut);
+}
+/** Réseaux proposés au filtre (stations géolocalisées du type choisi ; réseau choisi toujours présent), effectifs. */
+function networkChoices(q) {
+  const list = stations({ type: q.type });
+  const codes = sortNetworkCodes([...new Set(list.flatMap(x => x.networks)), ...(q.reseau && q.reseau !== NO_NETWORK ? [q.reseau] : [])], currentNetworkIndex());
+  if (list.some(x => !x.networks.length) || q.reseau === NO_NETWORK) codes.push(NO_NETWORK);
+  return codes.map(code => ({ code, n: code === NO_NETWORK ? null : currentNetworkOf(code), count: list.filter(x => inNetwork(x.networks, code)).length }));
 }
 
 export default {
@@ -32,9 +43,13 @@ export default {
     const n = await tileCacheCount();
     const list = stations(q);
     const usable = await tilesUsable();
-    const chip = (k, v, label, extra = '') => html`<button class="chip ${(q[k] || '') === v ? 'sel' : ''}" data-act="filter" data-k="${k}" data-v="${v}" aria-pressed="${(q[k] || '') === v}">${extra}${label}</button>`;
-    return html`${pageTitle('Carte des stations', `${list.length} station(s) affichée(s) · ${n} tuile(s) de carte disponibles hors connexion`, html`<a class="btn ghost" href="#/"><span class="ic">${icon('station')}</span>Liste des stations</a>`)}
+    const chip = (k, v, label, extra = '', style = '') => html`<button class="chip ${(q[k] || '') === v ? 'sel' : ''}" data-act="filter" data-k="${k}" data-v="${v}" aria-pressed="${String((q[k] || '') === v)}" style="${style}">${extra}${label}</button>`;
+    const nets = networkChoices(q);
+    // Liste des stations avec les mêmes filtres (sinon : accueil avec les préférences de l'agent).
+    const listHref = q.type || q.reseau ? '#/?' + new URLSearchParams({ type: q.type || '', reseau: q.reseau || '' }) : '#/';
+    return html`${pageTitle('Carte des stations', `${list.length} station(s) affichée(s) · ${n} tuile(s) de carte disponibles hors connexion`, html`<a class="btn ghost" href="${listHref}"><span class="ic">${icon('station')}</span>Liste des stations</a>`)}
       <div class="chips" style="margin-bottom:6px" role="group" aria-label="Type de tournée">${chip('type', '', 'Toutes')}${TYPE_ORDER.map(t => chip('type', t, TYPE_STYLES[t].label, html`<i class="mk-chip" style="background:${TYPE_STYLES[t].color}"></i>`))}</div>
+      ${nets.length ? html`<div class="chips is-wrap mp-nets" style="margin-bottom:6px" role="group" aria-label="Réseau de surveillance">${chip('reseau', '', 'Tous réseaux')}${nets.map(x => chip('reseau', x.code, html`${x.n ? x.n.code : 'Sans réseau'}<span class="count">${x.count}</span>`, x.n ? networkDot(x.n) : html`<span class="net-dot" aria-hidden="true"></span>`, x.n ? networkVars(x.n) : ''))}</div>` : ''}
       <div class="chips" style="margin-bottom:8px" role="group" aria-label="Statut de contrôle">${chip('statut', '', 'Tous statuts')}${Object.entries(STATUS_STYLES).map(([k, s]) => chip('statut', k, k === 'controlee' ? `Contrôlées en ${new Date().getFullYear()}` : s.label))}</div>
       ${usable ? '' : html`<div class="banner warn">Hors connexion et aucune zone préchargée : fond de carte indisponible. Les stations restent affichées à leur position.</div>`}
       <div class="map-box mp-box" id="mapBox" role="application" aria-label="Carte interactive des stations"></div>
@@ -61,7 +76,7 @@ export default {
     for (const x of stations(q)) {
       const { site, ll, types, status } = x;
       const m = L.marker(ll, { icon: stationIcon({ types, status: status.key, size: status.key === 'a_controler' ? 20 : 24 }), title: `${site.name} (${site.code})`, riseOnHover: true, keyboard: true }).addTo(layer);
-      m.bindTooltip(`<b>${esc(site.name)}</b><br>${esc(site.code)} · ${esc(types.map(t => TYPE_STYLES[t].label).join(', '))}<br>${esc(status.label)}`, { direction: 'top', offset: [0, -10] });
+      m.bindTooltip(`<b>${esc(site.name)}</b><br>${esc(site.code)} · ${esc(types.map(t => TYPE_STYLES[t].label).join(', '))}<br>Réseaux : ${esc(x.networks.join(', ') || 'aucun')}<br>${esc(status.label)}`, { direction: 'top', offset: [0, -10] });
       m.on('click', () => navigate('/station/' + encodeURIComponent(site.id)));
       bounds.push(ll);
       if (focusSite === site.id) focus = { m, ll };

@@ -1,7 +1,11 @@
 /* Exports : tableaux (CSV, Excel), registre des écarts, historique, données complètes, dossiers de
  * preuve et sauvegarde chiffrée. Chaque export est tracé au journal.
  * Tournées (grille CT-2026) : colonnes « Type de tournée » et « Station(s) » ; réponses et synthèses par feuille
- * établies sur la grille EFFECTIVE de l'audit (un critère partagé par les stations n'apparaît qu'une fois). */
+ * établies sur la grille EFFECTIVE de l'audit (un critère partagé par les stations n'apparaît qu'une fois).
+ * Réseaux de surveillance (codes du référentiel « Réseaux », séparés par « ; », triés) : « Réseau(x) » des stations
+ * d'une tournée ou d'un écart ; prestations : « Réseau » du programme (celui de la campagne, unique) et « Réseau(x)
+ * de la station » (une station peut appartenir à plusieurs réseaux) ; stations : une ligne par station (« Réseau(x) »)
+ * et une ligne par station ET par réseau (stationsByNetwork : rangement par réseau, « Aussi dans »). */
 import { store, LOCAL_ONLY } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes, storeRemoteBytes } from '../core/media.js';
@@ -11,10 +15,13 @@ import { fmtDate, fmtDateTime, fmtTime, nowISO, localDate, bytesToBase64, base64
 import { toCSV, objectsToRows } from '../formats/csv.js';
 import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
-import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, auditDate } from '../domain/model.js';
+import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, AUDIT_TYPES, CODE_TYPES, auditDate } from '../domain/model.js';
 import { allItems, sheetOf, gridType } from '../domain/grids.js';
 import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
+import { upToDateGrid } from '../domain/default-grids.js';
+import { NO_NETWORK, prestationNetwork, sortNetworkCodes, groupSitesByNetwork, auditTypesOf } from '../domain/networks.js';
+import { currentNetworkIndex } from './networks.js';
 import { controllerNamesText } from '../domain/permissions.js';
 import { auditState, effectiveGrid, auditContext, auditTypeOf, deviationPlace } from './audits.js';
 
@@ -29,11 +36,27 @@ const stationsLabel = a => (a.stations || []).map(st => { const s = store.get('s
 const deviationStation = d => deviationPlace(d, { codes: false });
 /** Sites d'un écart : son site, ou ceux de toutes les stations pour un écart commun à la tournée. */
 const deviationSites = d => (d.siteId ? [d.siteId] : d.siteIds || []).map(id => name('site', id)).filter(Boolean).join(' ; ');
+/** Réseaux (codes triés, « BIO ; Chimie ») d'un ensemble de stations. */
+const networksOf = siteIds => sortNetworkCodes(siteIds.flatMap(id => store.get('site', id)?.networks || []), currentNetworkIndex()).join(' ; ');
+const auditSiteIds = a => (a.stations || []).length ? a.stations.map(s => s.siteId) : [a.siteId].filter(Boolean);
+/** Types de tournée d'une station (enregistrés, sinon déduits des réseaux) : « Hydrobiologie ; Cours d’eau ». */
+const siteTypesText = s => ((s.types || []).length ? s.types : auditTypesOf(s, currentNetworkIndex())).map(t => AUDIT_TYPES[t] || t).join(' ; ');
+
+/**
+ * Stations rangées par réseau (une ligne par station ET par réseau ; une station sur deux réseaux a deux lignes,
+ * « Aussi dans » nomme l'autre ; groupe « Sans réseau » en dernier) : [{ network, site, others }].
+ */
+export function stationsByNetwork(sites) {
+  return groupSitesByNetwork(sites, currentNetworkIndex()).groups.flatMap(g => g.sites.map(site => ({
+    network: g.network, site, others: sortNetworkCodes(site.networks || [], currentNetworkIndex()).filter(c => c !== g.code)
+  })));
+}
 
 export const COLUMNS = {
   audits: [
     { label: 'Numéro', get: a => a.number }, { label: 'Type', get: a => a.kind === 'inopine' ? 'Inopiné' : 'Planifié' },
     { label: 'Type de tournée', get: typeLabel }, { label: 'Nombre de stations', get: a => (a.stations || []).length || (a.siteId ? 1 : 0) }, { label: 'Stations', get: stationsLabel },
+    { label: 'Réseau(x)', get: a => networksOf(auditSiteIds(a)) },
     { label: 'Date', get: a => fmtDate(auditDate(a)) }, { label: 'Début', get: a => fmtTime(a.startedAt) }, { label: 'Fin', get: a => fmtTime(a.endedAt) },
     { label: 'Statut', get: a => a.lock?.lockedAt ? 'Signé — verrouillé' : AUDIT_STATUS[a.status]?.label || a.status },
     { label: 'Prestataire', get: a => name('provider', a.providerId) }, { label: 'Nature', get: a => PROVIDER_KINDS[store.get('provider', a.providerId)?.kind] || '' },
@@ -49,7 +72,7 @@ export const COLUMNS = {
   ],
   deviations: [
     { label: 'Numéro', get: d => d.number }, { label: 'Date', get: d => fmtDate(d.date) }, { label: 'Heure', get: d => d.time }, { label: 'Audit', get: d => d.auditNumber },
-    { label: 'Prestataire', get: d => name('provider', d.providerId) }, { label: 'Site', get: deviationSites }, { label: 'Station', get: deviationStation }, { label: 'Critère', get: d => d.itemCode || '' },
+    { label: 'Prestataire', get: d => name('provider', d.providerId) }, { label: 'Site', get: deviationSites }, { label: 'Station', get: deviationStation }, { label: 'Réseau(x)', get: d => networksOf(d.siteId ? [d.siteId] : d.siteIds || []) }, { label: 'Critère', get: d => d.itemCode || '' },
     { label: 'Exigence concernée', get: d => d.requirement }, { label: 'Référence documentaire', get: d => (d.docRefs || []).map(r => [r.docKey, r.article].filter(Boolean).join(' § ')).join(' ; ') },
     { label: 'Description factuelle', get: d => d.description }, { label: 'Observation de l’auditeur', get: d => d.auditorObservation },
     { label: 'Criticité', get: d => crit(d.criticalityCode) }, { label: 'Type d’écart', get: d => name('deviationType', 'dtype-' + d.typeCode) || d.typeCode || '' },
@@ -60,10 +83,24 @@ export const COLUMNS = {
   ],
   prestations: [
     { label: 'Référence', get: p => p.ref }, { label: 'Date prévue', get: p => p.plannedDate ? fmtDate(p.plannedDate) : 'À planifier' }, { label: 'Heure', get: p => p.plannedTime }, { label: 'Date indicative', get: p => p.dateIndicative ? 'Oui' : '' },
-    { label: 'Site', get: p => name('site', p.siteId) }, { label: 'Code site', get: p => name('site', p.siteId, s => s.code) }, { label: 'Prestataire', get: p => name('provider', p.providerId) },
+    { label: 'Site', get: p => name('site', p.siteId) }, { label: 'Code site', get: p => name('site', p.siteId, s => s.code) },
+    { label: 'Réseau', get: p => prestationNetwork(p, store.get('campaign', p.campaignId), currentNetworkIndex()) }, { label: 'Réseau(x) de la station', get: p => networksOf([p.siteId].filter(Boolean)) },
+    { label: 'Prestataire', get: p => name('provider', p.providerId) },
     { label: 'Campagne', get: p => name('campaign', p.campaignId, c => c.label) }, { label: 'Type de prélèvement', get: p => name('samplingType', p.samplingTypeId) }, { label: 'Marché', get: p => p.marketRef },
     { label: 'Statut', get: p => PRESTATION_STATUS[p.status]?.label || p.status }, { label: 'Audits', get: p => store.filter('audit', a => (a.prestationId === p.id || (a.prestationIds || []).includes(p.id)) && a.status !== 'abandonne').map(a => a.number).join(', ') },
     { label: 'Source', get: p => p.source?.label || p.source?.kind || '' }
+  ],
+  sites: [
+    { label: 'Code', get: s => s.code }, { label: 'Type de code', get: s => CODE_TYPES[s.codeType] || s.codeType || '' }, { label: 'Station', get: s => s.name },
+    { label: 'Réseau(x)', get: s => sortNetworkCodes(s.networks || [], currentNetworkIndex()).join(' ; ') }, { label: 'Types de tournée', get: siteTypesText },
+    { label: 'Bassin versant', get: s => s.bassin || '' }, { label: 'Commune', get: s => s.commune || '' }, { label: 'Cours d’eau', get: s => s.riverName || '' },
+    { label: 'Masse d’eau', get: s => s.masseEau || '' }, { label: 'Nature', get: s => s.kind || s.nature || '' },
+    { label: 'Latitude (WGS84)', get: s => s.lat ?? '' }, { label: 'Longitude (WGS84)', get: s => s.lon ?? '' }
+  ],
+  stationsByNetwork: [
+    { label: 'Réseau', get: r => r.network.code === NO_NETWORK ? 'Sans réseau' : r.network.code }, { label: 'Libellé du réseau', get: r => r.network.label || '' },
+    { label: 'Code', get: r => r.site.code }, { label: 'Station', get: r => r.site.name }, { label: 'Aussi dans', get: r => r.others.join(' ; ') },
+    { label: 'Types de tournée', get: r => siteTypesText(r.site) }, { label: 'Bassin versant', get: r => r.site.bassin || '' }, { label: 'Commune', get: r => r.site.commune || '' }
   ],
   trail: [
     { label: 'Date et heure', get: t => fmtDateTime(t.at) }, { label: 'Horodatage ISO', get: t => t.at }, { label: 'Utilisateur', get: t => t.userName }, { label: 'Profil', get: t => t.role },
@@ -175,7 +212,10 @@ export async function importPackage(pkg) {
   for (const [type, list] of Object.entries(pkg.entities || {})) {
     if (LOCAL_ONLY.has(type)) continue;
     const toPut = [];
-    for (const remote of list) {
+    for (const received of list) {
+      // Grille par défaut d'une tablette pas encore mise à niveau (turbidité en FNU…) : lue d'après la version de
+      // l'application avant la comparaison (ni conflit, ni retour en arrière).
+      const remote = type === 'grid' ? upToDateGrid(received) : received;
       const local = store.getRaw(type, remote.id);
       if (!local) { toPut.push(remote); res.added++; continue; }
       if (JSON.stringify(sortKeys(local, true)) === JSON.stringify(sortKeys(remote, true))) { res.same++; continue; }

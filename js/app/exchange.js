@@ -33,6 +33,7 @@ import { uuid, nowISO, fmtDateTime, sortBy, base64ToBytes } from '../core/util.j
 import { encodeExchange, decodeExchange, isExchangeText, ExchangeError } from './exchange-file.js';
 import { planEntity, guardProfile, nextCandidates, exchanged, exchangeFileName, countEntities, countsLabel, freeDeviceNumber, heldLabel, selectForSend } from '../domain/exchange.js';
 import { IMMUTABLE_TYPES } from '../domain/merge.js';
+import { upToDateGrid } from '../domain/default-grids.js';
 import { orgSettings } from './settings.js';
 
 export { ExchangeError };
@@ -324,7 +325,10 @@ export async function receiveExchange(rx, { setup = false } = {}) {
     }
     const keys = valid.filter(e => store.getRaw(type, e.id)).map(e => `${type}:${e.id}`);
     const bases = keys.length ? await store.getLazyMany(BASE, keys) : new Map();
-    for (const remote of valid) {
+    for (const received of valid) {
+      // Grille par défaut envoyée par une tablette pas encore mise à niveau (turbidité en FNU, version antérieure) :
+      // lue d'après la version livrée avec l'application avant toute comparaison (ni conflit, ni retour en arrière).
+      const remote = type === 'grid' ? upToDateGrid(received) : received;
       const local = store.getRaw(type, remote.id), key = `${type}:${remote.id}`;
       const cands = bases.get(key)?.cands || [];
       const plan = planEntity(type, local, remote, { candidates: cands, deviceId });

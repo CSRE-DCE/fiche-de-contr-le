@@ -3,9 +3,11 @@
  * marché – lot 1, OEG en régie, HYDRECO, NBC en premier, puis les autres), date, audit inopiné ou avec
  * rendez-vous, contrôleurs OEG de la tournée (binôme : agents connus autorisés à auditer, agent connecté coché et
  * obligatoire), stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
- * prestataire mises en avant, ordre modifiable, station la plus proche par GPS), compartiments (biologie :
- * pré-cochés selon les stations) et opérateurs → createAudit → #/audit/<id>.
- * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine.
+ * prestataire mises en avant, ordre modifiable, station la plus proche par GPS, filtre par réseau de surveillance
+ * avec effectifs, réseaux de chaque station), compartiments (biologie : pré-cochés selon les stations) et
+ * opérateurs → createAudit → #/audit/<id>.
+ * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine,
+ * ?reseau=<code> (filtre des stations candidates : seulement par l'adresse, jamais par une préférence mémorisée).
  * Option avancée : audit sur une grille historique (un seul site), ?mode=general — formulaire d'origine. */
 import { html, sortBy, localDate, addDays, haversine, fmtDistance, fmtDate, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
@@ -14,13 +16,15 @@ import { can, ROLES, knownUsers } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { pageTitle, options, field, operatorName, empty } from '../ui/components.js';
+import { pageTitle, options, field, operatorName, empty, networkBadges, networkDot, networkVars } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
 import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
 import { agentInitials } from '../domain/permissions.js';
 import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
 import { getPosition } from '../ui/gps.js';
-import { pref } from '../app/settings.js';
+import { agentPref } from '../app/settings.js';
+import { NO_NETWORK, inNetwork, prestationNetwork, sortNetworkCodes } from '../domain/networks.js';
+import { currentNetworkIndex, currentNetworkOf, siteNetworks } from '../app/networks.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { ctGrid, CT_GRID, siteTypes, openPrestations, prestationType, plannedLabel, siteMatches, typeBadges } from './station-sheet.js';
 
@@ -40,7 +44,7 @@ function initDraft(q) {
   const site = q.site ? store.get('site', q.site) : null;
   const typeOk = k => !!gridType(grid, k);
   let type = typeOk(q.type) ? q.type : pres[0] ? prestationType(pres[0], grid) : site ? inferAuditType(grid, { site, prestation: openPrestations(site.id)[0] || null }) : '';
-  if (!typeOk(type)) type = typeOk(pref('home.type', '')) ? pref('home.type', '') : (gridTypes(grid)[0]?.key || 'bio');
+  if (!typeOk(type)) type = typeOk(agentPref('home.type', '')) ? agentPref('home.type', '') : (gridTypes(grid)[0]?.key || 'bio');
   let providerId = pres[0]?.providerId || '';
   if (!providerId && site) providerId = openPrestations(site.id, { type })[0]?.providerId || '';
   const stations = [];
@@ -49,6 +53,8 @@ function initDraft(q) {
   return {
     key: JSON.stringify(q), type, providerId, date: localDate(), kind: q.kind === 'inopine' || !pres.length ? 'inopine' : 'planifie',
     stations, compartments: null, operatorIds: [...new Set(pres.flatMap(p => p.operatorIds || []))], search: '',
+    // Filtre des stations candidates par réseau : seulement ?reseau= (jamais une préférence : toutes les stations du type).
+    network: knownNetwork(q.reseau) ? q.reseau : '',
     controllerIds: [session.user?.id].filter(Boolean), userId: session.user?.id || null
   };
 }
@@ -71,10 +77,31 @@ function providerLists(grid) {
 }
 
 /* ---------- Choix des stations ---------- */
+/** Code de réseau reconnu (référentiel, code porté par une station, ou « aucun » : stations sans réseau). */
+function knownNetwork(code) {
+  if (!code) return false;
+  return code === NO_NETWORK || currentNetworkIndex().has(code) || store.all('site').some(s => (s.networks || []).includes(code));
+}
+/** Réseaux des stations du type de tournée (filtre des candidates) : [{code, n, count}], réseau choisi toujours présent. */
+function networkChoices(d) {
+  const sites = store.filter('site', s => siteTypes(s).includes(d.type));
+  const codes = sortNetworkCodes([...new Set(sites.flatMap(s => s.networks || [])), ...(d.network && d.network !== NO_NETWORK ? [d.network] : [])], currentNetworkIndex());
+  if (sites.some(s => !(s.networks || []).length) || d.network === NO_NETWORK) codes.push(NO_NETWORK);
+  return { total: sites.length, list: codes.map(code => ({ code, n: code === NO_NETWORK ? null : currentNetworkOf(code), count: sites.filter(s => inNetwork(s, code)).length })) };
+}
+function networkFilterHTML(d) {
+  const { total, list } = networkChoices(d);
+  if (list.length < 2 && !d.network) return '';
+  const chip = (code, label, count, n = null) => html`<button type="button" class="chip${d.network === code ? ' sel' : ''}" data-act="setNet" data-v="${code}" aria-pressed="${String(d.network === code)}" style="${n ? networkVars(n) : ''}">${code ? (n ? networkDot(n) : html`<span class="net-dot" aria-hidden="true"></span>`) : icon('grid')}${label}<span class="count">${count}</span></button>`;
+  return html`<div class="chips is-wrap an-nets" role="group" aria-label="Réseau de surveillance des stations proposées">${chip('', 'Tous réseaux', total)}${list.map(x => chip(x.code, x.n ? x.n.code : 'Sans réseau', x.count, x.n))}</div>`;
+}
+
 function candidateRow(site, p, d) {
+  const nets = siteNetworks(site);
   return html`<div class="an-cand${p ? ' is-planned' : ''}">
     <div class="an-cand-main"><span class="an-cand-name">${site.name}</span>
       <span class="an-cand-sub">${site.code}${site.bassin ? ' · ' + site.bassin : site.commune ? ' · ' + site.commune : ''}</span>
+      ${nets.length ? html`<span class="an-cand-nets net-badges">${networkBadges(nets)}</span>` : ''}
       ${p ? html`<span class="an-cand-pres${p.plannedDate ? '' : ' is-unplanned'}">${icon('calendar', { size: 14 })}${p.ref} · ${plannedLabel(p)}</span>` : ''}</div>
     <button type="button" class="btn ${p ? 'primary' : 'ghost'} sm" data-act="addSt" data-site="${site.id}" data-pres="${p?.id || ''}">${icon('plus', { size: 18 })}Ajouter</button>
   </div>`;
@@ -83,16 +110,22 @@ function candidatesHTML(d) {
   const grid = ctGrid();
   const taken = new Set(d.stations.map(s => s.siteId));
   const t = normalize(d.search);
-  const planned = d.providerId ? sortBy(store.filter('prestation', p => p.providerId === d.providerId && ['prevue', 'reportee'].includes(p.status) && prestationType(p, grid) === d.type && !taken.has(p.siteId)), p => p.plannedDate || '9999', 'ref') : [];
+  // Filtre par réseau : stations du réseau ; prestations de son programme (réseau de la campagne) ou sans programme connu.
+  const idx = currentNetworkIndex();
+  const inNet = s => !d.network || inNetwork(s, d.network);
+  const presNet = p => { const c = prestationNetwork(p, p.campaignId ? store.get('campaign', p.campaignId) : null, idx); return !d.network || !c || c === d.network; };
+  const planned = d.providerId ? sortBy(store.filter('prestation', p => p.providerId === d.providerId && ['prevue', 'reportee'].includes(p.status) && prestationType(p, grid) === d.type && !taken.has(p.siteId) && presNet(p)), p => p.plannedDate || '9999', 'ref') : [];
   const plannedBySite = new Map();
-  for (const p of planned) { const s = store.get('site', p.siteId); if (s && !plannedBySite.has(s.id) && openPrestations(s.id, { providerId: d.providerId, type: d.type }).some(x => x.id === p.id) && siteMatches(s, t)) plannedBySite.set(s.id, p); }
-  const others = sortBy(store.filter('site', s => !taken.has(s.id) && !plannedBySite.has(s.id) && siteTypes(s).includes(d.type) && siteMatches(s, t)), 'name');
+  for (const p of planned) { const s = store.get('site', p.siteId); if (s && inNet(s) && !plannedBySite.has(s.id) && openPrestations(s.id, { providerId: d.providerId, type: d.type }).some(x => x.id === p.id) && siteMatches(s, t)) plannedBySite.set(s.id, p); }
+  const others = sortBy(store.filter('site', s => !taken.has(s.id) && !plannedBySite.has(s.id) && siteTypes(s).includes(d.type) && inNet(s) && siteMatches(s, t)), 'name');
   const prov = store.get('provider', d.providerId);
+  const net = d.network ? (d.network === NO_NETWORK ? 'sans réseau' : d.network) : '';
   return html`
+    ${networkFilterHTML(d)}
     ${plannedBySite.size ? html`<h4 class="an-h4">${icon('calendar', { size: 18 })}Prestations programmées · ${providerHeaderName(prov)}<span class="badge info">${plannedBySite.size}</span></h4>
       <div class="an-cands">${[...plannedBySite].slice(0, MAX_CANDIDATES).map(([id, p]) => candidateRow(store.get('site', id), p, d))}</div>` : ''}
-    <h4 class="an-h4">${icon(TYPE_STYLES[d.type]?.icon || 'station', { size: 18 })}${plannedBySite.size ? 'Autres stations' : 'Stations'} · ${TYPE_STYLES[d.type]?.label || ''}<span class="badge outline">${others.length}</span></h4>
-    ${!others.length ? html`<p class="note">${t ? 'Aucune station ne correspond à la recherche.' : 'Toutes les stations de ce type sont déjà dans la tournée.'}</p>`
+    <h4 class="an-h4">${icon(TYPE_STYLES[d.type]?.icon || 'station', { size: 18 })}${plannedBySite.size ? 'Autres stations' : 'Stations'} · ${TYPE_STYLES[d.type]?.label || ''}${net ? ` · réseau ${net}` : ''}<span class="badge outline">${others.length}</span></h4>
+    ${!others.length ? html`<p class="note">${t ? 'Aucune station ne correspond à la recherche.' : d.network ? 'Aucune autre station de ce type dans ce réseau.' : 'Toutes les stations de ce type sont déjà dans la tournée.'}</p>`
       // Prestations programmées mises en avant : les autres stations restent repliées tant qu'aucune recherche n'est saisie.
       : plannedBySite.size && !t && !d.showAll ? html`<button type="button" class="btn ghost sm" data-act="showAll">${icon('list', { size: 18 })}Afficher les ${others.length} autres stations</button>`
       : html`<div class="an-cands">${others.slice(0, MAX_CANDIDATES).map(s => candidateRow(s, null, d))}</div>
@@ -107,7 +140,7 @@ function selectedHTML(d) {
     return html`<li class="an-sel-row">
       <span class="an-sel-no">${i + 1}</span>
       <span class="an-sel-main"><span class="an-sel-name">${site?.name || s.siteId}</span>
-        <span class="an-sel-sub">${site?.code || ''}${site ? html` ${typeBadges(site, { short: true })}` : ''}</span>
+        <span class="an-sel-sub">${site?.code || ''}${site ? html` ${typeBadges(site, { short: true })}${networkBadges(siteNetworks(site))}` : ''}</span>
         <span class="an-sel-pres">${p ? html`${icon('calendar', { size: 14 })}Prestation ${p.ref} · ${plannedLabel(p)}` : 'Hors programme (aucune prestation programmée rattachée)'}</span></span>
       <span class="an-sel-tools">
         <button type="button" class="icon-btn" data-act="moveSt" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} title="Monter" aria-label="Monter ${site?.name || ''}">▲</button>
@@ -258,7 +291,18 @@ export default {
       draft.type = el.dataset.v;
       draft.stations = kept.map(s => ({ siteId: s.siteId, prestationId: matchPrestation(s.siteId, draft.providerId, draft.type)?.id || null }));
       draft.compartments = null;
+      // Réseau sans station de ce type : filtre retiré.
+      if (draft.network && !store.all('site').some(s => siteTypes(s).includes(draft.type) && inNetwork(s, draft.network))) draft.network = '';
       this.refresh();
+    },
+    setNet(el) {
+      draft.network = el.dataset.v || '';
+      draft.showAll = draft.showAll || !!draft.network;
+      const box = document.getElementById('anCands');
+      if (!box) return;
+      box.innerHTML = String(candidatesHTML(draft));
+      // Focus rendu au filtre choisi (la liste est réaffichée sans quitter l'écran ; la recherche est conservée).
+      box.querySelector(`[data-act=setNet][data-v="${CSS.escape(draft.network)}"]`)?.focus();
     },
     setProvider(el) { selectProvider(el.dataset.v); this.refresh(); },
     setProviderSel(el) { if (el.value) { selectProvider(el.value); this.refresh(); } },

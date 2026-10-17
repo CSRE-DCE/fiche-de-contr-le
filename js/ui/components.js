@@ -6,6 +6,7 @@ import { hasSpeech } from './dom.js';
 import {
   PRESTATION_STATUS, AUDIT_STATUS, DEVIATION_STATUS, DOC_STATUS, PROVIDER_KINDS, RESPONSES, ALERT_LEVELS
 } from '../domain/model.js';
+import { networkColors } from '../domain/networks.js';
 
 export function badge(text, cls = '') { return html`<span class="badge ${cls}">${text}</span>`; }
 export function statusBadge(map, key) { const s = map[key]; return s ? badge(s.label || s, s.cls || '') : badge(key || '—', 'na'); }
@@ -29,6 +30,39 @@ export function kv(pairs) {
 export function empty(icon, text, action = '') { return html`<div class="empty"><span class="ic">${icon}</span><div>${text}</div>${action ? html`<div style="margin-top:12px">${action}</div>` : ''}</div>`; }
 export function pageTitle(title, sub = '', right = '', back = '') {
   return html`${back ? html`<a class="back" href="${back}">‹ Retour</a>` : ''}<div class="page-title"><div><h1>${title}</h1>${sub ? html`<div class="sub">${sub}</div>` : ''}</div>${right ? html`<div class="row">${right}</div>` : ''}</div>`;
+}
+/** Pastille de couleur d'un réseau de surveillance (décorative : le code ou le libellé l'accompagne toujours). */
+export function networkDot(network) { return html`<span class="net-dot" style="--net:${networkColors(network).main}" aria-hidden="true"></span>`; }
+/** Variables CSS des couleurs d'un réseau (--net, --net-light, --net-line, --net-dark : texte et fond sélectionné). */
+export function networkVars(network) {
+  const c = networkColors(network);
+  return `--net:${c.main};--net-light:${c.light};--net-line:${c.line};--net-dark:${c.dark}`;
+}
+/**
+ * Badge d'un réseau (pastille + code, libellé en info-bulle ; `long` : « CODE – Libellé ») ; `href` : lien (stations
+ * du réseau à l'accueil). Le code est du texte : l'information ne repose jamais sur la seule couleur.
+ */
+export function networkBadge(network, { href = '', long = false } = {}) {
+  const n = network || {};
+  const text = long && n.label && n.label !== n.code ? `${n.code} – ${n.label}` : n.code;
+  const title = n.label && n.label !== n.code ? `${n.code} – ${n.label}` : `Réseau ${n.code}`;
+  const inner = html`${networkDot(n)}${text}`;
+  return href ? html`<a class="net-badge" href="${href}" style="${networkVars(n)}" title="${title}">${inner}</a>`
+    : html`<span class="net-badge" style="${networkVars(n)}" title="${title}">${inner}</span>`;
+}
+/** Badges d'une liste de réseaux (objets du référentiel, js/app/networks.js : siteNetworks). */
+export const networkBadges = (list, opts = {}) => (list || []).map(n => networkBadge(n, { ...opts, href: typeof opts.href === 'function' ? opts.href(n) : opts.href || '' }));
+/**
+ * Cases à cocher des réseaux de surveillance (valeur enregistrée = code) : pastille, code et libellé. `networks` :
+ * réseaux proposés (js/app/networks.js : currentNetworkList, qui garde les réseaux déjà portés même inactifs ou
+ * hors référentiel) ; `selected` : codes cochés.
+ */
+export function networkChecks(name, networks, selected = []) {
+  const state = n => n.virtual ? 'hors référentiel' : n._deleted ? 'supprimé du référentiel' : n.active === false ? 'inactif' : '';
+  return html`<div class="checks net-checks">${networks.map(n => {
+    const on = selected.includes(n.code);
+    return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" name="${name}" data-multi value="${n.code}" ${on ? raw('checked') : ''}>${networkDot(n)}<span><b>${n.code}</b>${n.label && n.label !== n.code ? ` – ${n.label}` : ''}${state(n) ? html`<small class="net-state"> (${state(n)})</small>` : ''}</span></label>`;
+  })}</div>`;
 }
 export function field(label, control, { required = false, hint = '', id = '' } = {}) {
   return html`<div class="field"><label ${id ? raw(`for="${esc(id)}"`) : ''}>${label}${required ? html` <span class="req">*</span>` : ''}</label>${control}${hint ? html`<div class="hint">${hint}</div>` : ''}</div>`;

@@ -7,7 +7,8 @@
  * Habillage OEG (charte des fiches de contrôle) : polices Barlow incorporées, logo rond, pied de page à vagues
  * (js/app/sheets-pdf.js, chargé à la demande ; repli Helvetica sans décor s'il est indisponible). Échelle
  * C / P / NC / N/A ; tournée de plusieurs stations : stations, décomptes par station et par feuille, critères
- * « communs à la tournée » listés une seule fois.
+ * « communs à la tournée » listés une seule fois. Réseaux de surveillance des stations (« BIO – Biologie… ») et
+ * réseau du programme de la prestation (référentiel « Réseaux »).
  */
 import { PDFDocument } from '../formats/pdf.js';
 import { store } from '../core/store.js';
@@ -21,6 +22,7 @@ import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGri
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { refLabel } from './documents.js';
 import { orgSettings } from './settings.js';
+import { siteNetworks, siteNetworksText, prestationNetworkOf } from './networks.js';
 import { toJPEG } from '../ui/capture.js';
 
 const COLORS = { C: '#1b7a43', P: '#b45309', NC: '#b3261e', NA: '#55636a', NO: '#8a5a00', NV: '#5d3f99' };
@@ -201,14 +203,14 @@ export async function buildAuditReport(auditId) {
   // 5. Site et point
   doc.heading(multi ? '5. Stations de la tournée et point de prélèvement' : '5. Site et point de prélèvement');
   if (multi) doc.table({
-    columns: [{ label: 'N°', width: 24 }, { label: 'Station', width: 140 }, { label: 'Code', width: 90 }, { label: 'Commune / bassin', width: 127 }, { label: 'Prestation programmée', width: 130 }],
-    rows: stations.map(x => [String(x.index + 1), x.name, `${x.code} (${x.codeType === 'BSS' ? 'BSS' : 'SANDRE'})`, [x.site?.commune, x.site?.bassin].filter(Boolean).join(' / '), x.prestation ? `${x.prestation.ref || ''}${x.prestation.plannedDate ? ' — ' + fmtDate(x.prestation.plannedDate) : ''}` : '—']),
+    columns: [{ label: 'N°', width: 24 }, { label: 'Station', width: 120 }, { label: 'Code', width: 90 }, { label: 'Réseaux', width: 60 }, { label: 'Commune / bassin', width: 107 }, { label: 'Prestation programmée', width: 130 }],
+    rows: stations.map(x => [String(x.index + 1), x.name, `${x.code} (${x.codeType === 'BSS' ? 'BSS' : 'SANDRE'})`, x.site ? siteNetworks(x.site).map(n => n.code).join(' · ') : '', [x.site?.commune, x.site?.bassin].filter(Boolean).join(' / '), x.prestation ? `${x.prestation.ref || ''}${x.prestation.plannedDate ? ' — ' + fmtDate(x.prestation.plannedDate) : ''}` : '—']),
     fontSize: 8
   });
   const lastGps = (audit.gps || []).slice(-1)[0];
   const threshold = Number(point?.gpsThreshold) || Number(org.gpsThresholdM) || 100;
   doc.keyValues([
-    ['Site', site ? `${site.name} (${site.code})` : ''], ['Réseau(x)', (site?.networks || []).join(', ')], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')],
+    ['Site', site ? `${site.name} (${site.code})` : ''], ['Réseau(x)', site ? siteNetworksText(site) : ''], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')],
     ['Masse d’eau', site?.masseEau], ['Point', point ? `${point.code} — ${point.name}` : ''],
     ['Coordonnées attendues (WGS84)', point?.lat ? `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}` : 'non renseignées'],
     ['Dernier relevé GPS', lastGps ? `${lastGps.lat.toFixed(6)}, ${lastGps.lon.toFixed(6)} ±${Math.round(lastGps.accuracy || 0)} m le ${fmtDateTime(lastGps.at)}${lastGps.source === 'manuel' ? ' (saisie manuelle)' : ''}` : 'aucun'],
@@ -218,7 +220,8 @@ export async function buildAuditReport(auditId) {
   // 6. Prestation
   doc.heading('6. Prestation');
   if (prestation) {
-    doc.keyValues([['Référence', prestation.ref], ['Statut', PRESTATION_STATUS[prestation.status]?.label || prestation.status], ['Équipe', prestation.team], ['Opérateurs programmés', (prestation.operatorIds || []).map(id => opName(store.get('operator', id))).join(', ')]]);
+    const pnet = prestationNetworkOf(prestation);
+    doc.keyValues([['Référence', prestation.ref], ['Réseau (programme)', pnet ? (pnet.label && pnet.label !== pnet.code ? `${pnet.code} – ${pnet.label}` : pnet.code) : ''], ['Statut', PRESTATION_STATUS[prestation.status]?.label || prestation.status], ['Équipe', prestation.team], ['Opérateurs programmés', (prestation.operatorIds || []).map(id => opName(store.get('operator', id))).join(', ')]]);
     if ((prestation.statusHistory || []).length) doc.table({ columns: [{ label: 'Date', width: 90 }, { label: 'Par', width: 100 }, { label: 'Évènement', width: 321 }], rows: prestation.statusHistory.map(h => [fmtDateTime(h.at), h.by || '', h.label || (h.to ? `${PRESTATION_STATUS[h.from]?.label || h.from || ''} → ${PRESTATION_STATUS[h.to]?.label || h.to}` : '') + (h.reason ? ` — ${h.reason}` : '')]) });
   } else doc.paragraph('Audit inopiné sans prestation programmée associée.');
 

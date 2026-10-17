@@ -26,7 +26,7 @@ import {
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
-import { CT_GRID_ID } from '../domain/default-grids.js';
+import { CT_GRID_ID, upToDateGrid } from '../domain/default-grids.js';
 import { nextNumber } from './numbering.js';
 import { applicableDocuments, snapshotDocument } from './documents.js';
 import { orgSettings } from './settings.js';
@@ -112,7 +112,9 @@ export function auditContext(audit) {
   const provider = store.get('provider', audit.providerId);
   const ctx = {
     matrixCode: matrix?.code || '', samplingTypeCode: stype?.code || '', providerKind: provider?.kind || '', providerId: provider?.id || '',
-    auditKind: audit.kind || '', network: (site?.networks || []).join(','), controlLevel: prestation?.controlLevel || '',
+    // network : réseaux joints (« BIO,Chimie », compatibilité, opérateur « est égal à ») ; networks : tableau (opérateur
+    // « fait partie de » : vrai pour une station sur plusieurs réseaux dès que l'un d'eux est cité).
+    auditKind: audit.kind || '', network: (site?.networks || []).join(','), networks: [...(site?.networks || [])], controlLevel: prestation?.controlLevel || '',
     compartments: normalizeCompartments(audit.gridSnapshot, audit.compartments)
   };
   const type = auditTypeOf(audit);
@@ -314,7 +316,10 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     return { siteId: s?.siteId || p?.siteId || null, prestationId: p?.id || null, pointId: s?.pointId || p?.pointIds?.[0] || null, prestation: p };
   });
   const prestation = req[0].prestation;
-  const grid = store.get('grid', gridId || prestation?.gridId || (auditType ? CT_GRID_ID : null));
+  // Grille par défaut lue d'après la version livrée avec l'application (turbidité en NTU…) même si la grille enregistrée
+  // n'est pas encore mise à niveau sur la tablette (aucune session administrateur depuis la mise à jour) : l'instantané
+  // d'une NOUVELLE tournée est toujours à jour ; celui des tournées existantes n'est jamais modifié.
+  const grid = upToDateGrid(store.get('grid', gridId || prestation?.gridId || (auditType ? CT_GRID_ID : null)));
   if (!grid) throw new Error('Grille d’audit introuvable.');
   if (auditType && gridTypes(grid).length && !gridType(grid, auditType)) throw new Error(`Type de tournée inconnu : ${auditType}`);
   const site0 = req[0].siteId ? store.get('site', req[0].siteId) : null;

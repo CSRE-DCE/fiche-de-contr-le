@@ -3,6 +3,9 @@
  * RGFG95), cartes de section à pastille numérotée, encadrés (observations, conclusion…), cases à
  * cocher carrées, silhouette de la Guyane avec le point de la station, pied de page (vagues, forêt).
  *
+ * Bandeau « Station » de la feuille 1 : réseaux de surveillance de la station (option networks : objets du
+ * référentiel « Réseaux », couleurs de js/domain/networks.js) sur une ligne à part.
+ *
  * Fonctions pures produisant du HTML (gabarits html`` de js/core/util.js), mises en forme par
  * css/sheet.css. Couleurs : thème de la feuille (js/ui/themes.js), posé par sheetFrame() ou par le
  * paramètre `theme` d'un composant (classe .th-<thème> + variables CSS --th-*).
@@ -12,6 +15,7 @@ import { THEMES, themeVars } from './themes.js';
 import { icon } from './icons.js';
 import { GUYANE, guyaneXY } from '../lib/guyane.js';
 import { utmToLatLon } from '../lib/geo.js';
+import { networkColors } from '../domain/networks.js';
 
 /** Adresse d'un fichier de l'application (résolue depuis ce module : fonctionne depuis index.html,
  * docs/charte.html ou un sous-chemin GitHub Pages). */
@@ -135,13 +139,16 @@ export function oegHeader({ grid = null, sheet = null, site = null, sheetCount =
  * Options supplémentaires : sheetNo / sheetCount (pastille « Feuille n / N », numéro affiché), tagline,
  * stationIndex / stationTotal (« Station 2 / 3 » d'une tournée, si plus d'une station). */
 export function stationBanner({ site, kicker = '', theme = 'ocean', photo = null, sheetNo = null, sheetCount = 9, tagline = 'Des rivières vivantes pour demain',
-  stationIndex = null, stationTotal = null } = {}) {
+  stationIndex = null, stationTotal = null, networks = [] } = {}) {
   const name = site?.name || 'Station';
   const tour = present(stationIndex) && Number(stationTotal) > 1;
+  // Réseaux de surveillance (feuille 1 seulement) : ligne à part sous « Station », qui passe à la ligne (téléphone).
+  const nets = (networks || []).filter(n => n?.code);
   return html`<div ${themed(theme, 'station-banner', [photo ? 'has-photo' : '', sheetNo ? 'has-sheet' : ''].filter(Boolean).join(' '))}>
     ${photo ? html`<div class="sb-photo" style="background-image:url(&quot;${cssURL(photo)}&quot;)" role="img" aria-label="Photographie de la station ${name}"></div>` : ''}
     <div class="sb-text">
       <span class="sb-k">Station${tour ? html`<span class="sb-tour">${icon('route', { size: 16 })}${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : ''}</span>
+      ${nets.length ? html`<span class="sb-nets" role="list" aria-label="Réseaux de surveillance">${nets.map(n => html`<span class="sb-net" role="listitem" style="--net-dark:${networkColors(n).dark}" title="${n.label && n.label !== n.code ? `${n.code} – ${n.label}` : n.code}">${n.code}</span>`)}</span>` : ''}
       <span class="sb-name">${name}</span>
       ${swoosh('sb-swoosh')}
       ${kicker ? html`<span class="sb-kicker">${kicker}</span>` : ''}

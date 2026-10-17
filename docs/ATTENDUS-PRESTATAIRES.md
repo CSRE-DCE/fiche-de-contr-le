@@ -1070,6 +1070,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 - **NC** (non conforme) : Une seule mesure, cuve sale ou rayée, ou échantillon non homogénéisé.
 - **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
 - **Références :** NF EN ISO 7027-1
+- **À préciser (OEG) :** Unité NTU demandée par l’OEG et par les CCTP, alors que la norme NF EN ISO 7027-1 citée en référence exprime ses résultats dans une autre unité : méthode de mesure et type de turbidimètre à préciser au CCTP.
 
 #### F4.10 – Salinité (si applicable)
 

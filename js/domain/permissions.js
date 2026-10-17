@@ -94,7 +94,7 @@ export function suggestUsername(firstName, lastName) {
   return (f + l) || l || f;
 }
 
-export const REFERENTIAL_TYPES = ['provider', 'operator', 'site', 'point', 'equipment', 'samplingType', 'matrix', 'method', 'unit', 'criticality', 'deviationType', 'container', 'campaign', 'document', 'grid'];
+export const REFERENTIAL_TYPES = ['provider', 'operator', 'site', 'point', 'equipment', 'samplingType', 'matrix', 'method', 'unit', 'criticality', 'deviationType', 'container', 'campaign', 'network', 'document', 'grid'];
 
 /** Droit requis pour enregistrer un objet d'un type donné (null = refusé, '*' = tout profil). */
 export function writePermission(type) {

@@ -8,8 +8,10 @@
 <link rel="icon" href="../icons/icon-192.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="../css/sheet.css">
+<link rel="stylesheet" href="../css/station.css">
 <style>
-/* Mise en page propre à ce guide de style (préfixe cg-) ; tout le reste vient de styles.css et css/sheet.css.
+/* Mise en page propre à ce guide de style (préfixe cg-) ; tout le reste vient de styles.css, css/sheet.css et
+   css/station.css (accueil rangé par réseau).
    Ce guide est « vivant » : il assemble les vrais composants (js/ui/sheet-chrome.js, js/ui/icons.js) et,
    quand elle est disponible, la vraie grille « en feuilles » (js/domain/default-grids.js). */
 body{padding-bottom:40px}
@@ -102,6 +104,7 @@ import { THEMES, OEG } from '../js/ui/themes.js';
 import { icon, ICON_NAMES } from '../js/ui/icons.js';
 import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines,
   STATUS_SCALE, statusHeadCells, statusLegend, sharedBadge, tourStations } from '../js/ui/sheet-chrome.js';
+import { NETWORK_DEFAULTS, networkColors } from '../js/domain/networks.js';
 
 /* ---------- Données d'exemple ---------- */
 const SITE = { id: 'site-09271503', name: 'Athanase', code: '09271503', codeType: 'SANDRE', bassin: 'Approuague', riverName: 'Approuague', commune: 'Régina',
@@ -184,7 +187,7 @@ const PREFILL = { 'site.name': s => String(s.name).toUpperCase(), 'site.code': s
   'site.commune': s => s.commune || '', 'site.her': s => s.her ?? '', 'site.pressions': s => s.pressions || '', 'site.strahler': () => '', 'audit.date': () => '2026-10-09',
   'audit.time': () => '08:30', 'auditor.name': () => 'Marie Contrôleuse', 'provider.name': () => 'HYDRECO', 'prestation.operators': () => 'J. Martin, L. Pierre',
   'site.xy': s => ({ x: s.x, y: s.y }), 'audit.kind': () => 'Inopiné' };
-const SAMPLE_UNIT = { '°C': '6,5', 'mg/L': '7,8', '%': '92', 'µS/cm': '42', 'unité pH': '6,4', 'm': '2', 'FNU': '3,1', 'min': '15', 'mV': '180' };
+const SAMPLE_UNIT = { '°C': '6,5', 'mg/L': '7,8', '%': '92', 'µS/cm': '42', 'unité pH': '6,4', 'm': '2', 'NTU': '3,1', 'min': '15', 'mV': '180' };
 const PATTERN = ['C', 'C', 'P', '', 'C', 'NC', 'NA', 'C', '', 'C', 'P', 'C', ''];
 const OBS = { P: 'À améliorer : étiquetage manuscrit peu lisible', NC: 'Glacière sans pain de glace : 11,5 °C — action demandée' };
 const isConf = item => item.kind === 'conformity' || (!item.kind && item.responses);
@@ -375,6 +378,38 @@ function swatches(name) {
   return html`<div class="cg-swatches">${Object.entries(t).filter(([k]) => k !== 'label').map(([k, v]) => html`<div class="cg-sw"><b style="background:${v}"></b><span>${k} ${v}</span></div>`)}</div>`;
 }
 
+/* ---------- Réseaux de surveillance (accueil rangé par réseau, badges, bandeau de la feuille 1) ---------- */
+const NET = Object.fromEntries(NETWORK_DEFAULTS.map(n => [n.code, n]));
+const NET_COUNTS = { BIO: 38, Chimie: 15, RCO: 25, EL: 29, ESO: 17 };
+const netVars = n => { const c = networkColors(n); return `--net:${c.main};--net-light:${c.light};--net-line:${c.line};--net-dark:${c.dark}`; };
+const netDot = n => html`<span class="net-dot" style="--net:${networkColors(n).main}" aria-hidden="true"></span>`;
+const netBadge = n => html`<span class="net-badge" style="${netVars(n)}" title="${n.code} – ${n.label}">${netDot(n)}${n.code}</span>`;
+function networksDemo() {
+  const card = html`<a class="hm-card th-green is-a_controler" href="#reseaux" data-site="site-09160201">
+    <span class="hm-top"><span class="hm-badges"><span class="type-badge t-bio">${icon('fish', { size: 15 })}Biologie</span><span class="type-badge t-ce">${icon('wave', { size: 15 })}Cours d’eau</span></span><span class="hm-code">09160201</span></span>
+    <span class="hm-main"><span class="hm-txt"><span class="hm-k">Station</span><span class="hm-name">Acarouany</span><span class="hm-place">Mana</span></span><span class="hm-inset">${guyaneInset({ x: 188010, y: 622135, lat: 5.62167, lon: -53.81612 }, { size: 50 })}</span></span>
+    <span class="hm-netline hm-also"><span class="hm-also-k">Aussi&nbsp;:</span>${netBadge(NET.Chimie)}</span>
+    <span class="hm-foot"><span class="badge outline">À contrôler</span></span></a>`;
+  return html`<section class="cg-section-app" id="reseaux">
+    <h2 class="cg-h2">Réseaux de surveillance</h2>
+    <p class="cg-lead">Référentiel « Réseaux » (<code>js/domain/networks.js</code>) : code, libellé, couleur. Couleurs dérivées par <code>networkColors()</code> : <code>main</code> (pastille), <code>light</code> (fond), <code>line</code> (filet), <code>dark</code> (texte, chip sélectionné et pastilles du bandeau, contraste ≥ 4,5:1 avec le blanc et le fond clair). L’information n’est jamais portée par la seule couleur : le code est toujours écrit, « Aussi : … » est du texte. Une station sur deux réseaux figure dans chaque section, les effectifs et le total « n stations affichées » comptent les stations distinctes.</p>
+    <div class="cg-swatches">${NETWORK_DEFAULTS.map(n => { const c = networkColors(n); return html`<div class="cg-sw"><b style="background:linear-gradient(90deg,${c.main} 0 40%,${c.dark} 40% 60%,${c.light} 60% 80%,${c.line} 80%)"></b><span>${n.code} ${c.main} / ${c.dark}</span></div>`; })}</div>
+    <div class="cg-demo" style="margin-top:12px">
+      <div class="card"><h2>Filtre « Réseau » et rangement (accueil)</h2>
+        <div class="chips is-wrap hm-nets" role="group" aria-label="Réseau de surveillance"><span class="hm-nets-k" aria-hidden="true">Réseau</span>
+          <button class="chip" aria-pressed="false">${icon('grid')}Tous<span class="count">108</span></button>
+          ${NETWORK_DEFAULTS.map((n, i) => html`<button class="chip hm-net${i === 1 ? ' sel' : ''}" aria-pressed="${String(i === 1)}" style="${netVars(n)}">${netDot(n)}${n.code}<span class="count">${NET_COUNTS[n.code]}</span></button>`)}</div>
+        <div class="hm-countbar"><p class="hm-count">15 stations affichées</p><div class="chips is-wrap hm-sort" role="group" aria-label="Ranger les stations"><span class="hm-sort-k" aria-hidden="true">Ranger&nbsp;:</span><button class="chip sel" aria-pressed="true">Par réseau</button><button class="chip" aria-pressed="false">Par statut</button></div></div>
+        <h3>Badges (<code>networkBadge</code>)</h3><div class="net-badges">${NETWORK_DEFAULTS.map(netBadge)}</div></div>
+      <div class="card"><h2>Section d’un réseau (accueil, rangement par réseau)</h2>
+        <section class="hm-sec" style="${netVars(NET.BIO)}" aria-labelledby="cgSecBio"><h2 class="hm-sec-h" id="cgSecBio">${netDot(NET.BIO)}<span class="hm-sec-code">BIO</span><span class="hm-sec-label">${NET.BIO.label}</span><span class="hm-sec-n">38 stations</span></h2>
+          <p class="hm-sec-d">${NET.BIO.description}</p><div class="hm-grid">${card}</div></section></div>
+    </div>
+    <h3 class="cg-h3">Bandeau de la feuille 1 : réseaux sur une ligne à part (écran et PDF ; jamais sur F3 / F9)</h3>
+    ${sheetFrame({ theme: 'green', cls: 'layout-station is-portrait', body: stationBanner({ site: { ...SITE, id: 'site-09160201', name: 'Acarouany', code: '09160201', x: 188010, y: 622135, lat: 5.62167, lon: -53.81612 }, kicker: HEADER.program, theme: 'green', networks: [NET.BIO, NET.Chimie] }) })}
+  </section>`;
+}
+
 /* ---------- Page ---------- */
 const THEME_ORDER = Object.keys(THEMES);
 const TOUR = [
@@ -384,7 +419,7 @@ const TOUR = [
 ];
 const navLink = (href, label, color = '', ic = '') => html`<a href="${href}">${color ? html`<i style="background:${color}"></i>` : ''}${ic ? icon(ic, { size: 18 }) : ''}${label}</a>`;
 document.getElementById('cgNav').innerHTML = String(html`
-  ${navLink('#palette', 'Palette', '', 'drop')}${navLink('#pictos', 'Pictogrammes', '', 'star')}${navLink('#app', 'Application', '', 'home')}${navLink('#fiches', 'Composants des fiches', '', 'clipboard')}${navLink('#tournee', 'Tournée', '', 'route')}
+  ${navLink('#palette', 'Palette', '', 'drop')}${navLink('#pictos', 'Pictogrammes', '', 'star')}${navLink('#app', 'Application', '', 'home')}${navLink('#reseaux', 'Réseaux', '', 'grid')}${navLink('#fiches', 'Composants des fiches', '', 'clipboard')}${navLink('#tournee', 'Tournée', '', 'route')}
   ${SHEETS.map(s => navLink(`#sheet-${s.no}`, `F${s.no} · ${s.theme}`, THEMES[s.theme]?.main))}${navLink('#themes', 'Tous les thèmes', '', 'grid')}`);
 
 const root = document.getElementById('cg');
@@ -437,6 +472,8 @@ root.innerHTML = String(html`
       </div>
     </div>
   </section>
+
+  ${networksDemo()}
 
   <section class="cg-fiches" id="fiches">
     <h2 class="cg-h2">Composants des fiches</h2>

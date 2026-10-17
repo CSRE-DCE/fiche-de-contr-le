@@ -709,6 +709,65 @@ export function validateGrid(grid) {
   return errors;
 }
 
+/* ---------- Mise à niveau des grilles par défaut (diffusion d'une nouvelle version avec l'application) ---------- */
+/** Compare deux numéros de version (« 1.10 » > « 1.9 » > « 1.0 ») : négatif, 0 ou positif. */
+export function compareVersions(a, b) {
+  const pa = String(a ?? '').split(/[.\-]/), pb = String(b ?? '').split(/[.\-]/);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? '0', y = pb[i] ?? '0';
+    const nx = Number(x), ny = Number(y);
+    const d = Number.isFinite(nx) && Number.isFinite(ny) && x !== '' && y !== '' ? nx - ny : String(x).localeCompare(String(y), 'fr', { numeric: true });
+    if (d) return d;
+  }
+  return 0;
+}
+/** Turbidité exprimée en NTU (demande de l'OEG ; unité des CCTP 2026, paramètre SANDRE 1295) : anciens symboles remplacés. */
+export const UNIT_REPLACEMENTS = Object.freeze({ FNU: 'NTU', NFU: 'NTU' });
+/**
+ * Copie d'une grille où chaque propriété `unit` (critère, `input`, champs `fields`, modules…) égale à un ancien symbole
+ * est remplacée : { grid, count }. Ne touche ni `unitKey` (unité choisie à la saisie), ni les libellés, ni les réponses ;
+ * aucune conversion numérique. Pure, déterministe et idempotente ; sans remplacement, la grille reçue est rendue telle
+ * quelle (même objet). Jamais appliquée à l'instantané d'une tournée existante (gridSnapshot, contenu scellé).
+ */
+export function replaceGridUnits(grid, map = UNIT_REPLACEMENTS) {
+  if (!grid || typeof grid !== 'object') return { grid, count: 0 };
+  let count = 0;
+  const walk = v => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (!isPlainObject(v)) return v;
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (k === 'unit' && typeof x === 'string' && Object.prototype.hasOwnProperty.call(map, x)) { out[k] = map[x]; count++; } else out[k] = walk(x);
+    }
+    return out;
+  };
+  const next = walk(grid);
+  return { grid: count ? next : grid, count };
+}
+/** Métadonnées d'enregistrement d'une grille (jamais reprises de la grille du code). */
+const RECORD_META = ['_rev', '_lv', '_vv', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy', 'updatedByName', '_conflict'];
+/**
+ * Mise à niveau d'une grille PAR DÉFAUT enregistrée d'après la grille de même identifiant livrée avec l'application
+ * (fonction pure, déterministe, idempotente) :
+ *  - version du code plus élevée : contenu remplacé par celui du code (métadonnées d'enregistrement conservées) ; une
+ *    grille ARCHIVÉE par un administrateur (écran Grilles : une grille publiée n'est jamais modifiable, elle peut
+ *    seulement être archivée ou servir de base à une nouvelle version, d'identifiant différent) reste archivée ;
+ *  - même version (ou version enregistrée plus récente, reçue d'une tablette mise à jour) : seules les unités de
+ *    turbidité sont remplacées (replaceGridUnits) ; jamais de retour à une version antérieure.
+ * Retourne { grid, changed, replaced?, from?, to?, units? } ; `grid` est la grille reçue si rien ne change.
+ */
+export function upgradeStoredGrid(stored, code) {
+  if (!stored || !code || stored.id !== code.id || stored._deleted) return { grid: stored, changed: false };
+  if (compareVersions(code.version, stored.version) > 0) {
+    const meta = Object.fromEntries(RECORD_META.filter(k => stored[k] !== undefined).map(k => [k, stored[k]]));
+    const next = { ...meta, ...structuredClone(code) };
+    if (stored.status === 'archivee') { next.status = 'archivee'; if (stored.archivedAt) next.archivedAt = stored.archivedAt; }
+    return { grid: next, changed: true, replaced: true, from: String(stored.version ?? ''), to: String(code.version ?? '') };
+  }
+  const r = replaceGridUnits(stored);
+  return { grid: r.grid, changed: r.count > 0, units: r.count };
+}
+
 /**
  * Grilles applicables à une prestation, de la plus spécifique à la plus générale.
  * scope de grille : {samplingTypeIds, matrixIds, providerIds, protocolDocKeys, cctpDocKeys, environments}

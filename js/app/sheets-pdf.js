@@ -15,8 +15,9 @@
  * Feuille X / N », bandeau d'information à pastilles (Code SANDRE ou Code BSS), cartes numérotées, tableaux aux
  * couleurs du thème de la feuille (js/ui/themes.js) avec cases C / P / NC / N/A, encadrés de la feuille
  * (sheetBlocks : observations, notes, photos, conclusion à cases, contrôleur, date, signature), module
- * « appareils et étalonnage » de F4, F8 en deux colonnes, F10 (ardoise), F1 complète (carte : js/app/static-map.js,
- * photos, accès, difficultés, compartiments, repères terrain), pied de page à vagues et forêt (décors de
+ * « appareils et étalonnage » de F4, F8 en deux colonnes, F10 (ardoise), F1 complète (réseaux de surveillance de la
+ * station dans le bandeau ; carte : js/app/static-map.js, photos, accès, difficultés, compartiments, repères
+ * terrain), pied de page à vagues et forêt (décors de
  * js/ui/sheet-chrome.js). Polices Barlow / Barlow Condensed / Montserrat incorporées (fonts/pdf), repli Helvetica.
  * Pictogrammes (js/ui/icons.js), logo et photos rastérisés par canvas.
  *
@@ -35,6 +36,7 @@ import { GUYANE, guyaneXY } from '../lib/guyane.js';
 import { latLonToUtm } from '../lib/geo.js';
 import { SAMPLING_KINDS, kindSVG } from '../ui/map.js';
 import { GRID_CT_2026, INSTRUMENTS, INSTRUMENT_FIELDS, CALIBRATION_FIELDS } from '../domain/grid-ct-2026.js';
+import { upToDateGrid } from '../domain/default-grids.js';
 import {
   expandGrid, sheetsOf, groupSheets, headerOf, sectionHeaders, sheetStoreKey, prefillResponses, auditCompartments, normalizeCompartments,
   typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName, allItems
@@ -46,6 +48,8 @@ import { ROLES } from '../domain/permissions.js';
 import { auditState, auditContentHash, auditMedia, stationLabel, deviationPlace, tourControllers } from './audits.js';
 import { staticMap, scaleBar } from './static-map.js';
 import { stationMapPoints, SLOTS } from '../views/station-sheet.js';
+import { networkColors } from '../domain/networks.js';
+import { siteNetworks } from './networks.js';
 
 /* ---------- Constantes de mise en page ---------- */
 const asset = path => new URL('../../' + path, import.meta.url).href;
@@ -281,7 +285,9 @@ export function drawOegFooter(doc, { theme: th = 'ocean', center = '', right = '
 }
 
 /* ---------- Modèle de document ---------- */
-const ctGridFromStore = () => store.get('grid', GRID_CT_2026.id) || GRID_CT_2026;
+/** Grille CT-2026 de la tablette, lue d'après la version livrée avec l'application (turbidité en NTU) si elle n'est pas
+ * encore mise à niveau : fiches vierges et fiche station. */
+const ctGridFromStore = () => upToDateGrid(store.get('grid', GRID_CT_2026.id)) || GRID_CT_2026;
 /** Prestataire de l'en-tête des fiches vierges : celui de la prochaine prestation programmée du type. */
 function plannedProvider(sites, type, grid) {
   for (const site of sites) {
@@ -560,10 +566,11 @@ class SheetsRenderer {
   /**
    * Grand bandeau « Station / NOM » (maquettes F1 portrait, F3 et F9 paysage) dans la boîte (x, y, w, h) : rang
    * dans la tournée, nom, vague, surtitre, silhouette de la Guyane avec le point de la station, photo fondue à
-   * droite (et slogan « Des rivières vivantes pour demain » si tag), pastille « Feuille X / N » (sheetNo).
-   * Proportions de la fiche station (hauteur 96) réduites à la hauteur demandée.
+   * droite (et slogan « Des rivières vivantes pour demain » si tag), pastille « Feuille X / N » (sheetNo) ;
+   * networks (feuille 1 seulement) : pastilles des réseaux de surveillance de la station sur la ligne « Station »,
+   * arrêtées avant la silhouette de la Guyane. Proportions de la fiche station (hauteur 96) réduites à la hauteur.
    */
-  async stationBanner(sh, site, x, y, w, h, t, { photo = null, kicker = '', sheetNo = '', tag = true, tagWithoutPhoto = true } = {}) {
+  async stationBanner(sh, site, x, y, w, h, t, { photo = null, kicker = '', sheetNo = '', tag = true, tagWithoutPhoto = true, networks = [] } = {}) {
     const d = this.doc, n = this.stationList.length, k = h / 96;
     d.roundRect(x, y, w, h, 10, { fill: t.light });
     const has = !!(photo && (photo.mediaId || photo.src));
@@ -572,13 +579,23 @@ class SheetsRenderer {
       const img = await this.A.photo(photo, { aspect: pw / h, maxW: 900, fade: 0.55, key: 'banner:' + (photo.mediaId || photo.src) });
       if (img) { d.save(); d.clipRect(x, y, w, h, 10); d.drawImage(img, x + w - pw, y, pw, h); d.restore(); }
     }
-    const ks = 14 * k;
+    const ks = 14 * k, ps = 7.4 * Math.max(k, 0.85);
     d.text('Station', x + 16, y + 9 * k, { font: F.text, size: ks, color: NAVY });
+    let nx = x + 24 + d.width('Station', F.text, ks);
     if (sh.station && n > 1) {
       const tour = `Station ${sh.station.index + 1} / ${n}`;
-      const ps = 7.4 * Math.max(k, 0.85), tw = d.width(tour, F.semi, ps) + 12, px = x + 24 + d.width('Station', F.text, ks);
-      d.roundRect(px, y + 10 * k, tw, ps + 4.6, (ps + 4.6) / 2, { fill: t.main });
-      d.text(tour, px, y + 10 * k + 2.2, { font: F.semi, size: ps, color: '#ffffff', align: 'center', width: tw });
+      const tw = d.width(tour, F.semi, ps) + 12;
+      d.roundRect(nx, y + 10 * k, tw, ps + 4.6, (ps + 4.6) / 2, { fill: t.main });
+      d.text(tour, nx, y + 10 * k + 2.2, { font: F.semi, size: ps, color: '#ffffff', align: 'center', width: tw });
+      nx += tw + 6;
+    }
+    // Réseaux de surveillance (codes en blanc sur la couleur foncée du réseau) ; jamais sur la silhouette (x + 53,5 %).
+    for (const net of networks) {
+      const tw = d.width(net.code, F.semi, ps) + 12;
+      if (nx + tw > x + w * 0.52) break;
+      d.roundRect(nx, y + 10 * k, tw, ps + 4.6, (ps + 4.6) / 2, { fill: networkColors(net).dark });
+      d.text(net.code, nx, y + 10 * k + 2.2, { font: F.semi, size: ps, color: '#ffffff', align: 'center', width: tw });
+      nx += tw + 4;
     }
     const nm = upper(site.name || '');
     const nmax = 40 * k, ns = d.fitSize(nm, F.black, nmax, w * 0.5, 14 * k);
@@ -1309,7 +1326,7 @@ class SheetsRenderer {
     let y = await this.fullHeader({ landscape: false, theme: sh.theme });
     // Bandeau « Station / NOM » avec photo fondue à droite et silhouette de la Guyane.
     const bh = 96;
-    await this.stationBanner(sh, site, M, y, cw, bh, t, { photo: site.photos?.RD, kicker: sh.kicker || this.m.header?.program || '', tag: !eso });
+    await this.stationBanner(sh, site, M, y, cw, bh, t, { photo: site.photos?.RD, kicker: sh.kicker || this.m.header?.program || '', tag: !eso, networks: siteNetworks(site) });
     y += bh + 7;
     await this.infoStrip(site, M, y, cw, 44, t);
     y += 52;

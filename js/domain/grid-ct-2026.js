@@ -211,7 +211,9 @@ const BILAN = (title, extra = {}) => ({ key: 'conclusion', title, icon: 'check',
 export const GRID_CT_2026 = {
   id: 'grid-ct-2026-v1',
   code: 'CT-2026',
-  version: '1.0',
+  // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 (même identifiant : grilles enregistrées mises à niveau par
+  // upgradeStoredGrid ; tournées existantes inchangées). Toute évolution diffusée aux tablettes incrémente ce numéro.
+  version: '1.1',
   status: 'publiee',
   publishedAt: '2026-10-10T00:00:00.000Z',
   name: 'Contrôle terrain des prestations de prélèvement – 2026',
@@ -546,7 +548,7 @@ export const GRID_CT_2026 = {
         C(4, 6, 'Saturation en O₂ (in situ)', 'SatO2', { input: num({ unit: '%', min: 0, step: 0.1 }) }),
         C(4, 7, 'Température eau (in situ)', 'T°', { input: num({ unit: '°C', step: 0.1 }) }),
         C(4, 8, 'Conductivité (in situ)', 'Cond', { input: num({ unit: 'µS/cm', min: 0, step: 0.1 }) }),
-        C(4, 9, 'Turbidité (in situ, triplicat)', 'Turb', { input: { type: 'fields', fields: [1, 2, 3].map(n => ({ key: 't' + n, label: 'Mesure ' + n, type: 'number', unit: 'FNU', min: 0, step: 0.01 })) } }),
+        C(4, 9, 'Turbidité (in situ, triplicat)', 'Turb', { input: { type: 'fields', fields: [1, 2, 3].map(n => ({ key: 't' + n, label: 'Mesure ' + n, type: 'number', unit: 'NTU', min: 0, step: 0.01 })) } }),
         C(4, 10, 'Salinité (si applicable)', 'Sal', { input: num({ min: 0, step: 0.01 }) }),
         C(4, 11, 'Position de mesure', 'Pos', { help: inc('site choisi pour les mesures (fiche cours d’eau).'), condition: NOT_FOR('eso') }),
         C(4, 12, 'Flaconnage conforme', 'Flac', { help: inc('flaconnage conforme au programme analytique du laboratoire (nombre, type de flacons) (fiche eaux souterraines).') }),

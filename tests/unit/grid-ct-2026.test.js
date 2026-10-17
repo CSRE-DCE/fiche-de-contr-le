@@ -2,22 +2,25 @@
  * des tournées (modules purs) : structure et feuilles par type de tournée, conditions par type et sur un champ
  * d'objet, échelle C / P / NC / N/A, grille effective (expansion par station, critères partagés comptés une fois),
  * pré-remplissage et alertes par station, synthèse par feuille / station / tournée, logique des stations,
- * traçabilité des fiches d'évaluation (table d'en-tête de grid-ct-2026.js), référentiel et programmes 2026. */
+ * traçabilité des fiches d'évaluation (table d'en-tête de grid-ct-2026.js), référentiel et programmes 2026, turbidité en
+ * NTU (version 1.1) et mise à niveau des grilles par défaut enregistrées (replaceGridUnits, upgradeStoredGrid). */
 import { test, assert, eq, deepEq } from './harness.js';
 import { GRID_CT_2026, INSTRUMENTS_ESO } from '../../js/domain/grid-ct-2026.js';
-import { DEFAULT_GRIDS, CT_GRID_ID } from '../../js/domain/default-grids.js';
+import { DEFAULT_GRIDS, CT_GRID_ID, GRID_GENERAL, DEFAULT_GRID_IDS, upToDateGrid } from '../../js/domain/default-grids.js';
 import { RESPONSES, formatValue, responseText, isEmptyValue, itemInput, fieldShown, defaultCriticality, BILAN_OPTIONS } from '../../js/domain/model.js';
 import {
   validateGrid, allItems, itemIndex, isAnswered, validateResponses, progress, visibleStructure, sheetsOf, sheetProgress, stationProgress,
   itemsOfSheet, normalizeCompartments, prefillResponses, sectionHeaders, expandGrid, groupSheets, sheetStoreKey, headerTitle, headerOf,
   inferAuditType, auditCompartments, typeCompartments, withCompartments, evalCondition, conditionErrors, parseItemId, stationKeyOf, makeStation,
-  stationEntries, isEnteredResponse, suggestedValue, durationText, needsJustification
+  stationEntries, isEnteredResponse, suggestedValue, durationText, needsJustification,
+  replaceGridUnits, upgradeStoredGrid, compareVersions, UNIT_REPLACEMENTS
 } from '../../js/domain/grids.js';
 import { computeAlerts, calibrationStatus, xyDistance } from '../../js/domain/rules.js';
 import { sheetSummary, stationSummary, auditSummary, recurringDeviations } from '../../js/domain/summary.js';
 import { compareAudits } from '../../js/domain/compare.js';
 import { parseInputValue } from '../../js/domain/normalize.js';
-import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN } from '../../js/domain/seed.js';
+import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN, baseReferential } from '../../js/domain/seed.js';
+import { canonicalJSON } from '../../js/core/util.js';
 
 const G = GRID_CT_2026;
 const IDX = itemIndex(G);
@@ -516,4 +519,105 @@ test('référentiel : eaux souterraines (BSS), stations cours d’eau, biologie 
   assert(cep.every(p => ref.site.some(s => s.id === p.siteId) && ref.campaign.some(c => c.id === p.campaignId)), 'sites et campagnes existants');
   eq(new Set(cep.map(p => p.id)).size, cep.length);
   assert(ref.provider.some(p => p.id === 'prov-TL1') && ref.provider.some(p => p.id === 'prov-NBC'));
+});
+
+/* ---------- Turbidité en NTU (grille CT-2026 1.1) et mise à niveau des grilles par défaut ---------- */
+/** Copie d'une grille par défaut « ancienne » : unités de turbidité repassées en FNU (et version donnée). */
+const withFNU = (grid, version = grid.version) => {
+  const g = structuredClone(grid); g.version = version;
+  const walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'unit' && x === 'NTU') v[k] = 'FNU'; else walk(x); } };
+  walk(g.sections);
+  return g;
+};
+const turbUnits = g => { const it = itemIndex(g).get('it-F4-9'); return it ? it.input.fields.map(f => f.unit) : []; };
+
+test('turbidité : NTU dans les grilles par défaut (CT-2026 1.1, GR-PREL-EAU), unité NTU au référentiel, FNU / NFU conservées', () => {
+  const text = JSON.stringify(DEFAULT_GRIDS);
+  assert(!/"(FNU|NFU)"/.test(text), 'aucune unité FNU / NFU dans les grilles du code');
+  deepEq(turbUnits(G), ['NTU', 'NTU', 'NTU'], 'F4.9 : trois mesures en NTU');
+  eq(itemIndex(GRID_GENERAL).get('it-V08').unit, 'NTU', 'V08 en NTU');
+  eq(G.id, 'grid-ct-2026-v1', 'même identifiant'); eq(G.version, '1.1', 'version 1.1'); eq(GRID_GENERAL.id, 'grid-prel-eau-general-v1');
+  eq(formatValue(item('it-F4-9'), { t1: 3.1, t2: 3.3, t3: 3.2 }), 'Mesure 1 : 3,1 NTU · Mesure 2 : 3,3 NTU · Mesure 3 : 3,2 NTU');
+  eq(formatValue(itemIndex(GRID_GENERAL).get('it-V08'), 2.5), '2,5 NTU');
+  eq(formatValue(item('it-F4-9'), { t1: 3.1 }, { unit: false }), 'Mesure 1 : 3,1', 'sans l’unité de la grille');
+  eq(formatValue(item('it-F9-5'), { volume: 500, unite: 'mL' }, { unit: false }), 'Volume : 500 mL', 'unité choisie à la saisie conservée');
+  const units = baseReferential().unit;
+  deepEq(units.find(u => u.id === 'unit-NTU'), { id: 'unit-NTU', code: 'NTU', symbol: 'NTU', label: 'NTU (Turbidité)', quantity: 'Turbidité' });
+  assert(units.some(u => u.id === 'unit-FNU') && units.some(u => u.id === 'unit-NFU'), 'FNU et NFU conservées (tournées antérieures)');
+  deepEq(UNIT_REPLACEMENTS, { FNU: 'NTU', NFU: 'NTU' });
+});
+
+test('replaceGridUnits : pur, déterministe, idempotent ; ni unitKey, ni libellés, ni réponses', () => {
+  const old = withFNU(G);
+  const before = canonicalJSON(old);
+  const r = replaceGridUnits(old);
+  eq(r.count, 3, 'trois champs de F4.9'); deepEq(turbUnits(r.grid), ['NTU', 'NTU', 'NTU']);
+  eq(canonicalJSON(old), before, 'entrée non modifiée');
+  eq(canonicalJSON(replaceGridUnits(old).grid), canonicalJSON(r.grid), 'déterministe');
+  const again = replaceGridUnits(r.grid);
+  eq(again.count, 0); assert(again.grid === r.grid, 'idempotent : même objet');
+  eq(canonicalJSON(r.grid), canonicalJSON({ ...old, sections: r.grid.sections }), 'seules les sections changent');
+  eq(itemIndex(r.grid).get('it-F9-5').input.fields.find(f => f.unitKey)?.unitKey, itemIndex(G).get('it-F9-5').input.fields.find(f => f.unitKey)?.unitKey, 'unitKey inchangé');
+  eq(item('it-F4-9').label, itemIndex(r.grid).get('it-F4-9').label);
+  const g2 = replaceGridUnits(withFNU(GRID_GENERAL));
+  eq(g2.count, 1); eq(itemIndex(g2.grid).get('it-V08').unit, 'NTU');
+  const odd = { id: 'x', sections: [{ items: [{ id: 'a', unit: 'NFU', label: 'FNU' }] }] };
+  deepEq(replaceGridUnits(odd).grid.sections[0].items[0], { id: 'a', unit: 'NTU', label: 'FNU' }, 'NFU aussi ; libellé intact');
+  const bare = { id: 'y', name: 'sans sections' };
+  assert(replaceGridUnits(bare).grid === bare && replaceGridUnits(null).grid === null, 'grille sans unité : telle quelle');
+});
+
+test('numéros de version : comparaison numérique', () => {
+  assert(compareVersions('1.1', '1.0') > 0 && compareVersions('1.10', '1.9') > 0 && compareVersions('1.0', '1.0') === 0 && compareVersions('1', '1.0') === 0);
+  assert(compareVersions('1.0', '1.1') < 0 && compareVersions('2.0', '1.12') > 0 && compareVersions('1.0.1', '1.0') > 0);
+});
+
+test('mise à niveau d’une grille par défaut enregistrée : nouvelle version ⇒ contenu du code ; même version ⇒ unités ; jamais de retour', () => {
+  const meta = { createdAt: '2026-10-10T08:00:00.000Z', createdBy: 'u1', updatedAt: '2026-10-11T08:00:00.000Z', _vv: { A: 3 }, _lv: 3 };
+  const stored = { ...withFNU(G, '1.0'), ...meta };
+  const r = upgradeStoredGrid(stored, G);
+  assert(r.changed && r.replaced, 'version 1.0 → 1.1'); deepEq([r.from, r.to], ['1.0', '1.1']);
+  const { createdAt, createdBy, updatedAt, _vv, _lv, ...content } = r.grid;
+  eq(canonicalJSON(content), canonicalJSON(G), 'contenu = grille du code');
+  deepEq({ createdAt, createdBy, updatedAt, _vv, _lv }, meta, 'métadonnées d’enregistrement conservées');
+  deepEq(turbUnits(r.grid), ['NTU', 'NTU', 'NTU']);
+  eq(upgradeStoredGrid(r.grid, G).changed, false, 'idempotent');
+  eq(canonicalJSON(upgradeStoredGrid({ ...withFNU(G, '1.0'), ...meta }, G).grid), canonicalJSON(r.grid), 'déterministe (deux tablettes : même grille)');
+  assert(!stored.version || stored.version === '1.0', 'entrée non modifiée');
+  // Grille archivée par un administrateur : reste archivée (avec sa date), contenu mis à niveau.
+  const arch = upgradeStoredGrid({ ...withFNU(G, '1.0'), status: 'archivee', archivedAt: '2026-10-12T00:00:00.000Z' }, G).grid;
+  deepEq([arch.status, arch.archivedAt, arch.version], ['archivee', '2026-10-12T00:00:00.000Z', '1.1']);
+  // Même version (grille générale non renumérotée) : unités seules.
+  const gen = upgradeStoredGrid({ ...withFNU(GRID_GENERAL), ...meta }, GRID_GENERAL);
+  assert(gen.changed && !gen.replaced && gen.units === 1); eq(gen.grid.updatedAt, meta.updatedAt);
+  // Version enregistrée plus récente (reçue d'une tablette mise à jour) : jamais de retour à la version du code.
+  const newer = { ...structuredClone(G), version: '1.2', name: 'CT-2026 (1.2)' };
+  const n = upgradeStoredGrid(newer, G);
+  assert(!n.changed && n.grid === newer, 'pas de retour en arrière');
+  // Grille supprimée, autre identifiant : rien.
+  assert(!upgradeStoredGrid({ ...withFNU(G, '1.0'), _deleted: true }, G).changed, 'grille supprimée');
+  assert(!upgradeStoredGrid({ ...withFNU(G, '1.0'), id: 'autre' }, G).changed, 'autre identifiant');
+});
+
+test('grille à jour (affichage, fiches vierges, nouvelle tournée) : grilles par défaut seulement, mémorisée', () => {
+  deepEq([...DEFAULT_GRID_IDS], DEFAULT_GRIDS.map(g => g.id));
+  const old = withFNU(G, '1.0');
+  const up = upToDateGrid(old);
+  eq(up.version, '1.1'); deepEq(turbUnits(up), ['NTU', 'NTU', 'NTU']);
+  assert(upToDateGrid(old) === up, 'mémorisée par objet');
+  assert(upToDateGrid(G) === G, 'grille déjà à jour : même objet');
+  const own = { ...withFNU(G, '1.0'), id: 'grid-copie-oeg' };
+  assert(upToDateGrid(own) === own, 'grille créée par l’OEG : jamais modifiée');
+  assert(upToDateGrid(null) === null);
+});
+
+test('comparaison de tournées : turbidité FNU puis NTU, mêmes valeurs ⇒ identique ; chaque tournée garde son unité', () => {
+  const v = { t1: 3.1, t2: 3.3, t3: 3.2 };
+  const a = { gridSnapshot: withFNU(G, '1.0'), stations: [{ key: '09271503', siteId: ATHANASE.id }], responses: { 'it-F4-9@09271503': { status: 'C', value: v } } };
+  const b = { gridSnapshot: G, stations: [{ key: '09271503', siteId: ATHANASE.id }], responses: { 'it-F4-9@09271503': { status: 'C', value: v } } };
+  const row = compareAudits(a, b).rows.find(x => x.code === 'F4.9');
+  eq(row.change, 'identique');
+  assert(/3,1 FNU/.test(row.before) && /3,1 NTU/.test(row.after), 'avant / après : unité de chaque tournée');
+  const c = { ...b, responses: { 'it-F4-9@09271503': { status: 'C', value: { ...v, t1: 4 } } } };
+  eq(compareAudits(a, c).rows.find(x => x.code === 'F4.9').change, 'modifie', 'valeur différente : modifiée');
 });

@@ -129,6 +129,9 @@
 .sb-k{display:inline-flex;align-items:center;gap:12px;font-weight:500;font-size:clamp(20px,2.5vw,36px);line-height:1;color:var(--th-dark)}
 .sb-tour{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--th-main);color:#fff;font-size:clamp(12px,1vw,15px);font-weight:700;padding:3px 10px 3px 8px}
 .sb-tour .ico{width:1.1em;height:1.1em}
+/* Réseaux de surveillance de la station (feuille 1) : ligne à part sous « Station », retour à la ligne autorisé */
+.sb-nets{display:flex;flex-wrap:wrap;gap:4px 6px;margin:6px 0 2px;max-width:100%}
+.sb-net{border-radius:999px;background:var(--net-dark,#3d4954);color:#fff;font-weight:700;font-size:clamp(12px,1vw,15px);line-height:1.3;padding:2px 11px;letter-spacing:.02em;white-space:nowrap}
 .sb-name{font-family:var(--f-black);font-weight:900;text-transform:uppercase;font-size:clamp(36px,6.4vw,96px);line-height:.95;letter-spacing:-.02em;color:var(--oeg-navy);
   max-width:100%;overflow-wrap:anywhere}
 .sb-swoosh{width:clamp(56px,6vw,96px);height:clamp(10px,1.2vw,16px);margin:4px 0 6px;background-color:var(--th-accent)}
@@ -467,7 +470,7 @@ body.sun .oh-sub,body.sun .is-k,body.sun .st-rc-short{color:#000}
   .oh-st-k{font-size:11pt}.oh-st-name{font-size:21pt}.oh-st-sheet{font-size:10pt;margin-top:-8px}
   .oh-sheet-title h2{font-size:16pt}
   .station-banner{min-height:34mm;padding:3mm 6mm}
-  .sb-k{font-size:15pt}.sb-name{font-size:38pt}.sb-kicker{font-size:7.5pt}.sb-tag{font-size:7pt}
+  .sb-net{font-size:8pt;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sb-k{font-size:15pt}.sb-name{font-size:38pt}.sb-kicker{font-size:7.5pt}.sb-tag{font-size:7pt}
   .station-banner .guyane-inset svg{width:20mm}
   .info-strip{padding:1.6mm 4mm}
   .is-ic{width:9.5mm}.is-k{font-size:8.5pt}.is-v{font-size:12.5pt}.is-xy{font-size:9.5pt}

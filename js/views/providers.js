@@ -1,5 +1,6 @@
-/* Base prestataires / partenaires / régie : identité, contrats, sites, opérateurs, habilitations,
- * équipements, historique des audits, des écarts et des actions correctives. */
+/* Base prestataires / partenaires / régie : identité, contrats, sites d'intervention (rangés par réseau de
+ * surveillance ; total en stations distinctes), opérateurs, habilitations, équipements, historique des audits, des
+ * écarts et des actions correctives. */
 import { html, fmtDate, sortBy, localDate, uuid, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
@@ -10,6 +11,18 @@ import { PROVIDER_KINDS, OPEN_DEVIATION, QUALIFICATION_TYPES, EQUIPMENT_STATUS, 
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { recurringDeviations, isOverdue } from '../domain/summary.js';
 import { controllerNamesText } from '../domain/permissions.js';
+import { NO_NETWORK, groupSitesByNetwork } from '../domain/networks.js';
+import { currentNetworkIndex } from '../app/networks.js';
+
+/** Sites d'intervention rangés par réseau de surveillance (une station sur deux réseaux figure sous chacun). */
+function sitesByNetwork(siteIds) {
+  const sites = siteIds.map(id => store.get('site', id)).filter(Boolean);
+  const missing = siteIds.length - sites.length;
+  if (!sites.length) return html`<p>${missing ? `${missing} site(s) absent(s) du référentiel` : '—'}</p>`;
+  const { groups } = groupSitesByNetwork(sortBy(sites, 'name'), currentNetworkIndex());
+  return html`${groups.map(g => html`<h3 class="pv-net">${g.code === NO_NETWORK ? 'Sans réseau' : g.network.label && g.network.label !== g.code ? `${g.code} – ${g.network.label}` : g.code} (${g.sites.length})</h3>
+    <p>${g.sites.map(s => s.name).join(' · ')}</p>`)}${missing ? html`<p class="note">${missing} site(s) absent(s) du référentiel.</p>` : ''}`;
+}
 
 export default {
   nav: 'prestataires', title: 'Prestataires',
@@ -120,7 +133,7 @@ export const detailView = {
         ${ops.length ? html`<div class="list">${ops.map(o => { const st = operatorStatus(o, today); return html`<div class="li ${o.active === false ? '' : st.ok ? 'stripe-ok' : 'stripe-nc'}"><div class="li-main"><div class="li-title">${operatorName(o)} ${o.active === false ? badge('Inactif', 'na') : ''}</div><div class="li-sub">${o.function || ''}</div><div class="li-sub">${(o.qualifications || []).map(q => `${QUALIFICATION_TYPES[q.type] || q.type} : ${q.label}${q.validUntil ? ' → ' + fmtDate(q.validUntil) : ''}`).join(' ; ') || 'aucune habilitation enregistrée'}</div>${st.ok ? badge('Habilité', 'ok') : badge(st.message, 'nc')}</div>${edit ? html`<button class="btn ghost sm" data-act="op-edit" data-id="${o.id}">Modifier</button>` : ''}</div>`; })}</div>` : html`<p class="note">Aucun opérateur.</p>`}
         ${edit ? html`<button class="btn ghost sm" style="margin-top:8px" data-act="op-new">＋ Opérateur</button>` : ''}</div>
       <div class="card"><h2>Équipements (${eqs.length})</h2>${eqs.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Équipement</th><th>Inventaire / série</th><th>Validité</th><th>État</th></tr></thead><tbody>${eqs.map(e => { const st = equipmentStatus(e, today); return html`<tr><td>${e.label}<div class="tiny muted">${e.brand} ${e.model}</div></td><td class="mono tiny">${e.inventoryNo}<br>${e.serial}</td><td>${fmtDate(e.validUntil) || '—'}</td><td>${st.ok ? badge(EQUIPMENT_STATUS[e.status] || 'Valide', 'ok') : badge(st.reasons[0], st.level === 'critique' ? 'nc' : 'warn')}</td></tr>`; })}</tbody></table></div>` : html`<p class="note">Aucun équipement enregistré (gestion dans Référentiels › Équipements).</p>`}</div>
-      <div class="card"><h2>Sites d’intervention (${siteIds.length})</h2><p>${siteIds.map(s => siteName(s)).join(' · ') || '—'}</p></div>
+      <div class="card"><h2>Sites d’intervention (${siteIds.length})</h2>${sitesByNetwork(siteIds)}</div>
       <div class="card"><h2>Historique des audits</h2>${audits.length ? html`<div class="list">${audits.slice(0, 20).map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${controllerNamesText(a)}</div></div>${auditBadge(a)}</a>`)}</div>` : html`<p class="note">Aucun audit.</p>`}</div>
       <div class="card"><h2>Historique des écarts</h2>${devs.length ? html`<div class="list">${devs.slice(0, 30).map(d => html`<a class="li" href="#/ecart/${d.id}"><div class="li-main"><div class="li-title">${d.number}</div><div class="li-sub">${d.requirement}</div></div>${critBadge(d.criticalityCode)}${deviationBadge(d.status)}</a>`)}</div>` : html`<p class="note">Aucun écart.</p>`}
         ${recurring.length ? html`<h3>Écarts récurrents</h3><ul>${recurring.map(r => html`<li>${r.requirement} — ${r.audits.length} audits (${r.open} ouvert(s))</li>`)}</ul>` : ''}</div>

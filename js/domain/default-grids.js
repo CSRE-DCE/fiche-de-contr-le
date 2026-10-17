@@ -9,6 +9,7 @@
  * grille par défaut des tournées de contrôle.
  */
 import { GRID_CT_2026 } from './grid-ct-2026.js';
+import { upgradeStoredGrid } from './grids.js';
 
 const C = (code, label, extra = {}) => ({ id: 'it-' + code, code, label, kind: 'conformity', required: true, evidenceOnNC: true, ...extra });
 const iso = (clause, requirement) => ({ docKey: 'ISO17025', docType: 'REFERENTIEL', article: clause, requirement });
@@ -123,7 +124,7 @@ export const GRID_GENERAL = {
         { id: 'it-V05', code: 'V05', label: 'État du milieu', kind: 'multiselect', options: ['Normal', 'Eau trouble', 'Hautes eaux / crue', 'Basses eaux / étiage', 'Marée montante', 'Marée descendante', 'Présence d’irisations', 'Présence de mousses', 'Odeur'], required: true },
         { id: 'it-V06', code: 'V06', label: 'Niveau d’eau', kind: 'number', unit: 'm', step: 0.01, allowNA: true, required: false },
         { id: 'it-V07', code: 'V07', label: 'Débit (si applicable)', kind: 'number', unit: 'm³/s', step: 0.001, allowNA: true, required: false },
-        { id: 'it-V08', code: 'V08', label: 'Turbidité (si applicable)', kind: 'number', unit: 'FNU', step: 0.1, allowNA: true, required: false },
+        { id: 'it-V08', code: 'V08', label: 'Turbidité (si applicable)', kind: 'number', unit: 'NTU', step: 0.1, allowNA: true, required: false },
         { id: 'it-V09', code: 'V09', label: 'Événement susceptible d’influencer le prélèvement ?', kind: 'boolean', required: true },
         { id: 'it-V10', code: 'V10', label: 'Événement (préciser)', kind: 'text', required: true, condition: { item: 'V09', op: 'truthy' } }
       ]
@@ -226,3 +227,19 @@ export { GRID_CT_2026 };
 export const CT_GRID_ID = GRID_CT_2026.id;
 export const OLD_BIO_GRID_ID = 'grid-ct-bio-2026-v1';
 export const DEFAULT_GRIDS = [GRID_CT_2026, GRID_GENERAL, GRID_RAPIDE];
+/** Identifiants des grilles par défaut (mises à niveau avec l'application : upgradeStoredGrid). */
+export const DEFAULT_GRID_IDS = new Set(DEFAULT_GRIDS.map(g => g.id));
+const UP_TO_DATE = new WeakMap();
+/**
+ * Grille à jour pour l'affichage, les fiches vierges et l'instantané d'une NOUVELLE tournée : une grille par défaut
+ * enregistrée (éventuellement pas encore mise à niveau sur la tablette : aucune session administrateur depuis la mise
+ * à jour de l'application, fichier reçu d'une tablette non mise à jour) est lue d'après la grille du code
+ * (nouvelle version, turbidité en NTU) ; toute autre grille est rendue telle quelle. Jamais appliquée à une tournée
+ * existante. */
+export function upToDateGrid(grid) {
+  if (!grid || typeof grid !== 'object' || !DEFAULT_GRID_IDS.has(grid.id)) return grid;
+  // Mémorisé par objet : une grille enregistrée n'est jamais modifiée sur place (chaque écriture crée un nouvel objet).
+  let up = UP_TO_DATE.get(grid);
+  if (!up) { up = upgradeStoredGrid(grid, DEFAULT_GRIDS.find(g => g.id === grid.id)).grid; UP_TO_DATE.set(grid, up); }
+  return up;
+}

@@ -1,7 +1,8 @@
 /* Référentiels initiaux. Fichier pur (testé sous Node).
  *
  * - baseReferential() : niveaux de criticité, types d'écarts, matrices, types de prélèvement,
- *   méthodes, unités, contenants, réglages par défaut — tous administrables ensuite.
+ *   méthodes, unités (turbidité en NTU, unité des CCTP 2026 ; FNU et NFU conservées pour les tournées antérieures),
+ *   contenants, réseaux de surveillance (js/domain/networks.js), réglages par défaut — tous administrables ensuite.
  * - oegReferential(DATA) : sites, points, prestataires/partenaires/régie, opérateurs et campagnes repris
  *   du référentiel des fiches terrain OEG (js/data.js), pour démarrer avec les stations réelles.
  * - oegProgramme(DATA, …) : prestations programmées déduites des sessions de campagne des fiches terrain
@@ -17,6 +18,7 @@
  */
 import { utmToLatLon } from '../lib/geo.js';
 import { addDays, localDate } from '../core/util.js';
+import { defaultNetworks, networkIndex, auditTypesOf } from './networks.js';
 
 export function baseReferential() {
   const criticality = [
@@ -51,8 +53,8 @@ export function baseReferential() {
     { code: 'PROTO-INTERNE', label: 'Protocole interne / mode opératoire du marché', reference: 'Protocole du marché', docKey: '' }
   ].map(x => ({ id: 'meth-' + x.code, ...x }));
   const unit = [
-    ['C', '°C', 'Température'], ['M', 'm', 'Longueur / profondeur'], ['M3S', 'm³/s', 'Débit'], ['LS', 'L/s', 'Débit'], ['FNU', 'FNU', 'Turbidité'],
-    ['NFU', 'NFU', 'Turbidité'], ['ML', 'mL', 'Volume'], ['L', 'L', 'Volume'], ['USCM', 'µS/cm', 'Conductivité'], ['MGL', 'mg/L', 'Concentration'],
+    ['C', '°C', 'Température'], ['M', 'm', 'Longueur / profondeur'], ['M3S', 'm³/s', 'Débit'], ['LS', 'L/s', 'Débit'], ['NTU', 'NTU', 'Turbidité'],
+    ['FNU', 'FNU', 'Turbidité'], ['NFU', 'NFU', 'Turbidité'], ['ML', 'mL', 'Volume'], ['L', 'L', 'Volume'], ['USCM', 'µS/cm', 'Conductivité'], ['MGL', 'mg/L', 'Concentration'],
     ['PCT', '%', 'Pourcentage'], ['H', 'h', 'Durée'], ['MIN', 'min', 'Durée'], ['UPH', 'unité pH', 'pH']
   ].map(([code, symbol, quantity]) => ({ id: 'unit-' + code, code, symbol, label: `${symbol} (${quantity})`, quantity }));
   const container = [
@@ -64,7 +66,9 @@ export function baseReferential() {
     sampleIdPattern: '{AUDIT}-E{NN}', tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', tileAttribution: '© contributeurs OpenStreetMap', maxPreloadZoom: 14,
     reportFooter: 'Document généré par la PWA d’audit des prestations de prélèvement — enregistrement qualité.'
   }];
-  return { criticality, deviationType, matrix, samplingType, method, unit, container, setting };
+  // Réseaux de surveillance (codes enregistrés sur les stations et les campagnes) : contenu déterministe.
+  const network = defaultNetworks();
+  return { criticality, deviationType, matrix, samplingType, method, unit, container, network, setting };
 }
 
 /** Documents de référence (métadonnées) : versions à vérifier et à compléter par le responsable qualité. */
@@ -118,7 +122,8 @@ export const BIO_CAMPAIGN = { id: 'camp-BIO-2026', code: 'BIO-2026', label: 'RCS
 /** Grille des tournées de contrôle terrain 2026 (CT-2026) ; BIO_GRID_ID : ancien nom, conservé pour compatibilité. */
 export const CT_GRID_ID = 'grid-ct-2026-v1';
 export const BIO_GRID_ID = CT_GRID_ID;
-/** Réseaux du programme cours d'eau installé avec le référentiel (prestations « ce »). */
+/** Réseaux du programme cours d'eau installé avec le référentiel (prestations « ce ») : liste de PROGRAMMES, distincte
+ * des types de tournée associés aux réseaux (EL est aussi « ce », sans programme installé). */
 export const CE_NETWORKS = ['Chimie', 'RCO'];
 /** Ordre des compartiments de la grille CT-2026. */
 export const COMPARTMENT_ORDER = ['organisation', 'physico', 'eso', 'invertebres', 'diatomees', 'poissons', 'phytoplancton'];
@@ -128,16 +133,14 @@ export const orderCompartments = list => COMPARTMENT_ORDER.filter(k => list.incl
 export function esoUsage(typePoint) {
   return /AEP|Unité de traitement|exploitation/i.test(String(typePoint || '')) ? 'Alimentation en eau potable' : 'Surveillance (piézomètre)';
 }
+const DEFAULT_NETWORK_INDEX = networkIndex();
 /**
  * Types de tournée d'une station (une station peut en avoir plusieurs) : bio (listes BIO_CE / BIO_FISH / BIO_PHYTO),
- * ce (réseaux Chimie, RCO, EL), eso (réseau ESO).
+ * puis les types associés à ses réseaux dans le référentiel « Réseaux » (`idx` : index courant ; par défaut les
+ * réseaux de 2026 : Chimie, RCO, EL ⇒ ce ; ESO ⇒ eso).
  */
-export function stationTypes(site) {
-  const out = [];
-  if ((site.bioLists || []).length) out.push('bio');
-  if ((site.networks || []).some(n => ['Chimie', 'RCO', 'EL'].includes(n))) out.push('ce');
-  if ((site.networks || []).includes('ESO')) out.push('eso');
-  return out;
+export function stationTypes(site, idx = DEFAULT_NETWORK_INDEX) {
+  return auditTypesOf(site, idx);
 }
 /** Compartiments à contrôler d'une station selon ses types (biologie : listes BIO ; ce : physico ; eso : eso). */
 export function stationCompartments(site) {

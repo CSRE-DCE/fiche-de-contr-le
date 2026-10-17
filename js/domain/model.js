@@ -263,8 +263,10 @@ function scalarText(spec, v, unit) {
  * scalaires (nombres avec unité et virgule décimale, dates JJ/MM/AAAA, Oui / Non, listes),
  * objets « fields » → « Nom : Dupont · Fonction : Chef d’équipe » (champs masqués par showIf ignorés,
  * coordonnées techniques lat / lon / précision non reprises).
+ * `unit: false` : sans l'unité définie par la grille (comparaison de deux tournées dont les grilles diffèrent
+ * seulement par l'unité, ex. turbidité FNU puis NTU) ; l'unité choisie à la saisie (`unitKey`) est conservée.
  */
-export function formatValue(item, value) {
+export function formatValue(item, value, { unit: withUnit = true } = {}) {
   if (blank(value)) return '';
   const input = itemInput(item);
   if (isPlainObject(value)) {
@@ -274,7 +276,8 @@ export function formatValue(item, value) {
     const parts = [];
     for (const f of fields) {
       if (!fieldShown(f, value) || used.has(f.key) || blank(value[f.key])) continue;
-      let t = scalarText(f, value[f.key], f.unitKey ? (value[f.unitKey] || f.unit) : f.unit);
+      const gridUnit = withUnit ? f.unit : '';
+      let t = scalarText(f, value[f.key], f.unitKey ? (value[f.unitKey] || gridUnit) : gridUnit);
       // Choix « Autre » / « Écart(s) » suivi de sa précision : « Autre : pompe » (une seule mention).
       const detail = f.type === 'choice' && fields.find(d => !Array.isArray(d.showIf) && d.showIf?.key === f.key && d.showIf.value === value[f.key] && d.label === value[f.key] && !blank(value[d.key]));
       if (detail) { t = `${t} : ${scalarText(detail, value[detail.key])}`; used.add(detail.key); }
@@ -282,7 +285,7 @@ export function formatValue(item, value) {
     }
     return parts.join(' · ');
   }
-  return scalarText(input || {}, value);
+  return scalarText(input || {}, value, withUnit ? undefined : '');
 }
 
 /** Libellé lisible d'une réponse : statut · valeur. */

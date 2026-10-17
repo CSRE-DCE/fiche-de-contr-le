@@ -13,7 +13,7 @@ import { flatSections, allItems, itemIndex, validateGrid, OPERATORS } from '../d
 
 const GRID_STATUS = { brouillon: ['Brouillon', 'warn'], publiee: ['Publiée', 'ok'], archivee: ['Archivée', 'na'] };
 const statusBadge = s => badge(GRID_STATUS[s]?.[0] || s, GRID_STATUS[s]?.[1] || 'na');
-const CTX_KEYS = { matrixCode: 'Code de matrice (ESU, ESO, EL…)', samplingTypeCode: 'Code du type de prélèvement', providerKind: 'Nature du prestataire (regie, prestataire, partenaire)', auditKind: 'Type d’audit (planifie, inopine)', network: 'Réseau du site' };
+const CTX_KEYS = { matrixCode: 'Code de matrice (ESU, ESO, EL…)', samplingTypeCode: 'Code du type de prélèvement', providerKind: 'Nature du prestataire (regie, prestataire, partenaire)', auditKind: 'Type d’audit (planifie, inopine)', network: 'Réseau(x) du site (codes joints : « BIO,Chimie »)', networks: 'Réseaux du site (opérateur « fait partie de »)' };
 
 export function conditionText(cond, index) {
   if (!cond) return '';

@@ -1,6 +1,6 @@
 /* Fiche station (feuille 1 des fiches de contrôle terrain), fidèle aux maquettes
  * docs/maquettes/feuille-1-station.webp et sa variante : en-tête OEG, bandeau « Station / NOM » (photo RD en
- * fond), bandeau d'information (Code SANDRE ou Code BSS), « Localisation cartographique » (carte Leaflet : étoile
+ * fond ; réseaux de surveillance de la station sur une ligne à part), bandeau d'information (Code SANDRE ou Code BSS), « Localisation cartographique » (carte Leaflet : étoile
  * de la station, points de prélèvement du site et relevés GPS de la tournée pour cette station, légende, échelle,
  * nord, encart Guyane ; repli hors connexion), « Photographies de la station » (RD / RG / AM / AV), « Accès /
  * Localisation », « Difficultés / points d’attention », « Compartiments à contrôler », point d'eau souterraine
@@ -22,6 +22,9 @@ import { icon } from '../ui/icons.js';
 import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines, assetURL, siteLatLon } from '../ui/sheet-chrome.js';
 import { createMap, tilesUsable, watchTiles, kindIcon, kindSVG, SAMPLING_KINDS, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
+import { upToDateGrid } from '../domain/default-grids.js';
+import { auditTypesOf } from '../domain/networks.js';
+import { currentNetworkIndex, siteNetworks } from '../app/networks.js';
 import { headerOf, resolveSheet, sheetOf, gridType, gridTypes, defaultAuditType, typeCompartments, normalizeCompartments, allItems, itemIndex, evalCondition, parseItemId, stationKeyOf, providerHeaderName } from '../domain/grids.js';
 import { itemInput, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { effectiveGrid, auditTypeOf } from '../app/audits.js';
@@ -33,17 +36,21 @@ export const SLOTS = [['RD', 'Rive droite'], ['RG', 'Rive gauche'], ['AM', 'Amon
 const SLOT_LONG = Object.fromEntries(SLOTS);
 
 /* ---------- Aides « station » partagées (accueil, fiche, carte, création de tournée) ---------- */
-/** Grille CT-2026 publiée sur l'appareil (à défaut : la grille de référence embarquée). */
-export function ctGrid() { return store.get('grid', CT_GRID) || GRID_CT_2026; }
+/** Grille CT-2026 publiée sur l'appareil, lue d'après la version livrée avec l'application si elle n'est pas encore
+ * mise à niveau (turbidité en NTU…) ; à défaut : la grille de référence embarquée. */
+export function ctGrid() { return upToDateGrid(store.get('grid', CT_GRID)) || GRID_CT_2026; }
 
-/** Types de tournée d'une station (bio, ce, eso), dans l'ordre d'affichage ; déduits si le site n'est pas encore enrichi. */
+/**
+ * Types de tournée d'une station (bio, ce, eso), dans l'ordre d'affichage ; déduits si le site n'est pas encore enrichi :
+ * listes biologiques et types associés à ses réseaux (référentiel « Réseaux », repli sur les réseaux par défaut), plus
+ * eaux souterraines pour un code BSS ou une matrice ESO.
+ */
 export function siteTypes(site) {
   if (!site) return [];
   let t = Array.isArray(site.types) && site.types.length ? site.types : [];
   if (!t.length) {
-    if ((site.bioLists || []).length) t.push('bio');
-    if ((site.networks || []).some(n => ['Chimie', 'RCO', 'EL'].includes(n))) t.push('ce');
-    if (site.codeType === 'BSS' || (site.networks || []).includes('ESO') || site.matrixId === 'mat-ESO') t.push('eso');
+    t = auditTypesOf(site, currentNetworkIndex());
+    if (site.codeType === 'BSS' || site.matrixId === 'mat-ESO') t = [...t, 'eso'];
   }
   return TYPE_ORDER.filter(k => t.includes(k));
 }
@@ -89,11 +96,17 @@ export function plannedLabel(p) {
   if (!p?.plannedDate) return 'À planifier';
   return fmtDate(p.plannedDate) + (p.dateIndicative ? ' (indicative)' : '');
 }
-/** Recherche plein texte d'une station (nom, code, bassin, commune, cours d'eau). */
+/** Texte de recherche d'une station (normalisé) : nom, code, bassin, commune, cours d'eau, masse d'eau, nature,
+ * aquifère, réseaux de surveillance (codes et libellés : « chimie », « RCO », « eaux littorales »). */
+export function siteSearchText(site) {
+  const s = site || {};
+  return normalize([s.name, s.code, s.bassin, s.commune, s.riverName, s.masseEau, s.nature, s.aquifere, ...siteNetworks(s).flatMap(n => [n.code, n.label])].filter(Boolean).join(' '));
+}
+/** Recherche plein texte d'une station (nom, code, bassin, commune, cours d'eau, réseaux). */
 export function siteMatches(site, query) {
   const t = normalize(query);
   if (!t) return true;
-  return normalize([site.name, site.code, site.bassin, site.commune, site.riverName, site.masseEau, site.nature].filter(Boolean).join(' ')).includes(t);
+  return siteSearchText(site).includes(t);
 }
 
 /* ---------- Composition de la feuille ---------- */
@@ -295,7 +308,7 @@ export function stationSheet({ site, grid = null, audit = null, editable = false
   const body = html`
     ${full ? oegHeader({ grid: g, sheet: { ...sheetDef, layout: 'station' }, site, title: head.title, subtitle: head.subtitle }) : ''}
     ${stationBanner({ site, kicker: sheetDef.kicker || head.program || '', theme, photo: bannerPhoto, stationIndex: pos >= 0 ? pos + 1 : null, stationTotal: stations.length || null,
-      tagline: eso ? (head.tagline || '') : 'Des rivières vivantes pour demain' })}
+      tagline: eso ? (head.tagline || '') : 'Des rivières vivantes pour demain', networks: siteNetworks(site) })}
     ${infoStrip(site, { codeType: site.codeType || (eso ? 'BSS' : '') })}
     <div class="ss-body">
       <div class="ss-col">

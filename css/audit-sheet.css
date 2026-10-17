@@ -112,7 +112,7 @@
 .as-frame .st-table .st-field.is-num>input{max-width:7.5em}
 /* Libellé et valeur sur la même ligne d'écriture (« Volume : ……… ») */
 .as-frame .st-field:not(.is-choice){align-items:baseline}
-/* Mesure avec unité : l'unité suit la valeur sur la même ligne (« Mesure 1 : 3,1 FNU ») ; plusieurs mesures à unité
+/* Mesure avec unité : l'unité suit la valeur sur la même ligne (« Mesure 1 : 3,1 NTU ») ; plusieurs mesures à unité
  * dans la même cellule (turbidité en triplicat de F4.9…) : une mesure par ligne. Le libellé peut passer sur deux
  * lignes si la cellule est étroite, jamais l'unité. */
 .as-frame .st-field.is-num:has(>.st-unit){flex-wrap:nowrap}

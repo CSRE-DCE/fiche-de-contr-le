@@ -1,5 +1,6 @@
 /* Fiche de préparation d'une prestation programmée (avant déplacement) + édition de la prestation.
- * Date vide = « À planifier » (programme RCS ESC BIO 2026). Les prestations des fiches de contrôle 2026 (grille
+ * Réseau de surveillance du programme (celui de la campagne, unique) et réseaux de la station (une station peut en
+ * avoir deux), en badges. Date vide = « À planifier » (programme RCS ESC BIO 2026). Les prestations des fiches de contrôle 2026 (grille
  * CT-2026) démarrent une TOURNÉE (#/nouvel-audit, pré-sélection de la prestation) ; les autres, un audit sur leur
  * grille historique. Lien vers la fiche station. */
 import { html, fmtDate, fmtDateTime, localDate, sortBy, uuid, nowISO } from '../core/util.js';
@@ -9,7 +10,8 @@ import { can } from '../core/auth.js';
 import { hasLocalBytes } from '../core/media.js';
 import { navigate } from '../ui/router.js';
 import { openModal, toast, promptDialog, choiceDialog, formValues } from '../ui/dom.js';
-import { pageTitle, kv, prestationBadge, kindBadge, auditBadge, badge, docBadge, empty, options, critBadge, deviationBadge, operatorName, field, tourStationsLabel } from '../ui/components.js';
+import { pageTitle, kv, prestationBadge, kindBadge, auditBadge, badge, docBadge, empty, options, critBadge, deviationBadge, operatorName, field, tourStationsLabel, networkBadge, networkBadges } from '../ui/components.js';
+import { siteNetworks, prestationNetworkOf } from '../app/networks.js';
 import { PRESTATION_STATUS, CONTROL_LEVELS, DOC_TYPES, OPEN_DEVIATION, EQUIPMENT_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { recurringDeviations } from '../domain/summary.js';
@@ -55,6 +57,8 @@ export default {
     const provDevs = store.filter('deviation', d => d.providerId === p.providerId && OPEN_DEVIATION.includes(d.status));
     const recurring = recurringDeviations(store.filter('deviation', d => d.providerId === p.providerId));
     const camp = store.get('campaign', p.campaignId);
+    const net = prestationNetworkOf(p);
+    const siteNets = site ? networkBadges(siteNetworks(site), { long: true }) : [];
     const date = p.plannedDate || today;
     const tour = isTourPrestation(p);
     return html`
@@ -72,7 +76,7 @@ export default {
         ['Prestataire', prov ? html`<a href="#/prestataire/${prov.id}">${prov.name}</a> ${kindBadge(prov.kind)}` : '—'],
         ['Partenaire', partner?.name], ['Équipe de prélèvement', [p.team, ops.map(o => operatorName(o)).join(', ')].filter(Boolean).join(' — ')],
         ['Date', p.plannedDate ? fmtDate(p.plannedDate) + (p.dateIndicative ? ' (indicative)' : '') : 'À planifier'], ['Heure', p.plannedTime],
-        ['Site', site ? html`<a href="#/station/${encodeURIComponent(site.id)}">${site.name} (${site.code})</a>` : '—'], ['Campagne', camp?.label],
+        ['Site', site ? html`<a href="#/station/${encodeURIComponent(site.id)}">${site.name} (${site.code})</a>` : '—'], ['Campagne', camp?.label], ['Réseau de la prestation', net ? networkBadge(net, { long: true }) : ''],
         ['Type de prélèvement', store.get('samplingType', p.samplingTypeId)?.label], ['Matrice', store.get('matrix', p.matrixId)?.label],
         ['Protocole applicable', proto ? html`${proto.reference} <span class="version-pill">v${proto.version}</span>` : (p.protocolDocKey ? `${p.protocolDocKey} — aucune version en vigueur` : 'non précisé')],
         ['CCTP applicable', cctp ? html`${cctp.reference} <span class="version-pill">v${cctp.version}</span>` : (p.cctpDocKey ? `${p.cctpDocKey} — aucune version en vigueur` : 'non précisé')],
@@ -86,7 +90,7 @@ export default {
         <p class="note">Les versions affichées seront figées dans l’audit au démarrage : une modification ultérieure d’un document ne modifiera jamais un audit déjà réalisé.</p></div>
 
       <div class="card"><h2>Site et point(s) de prélèvement ${site ? html`<a class="btn ghost sm" href="#/station/${encodeURIComponent(site.id)}">Fiche station</a>` : ''}</h2>
-        ${kv([['Site', site ? `${site.name} — ${site.code}` : ''], ['Réseau(x)', (site?.networks || []).join(', ')], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')], ['Accès', (site?.transportModes || []).join(', ')], ['Pressions', site?.pressions]])}
+        ${kv([['Site', site ? `${site.name} — ${site.code}` : ''], ['Réseau(x) de la station', siteNets.length ? html`<span class="net-badges">${siteNets}</span>` : ''], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')], ['Accès', (site?.transportModes || []).join(', ')], ['Pressions', site?.pressions]])}
         <div class="list" style="margin-top:10px">${points.map(pt => html`<div class="li"><div class="li-main"><div class="li-title">📍 ${pt.code} — ${pt.name}</div><div class="li-sub">${pt.lat ? `${pt.lat.toFixed(6)}, ${pt.lon.toFixed(6)} (WGS84)` : 'coordonnées non renseignées'}${pt.description ? ' · ' + pt.description : ''}</div></div>${pt.lat ? html`<a class="btn ghost sm" href="#/carte?point=${pt.id}">Carte</a>` : ''}</div>`)}</div></div>
 
       <div class="card"><h2>Opérateurs prévus et habilitations</h2>

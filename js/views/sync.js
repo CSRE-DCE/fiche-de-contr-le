@@ -20,7 +20,7 @@ import { tokenHelp, probeSummary } from './auth.js';
 import { exchangeCard, historyCard, sendDialog, receiveFile, passwordDialog } from './exchange.js';
 import { knownDevices } from '../app/exchange.js';
 
-const TYPE_LABELS = { audit: 'Audits', deviation: 'Écarts', media: 'Médias (métadonnées)', __bin: 'Fichiers (photos, documents)', trail: 'Journal d’audit', prestation: 'Prestations', observation: 'Observations', alert: 'Alertes d’urgence', document: 'Documents', grid: 'Grilles', site: 'Stations', user: 'Utilisateurs' };
+const TYPE_LABELS = { audit: 'Audits', deviation: 'Écarts', media: 'Médias (métadonnées)', __bin: 'Fichiers (photos, documents)', trail: 'Journal d’audit', prestation: 'Prestations', observation: 'Observations', alert: 'Alertes d’urgence', document: 'Documents', grid: 'Grilles', site: 'Stations', network: 'Réseaux de surveillance', user: 'Utilisateurs' };
 const show = v => { const c = compactValue(v, 160); return c === undefined || c === null ? '—' : typeof c === 'string' ? c : JSON.stringify(c); };
 const short = sha => sha ? String(sha).slice(0, 7) : '';
 const errText = e => e?.message === 'Failed to fetch' ? 'GitHub injoignable : vérifiez la connexion réseau.' : (e?.message || String(e));

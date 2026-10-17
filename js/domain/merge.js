@@ -9,6 +9,9 @@
  *  - un champ modifié d'un seul côté prend la valeur modifiée ;
  *  - les objets (ex. réponses d'un audit, critère par critère) et les listes d'éléments identifiés
  *    (échantillons, équipements, actions correctives…) sont fusionnés élément par élément ;
+ *  - les réseaux et les types de tournée d'une station (site.networks, site.types : listes de codes) sont des
+ *    ENSEMBLES : un ajout d'un côté et un retrait de l'autre sont tous deux pris en compte, sans conflit (échange par
+ *    fichier entre tablettes comme synchronisation) ;
  *  - un même champ modifié des deux côtés avec des valeurs différentes est un CONFLIT : la version la
  *    plus récente (horodatage) est retenue et l'autre valeur est conservée dans le rapport de conflit,
  *    consultable et restaurable par l'utilisateur ;
@@ -24,11 +27,25 @@ const META = new Set(['_rev', '_lv', '_vv', 'updatedAt', 'updatedBy', 'updatedBy
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const isIdArray = v => Array.isArray(v) && v.length > 0 && v.every(x => isObj(x) && x.id);
 const stamp = v => (isObj(v) && (v.updatedAt || v.at)) || '';
+/** Champs fusionnés comme des ensembles de valeurs simples, par type d'entité. */
+export const SET_FIELDS = { site: new Set(['networks', 'types']) };
+const isSimpleList = v => v === undefined || v === null || (Array.isArray(v) && v.every(x => x === null || typeof x !== 'object'));
+/**
+ * Fusion d'ensembles : un élément retiré d'un côté (présent dans la version commune) est retiré ; un élément ajouté
+ * d'un côté est gardé. Ordre : version distante, puis ajouts locaux.
+ */
+export function mergeSet(base, local, remote) {
+  const l = local || [], r = remote || [];
+  const removed = new Set((base || []).filter(x => !(l.includes(x) && r.includes(x))));
+  return [...new Set([...r, ...l])].filter(x => !removed.has(x));
+}
 
 function mergeValue(base, local, remote, path, ctx, depth) {
   if (deepEqual(local, remote)) return clone(local);
   if (deepEqual(base, local)) return clone(remote);
   if (deepEqual(base, remote)) return clone(local);
+  // Liste de codes d'une station (réseaux, types de tournée) modifiée des deux côtés : fusion d'ensembles, sans conflit.
+  if (depth === 1 && SET_FIELDS[ctx.type]?.has(path) && [base, local, remote].every(isSimpleList)) return mergeSet(base, local, remote);
   // Modifié des deux côtés
   if (depth < 4 && (isObj(local) || local === undefined) && (isObj(remote) || remote === undefined) && (isObj(local) || isObj(remote))) {
     const b = isObj(base) ? base : {}, l = local || {}, r = remote || {};
@@ -71,7 +88,7 @@ export function mergeEntity(type, base, local, remote) {
   if (!remote) return { merged: clone(local), conflicts: [] };
   if (!local) return { merged: clone(remote), conflicts: [] };
   if (IMMUTABLE_TYPES.has(type)) return { merged: clone(remote), conflicts: deepEqual(stripMeta(local), stripMeta(remote)) ? [] : [{ path: '', kept: 'remote', reason: 'objet immuable', localValue: local, remoteValue: remote }] };
-  const ctx = { conflicts: [], localStamp: local.updatedAt || '', remoteStamp: remote.updatedAt || '' };
+  const ctx = { type, conflicts: [], localStamp: local.updatedAt || '', remoteStamp: remote.updatedAt || '' };
   const merged = mergeValue(base || {}, local, remote, '', ctx, 0);
   // Un audit signé reste verrouillé : on ne peut pas « déverrouiller » par fusion.
   if (type === 'audit') {

@@ -1,16 +1,20 @@
 /* Modification d'une station (#/station/:id/modifier), droit « référentiels » (ref.manage) : identification
- * (code SANDRE ou BSS, nom, nature, types de tournée, réseaux, matrice), localisation (commune, bassin, cours
- * d'eau, masse d'eau, coordonnées RGFG95 / UTM 22N → WGS84, hydro-écorégion, rang de Strahler, typologie,
- * pressions), point d'eau souterraine (nature, usage, aquifère), accès et difficultés, compartiments à contrôler et
- * listes biologiques, points de prélèvement (station, invertébrés, diatomées, ichtyofaune), légendes et source des
- * photographies. Enregistrement par store.put avec motif obligatoire (journal d'audit). */
+ * (code SANDRE ou BSS, nom, nature, types de tournée, réseaux de surveillance — cases à cocher du référentiel
+ * « Réseaux », plus « Autres réseaux » ramenés au code du référentiel ou ajoutés au référentiel —, matrice),
+ * localisation (commune, bassin, cours d'eau, masse d'eau, coordonnées RGFG95 / UTM 22N → WGS84, hydro-écorégion,
+ * rang de Strahler, typologie, pressions), point d'eau souterraine (nature, usage, aquifère), accès et difficultés,
+ * compartiments à contrôler et listes biologiques, points de prélèvement (station, invertébrés, diatomées,
+ * ichtyofaune), légendes et source des photographies. Enregistrement par store.put avec motif obligatoire (journal
+ * d'audit). */
 import { html, raw, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { pageTitle, field, options, empty } from '../ui/components.js';
+import { pageTitle, field, options, empty, networkChecks } from '../ui/components.js';
+import { normalizeNetworkCodes, sameNetworks, sortNetworkCodes } from '../domain/networks.js';
+import { currentNetworkIndex, currentNetworkList, ensureNetworks } from '../app/networks.js';
 import { CODE_TYPES } from '../domain/model.js';
 import { normalizeCompartments } from '../domain/grids.js';
 import { utmToLatLon, latLonToUtm } from '../lib/geo.js';
@@ -66,9 +70,10 @@ export default {
           ${field('Type de code', html`<select name="codeType">${options(Object.entries(CODE_TYPES).map(([k, l]) => ({ id: k, label: l })), s.codeType || 'SANDRE', { placeholder: null })}</select>`)}
           ${field('Nom de la station', html`<input name="name" value="${s.name || ''}" required>`, { required: true })}
           ${field('Nature du site', html`<input name="kind" value="${s.kind || ''}" placeholder="ex. Cours d’eau, Eau souterraine">`)}
-          ${field('Réseaux (séparés par « ; »)', html`<input name="networks" value="${(s.networks || []).join('; ')}">`)}
           ${field('Matrice principale', html`<select name="matrixId">${options(store.all('matrix'), s.matrixId || '', { placeholder: '—' })}</select>`)}
         </div>
+        ${field('Réseaux de surveillance', networkChecks('networks', currentNetworkList({ keep: s.networks || [] }), s.networks || []), { hint: 'Une station peut appartenir à plusieurs réseaux. Liste tenue dans Référentiels › Réseaux de surveillance.' })}
+        ${field('Autres réseaux (codes séparés par « ; »)', html`<input name="networksOther" value="" placeholder="ex. RCO ; Eaux littorales">`, { hint: 'Codes ou libellés reconnus sans tenir compte des majuscules ni des accents ; un code inconnu est ajouté au référentiel.' })}
         ${field('Types de tournée concernés', checkList('types', TYPE_ORDER.map(t => [t, TYPE_STYLES[t].long, TYPE_STYLES[t].icon]), types))}`)}
 
         ${sec('pin', 'Localisation', html`<div class="grid2">
@@ -162,9 +167,13 @@ export default {
         if (v['drop_' + slot] && cur.mediaId) { next.previousMediaId = cur.mediaId; next.mediaId = null; }
         if (caption || next.mediaId || next.src) photos[slot] = next; else delete photos[slot];
       }
+      // Réseaux : cases cochées + « Autres réseaux » ramenés au code du référentiel ; même ensemble : ordre conservé.
+      const idx = currentNetworkIndex();
+      const nets = normalizeNetworkCodes([...(v.networks || []), ...String(v.networksOther || '').split(/[;,|\n]/)], idx);
+      const networks = sameNetworks(nets.codes, s.networks || []) ? [...(s.networks || [])] : sortNetworkCodes(nets.codes, idx);
       const next = {
         ...s, code, name, codeType: v.codeType || 'SANDRE', kind: v.kind, matrixId: v.matrixId || s.matrixId || null,
-        networks: String(v.networks || '').split(';').map(t => t.trim()).filter(Boolean),
+        networks,
         types: TYPE_ORDER.filter(t => (v.types || []).includes(t)),
         commune: v.commune, bassin: v.bassin, riverName: v.riverName, masseEau: v.masseEau,
         x: x ?? null, y: y ?? null, lat: lat ?? null, lon: lon ?? null,
@@ -175,6 +184,7 @@ export default {
         compartments: normalizeCompartments(grid, v.compartments || []), bioLists: (v.bioLists || []).slice(),
         samplingPoints: points, photos, photoSource: String(v.photoSource || '').trim()
       };
+      const created = await ensureNetworks(nets.unknown, { reason: `${reason} (réseau ajouté depuis la fiche de la station ${code})`, action: 'create' });
       await store.put('site', next, { reason });
       // Point principal du site (créé avec le référentiel aux coordonnées de la station) : même position.
       if (lat !== null && (lat !== s.lat || lon !== s.lon)) {
@@ -182,7 +192,7 @@ export default {
           await store.put('point', { ...pt, lat, lon }, { reason: `${reason} (position de la station)` });
         }
       }
-      toast('Station enregistrée ✓', 'ok');
+      toast(created.length ? `Station enregistrée ✓ — réseau(x) ajouté(s) au référentiel : ${created.map(n => n.code).join(', ')}` : 'Station enregistrée ✓', 'ok', created.length ? 6000 : undefined);
       navigate('/station/' + encodeURIComponent(s.id));
     }
   }
