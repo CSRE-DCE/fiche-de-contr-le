@@ -16,11 +16,13 @@ import * as auth from '../core/auth.js';
 import { agentInitials, suggestUsername } from '../domain/permissions.js';
 import { bindActions, toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { logoImg, DEFAULT_LOGO_WIDE } from '../ui/logo.js';
 import { seedAll } from '../app/bootstrap.js';
 import { saveOrgSettings } from '../app/settings.js';
 import { parseRepoSpec } from '../app/github.js';
 
-const LOGO = 'icons/logo-oeg.png';
+// Logo des écrans de connexion : logo choisi en Administration (copie locale, js/ui/logo.js), sinon celui de l'OEG.
+const LOGO = () => logoImg({ cls: 'logo', alt: 'Office de l’Eau de Guyane', fallback: DEFAULT_LOGO_WIDE });
 let unbind = null;
 function bind(root, handlers) { unbind?.(); unbind = bindActions(root, handlers); }
 /** Retire les gestionnaires des écrans de connexion (appelé à l'entrée dans l'application). */
@@ -30,7 +32,7 @@ const footer = () => html`<p class="tiny muted" style="text-align:center;margin-
 
 export function renderMessage(root, { title, message }) {
   teardownAuth();
-  root.innerHTML = String(html`<div class="auth"><div class="auth-card"><img class="logo" src="${LOGO}" alt=""><h1>${title}</h1><p class="sub">${message}</p></div></div>`);
+  root.innerHTML = String(html`<div class="auth"><div class="auth-card">${LOGO()}<h1>${title}</h1><p class="sub">${message}</p></div></div>`);
 }
 
 /** Aide pas à pas : dépôt privé et jeton « fine-grained » (reprise dans l'écran Synchronisation). */
@@ -158,7 +160,7 @@ export function renderSetup(root, { onDone }) {
   };
   const draw = () => {
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
-      <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
+      ${LOGO()}
       <h1>Mise en service de la tablette</h1>
       <p class="sub">Fiches de contrôle terrain — première utilisation sur cette tablette.</p>
       ${mode === 'choice' ? choice() : mode === 'standalone' ? first() : mode === 'extra' ? extraForm() : html`<button type="button" class="btn ghost sm" data-act="mode" data-value="choice" style="margin-bottom:10px">← Revenir au mode autonome (celui de l’OEG)</button>
@@ -372,7 +374,7 @@ export async function renderLogin(root, { message = '', onUnlocked, pick = 'last
   let selected = pick === 'none' && users.length > 1 ? '' : users[0]?.username || '';
   const draw = () => {
     root.innerHTML = String(html`<div class="auth"><div class="auth-card">
-      <img class="logo" src="${LOGO}" alt="Office de l'Eau de Guyane">
+      ${LOGO()}
       <h1>Qui utilise la tablette ?</h1>
       <p class="sub">${navigator.onLine ? 'Fiches de contrôle terrain' : 'Hors connexion — ouverture de session locale'} : touchez votre nom puis saisissez votre mot de passe</p>
       ${message ? html`<div class="banner info" id="loginMsg">${message}</div>` : ''}

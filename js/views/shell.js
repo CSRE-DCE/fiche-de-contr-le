@@ -15,6 +15,7 @@ import { exchangeState, onExchangeState, watchExchange } from '../app/exchange.j
 import { orgSettings } from '../app/settings.js';
 import { OPEN_DEVIATION } from '../domain/model.js';
 import { icon } from '../ui/icons.js';
+import { logoImg } from '../ui/logo.js';
 
 // ic : nom de pictogramme (js/ui/icons.js) ; bottom : présent dans la barre basse du téléphone.
 const NAV = [
@@ -54,7 +55,7 @@ export function renderShell(root, { lock }) {
   const groups = [...new Set(navItems().map(n => n.group))];
   root.innerHTML = String(html`
     <header class="app-top" id="appTop">
-      <img class="logo" src="icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="46" height="46">
+      ${logoImg({ cls: 'logo', alt: org.orgName || 'Office de l’Eau de Guyane', width: 46, height: 46 })}
       <div class="titles"><h1>Fiches de contrôle terrain</h1><small>${org.orgName || 'Office de l’Eau de Guyane'}</small></div>
       <button class="top-pill" data-act="shell-sync" id="netPill" title="État de la connexion et de la synchronisation"><span class="dot"></span><span class="lbl" id="netLbl">…</span></button>
       <button class="top-pill pill-account" data-act="shell-account" title="Mon compte">${icon('user', { size: 20 })}<span class="lbl">${session.user.name.split(' ')[0]}</span></button>

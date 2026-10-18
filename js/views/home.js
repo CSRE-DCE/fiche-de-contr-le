@@ -25,7 +25,8 @@ import { navigate } from '../ui/router.js';
 import { icon } from '../ui/icons.js';
 import { empty, options, networkDot, networkBadges, networkVars } from '../ui/components.js';
 import { auditDate, byAuditDateDesc } from '../domain/model.js';
-import { guyaneInset, assetURL, LOGO_URL } from '../ui/sheet-chrome.js';
+import { guyaneInset, assetURL } from '../ui/sheet-chrome.js';
+import { logoImg } from '../ui/logo.js';
 import { mediaURL } from '../core/media.js';
 import { TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { agentPref, setAgentPref } from '../app/settings.js';
@@ -166,7 +167,7 @@ export default {
     };
     return html`
       <section class="hm-hero">
-        <img class="hm-logo" src="${LOGO_URL}" alt="" width="64" height="64">
+        ${logoImg({ cls: 'hm-logo', alt: '', width: 64, height: 64 })}
         <div class="hm-hero-txt"><h1>Stations</h1><p>${grid.name || 'Contrôle terrain des prestations de prélèvement'} · ${all.length} station${all.length > 1 ? 's' : ''} au référentiel${nets.filter(c => c !== NO_NETWORK).length && !type ? ` · ${nets.filter(c => c !== NO_NETWORK).length} réseaux de surveillance` : ''}</p></div>
         <div class="hm-hero-actions">
           ${can('audit.create') ? html`<a class="btn primary lg" href="${withQuery('#/nouvel-audit', { type, reseau })}"><span class="ic">${icon('plus')}</span>Nouvelle tournée</a>` : ''}

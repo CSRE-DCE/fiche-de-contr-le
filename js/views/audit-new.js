@@ -5,7 +5,8 @@
  * obligatoire), stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
  * prestataire mises en avant, ordre modifiable, station la plus proche par GPS, filtre par réseau de surveillance
  * avec effectifs, réseaux de chaque station), compartiments (biologie : pré-cochés selon les stations) et
- * opérateurs → createAudit → #/audit/<id>.
+ * préleveurs du prestataire (« Ajouter un opérateur » : nom, prénom, initiales, fonction, sans doublon) → createAudit →
+ * #/audit/<id>.
  * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine,
  * ?reseau=<code> (filtre des stations candidates : seulement par l'adresse, jamais par une préférence mémorisée).
  * Option avancée : audit sur une grille historique (un seul site), ?mode=general — formulaire d'origine. */
@@ -21,6 +22,8 @@ import { PROVIDER_KINDS } from '../domain/model.js';
 import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
 import { agentInitials } from '../domain/permissions.js';
 import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
+import { providerOperators, canAddOperator, operatorDisplay } from '../app/operators.js';
+import { openOperatorForm } from './audit-modules.js';
 import { getPosition } from '../ui/gps.js';
 import { agentPref } from '../app/settings.js';
 import { NO_NETWORK, inNetwork, prestationNetwork, sortNetworkCodes } from '../domain/networks.js';
@@ -178,7 +181,7 @@ function tourForm(q) {
   const prov = store.get('provider', d.providerId);
   const comps = chosenCompartments(grid, d);
   const typeDef = gridType(grid, d.type);
-  const ops = sortBy(store.filter('operator', o => o.providerId === d.providerId && o.active !== false), 'code');
+  const ops = d.providerId ? providerOperators(d.providerId, { include: d.operatorIds || [] }) : [];
   const step = (n, title, sub = '') => html`<h2 class="an-step"><span class="an-step-no">${n}</span><span>${title}${sub ? html`<small>${sub}</small>` : ''}</span></h2>`;
   return html`
     ${pageTitle('Nouvelle tournée', 'Contrôle terrain d’un prestataire de prélèvement : une journée, une ou plusieurs stations', html`<a class="btn ghost sm" href="#/nouvel-audit?mode=general">${icon('clipboard', { size: 18 })}Grille historique</a>`, '#/')}
@@ -223,11 +226,12 @@ function tourForm(q) {
             <p class="note">Pré-cochés selon les compartiments des stations choisies ; l’organisation, la sécurité et la traçabilité sont toujours contrôlées.</p>`
           : html`<ul class="an-fixed">${(grid.compartments || []).filter(c => comps.includes(c.key)).map(c => html`<li>${icon(c.icon || 'check', { size: 20 })}${c.label}</li>`)}</ul>`}</section>
 
-      <section class="card">${step(7, 'Opérateurs du prestataire')}
+      <section class="card" id="anOperators">${step(7, 'Préleveurs du prestataire', 'opérateurs contrôlés')}
         ${!d.providerId ? html`<p class="note">Choisissez d’abord le prestataire.</p>`
-          : ops.length ? html`<div class="checks">${ops.map(o => html`<label class="check ${(d.operatorIds || []).includes(o.id) ? 'sel' : ''}"><input type="checkbox" value="${o.id}" data-change="setOps" ${(d.operatorIds || []).includes(o.id) ? 'checked' : ''}> ${operatorName(o)}</label>`)}</div>
-            <p class="note">D’autres opérateurs pourront être ajoutés dans la tournée.</p>`
-          : html`<p class="note">Aucun opérateur enregistré pour ce prestataire : ils seront identifiés sur place.</p>`}</section>
+          : html`${ops.length ? html`<div class="checks an-ops">${ops.map(o => { const on = (d.operatorIds || []).includes(o.id); return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${o.id}" data-change="setOps" ${on ? 'checked' : ''}><span class="as-op-ini">${o.code || '?'}</span><span class="as-op-txt"><b>${operatorDisplay(o)}</b>${o.function ? html`<small>${o.function}</small>` : ''}</span></label>`; })}</div>`
+              : html`<p class="note">Aucun opérateur enregistré pour ce prestataire.</p>`}
+            ${canAddOperator() ? html`<button type="button" class="btn ghost" data-act="op-new" id="opNewCreate"><span class="ic">${icon('plus')}</span>Ajouter un opérateur</button>` : ''}
+            <p class="note">Cochez les préleveurs présents. Un préleveur absent de la liste : « Ajouter un opérateur » (nom, prénom, initiales, fonction) — rattaché à ${providerHeaderName(prov)}, sans doublon. La liste reste modifiable dans la tournée (feuille Organisation).</p>`}</section>
 
       <div class="an-submit">
         <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}
@@ -313,6 +317,13 @@ export default {
       this.refresh();
     },
     setOps() { draft.operatorIds = [...document.querySelectorAll('[data-change=setOps]')].filter(i => i.checked).map(i => i.value); this.refresh(); },
+    /** « Ajouter un opérateur » : rattaché au prestataire choisi, sans doublon, coché aussitôt. */
+    async 'op-new'() {
+      const op = await openOperatorForm(draft.providerId, { context: 'création de tournée' });
+      if (!op) return;
+      draft.operatorIds = [...new Set([...(draft.operatorIds || []), op.id])];
+      this.refresh();
+    },
     setCtrl() {
       const me = session.user?.id;
       draft.controllerIds = [me, ...[...document.querySelectorAll('[data-change=setCtrl]')].filter(i => i.checked && i.value !== me).map(i => i.value)].filter(Boolean);

@@ -10,8 +10,8 @@ import { can, isTeamMode } from '../core/auth.js';
 import { mediaFor } from '../core/media.js';
 import { navigate, currentView } from '../ui/router.js';
 import { toast, openModal, choiceDialog, formValues } from '../ui/dom.js';
-import { pageTitle, kv, badge, empty, options, thumbs, hydrateMedia, evidenceButtons, siteName, providerName, operatorName, voiceBtn, field, tourStationsLabel, auditSiteIds } from '../ui/components.js';
-import { addFilesFromInput, viewMedia, compressImage } from '../ui/capture.js';
+import { pageTitle, kv, badge, empty, options, thumbs, hydrateMedia, evidenceButtons, mediaInputs, siteName, providerName, operatorName, voiceBtn, field, tourStationsLabel, auditSiteIds } from '../ui/components.js';
+import { addFilesFromInput, viewMedia, preparePhoto, inputSource } from '../ui/capture.js';
 import { getPosition } from '../ui/gps.js';
 import { saveMedia } from '../core/media.js';
 import { EMERGENCY_CATEGORIES, auditDate, byAuditDateDesc } from '../domain/model.js';
@@ -37,7 +37,7 @@ async function captureForm({ urgent }) {
     body: html`<form id="obsf">
       <div class="banner ${urgent ? 'nc' : 'info'}" id="obsCtx">${fmtDateTime(nowISO())} · position en cours d’acquisition…${c.audit ? html` · audit ${c.audit.number}` : ''}</div>
       ${urgent && !isTeamMode() ? html`<p class="note" id="obsNoSend">L’alerte est enregistrée sur cette tablette, <b>sans transmission automatique</b> : prévenez directement votre responsable.</p>` : ''}
-      <label class="btn ${urgent ? 'danger' : 'primary'} lg block" style="margin-bottom:10px"><span class="ic">📷</span>Prendre une photo<input type="file" accept="image/*" capture="environment" hidden data-change="photo"></label>
+      <div class="btn-row obs-photo-btns" style="margin-bottom:10px">${mediaInputs(null, { act: 'photo', camCls: `btn ${urgent ? 'danger' : 'primary'} lg`, cls: 'btn ghost lg' })}</div>
       <div class="thumbs" id="obsThumbs"></div>
       ${urgent ? field('Nature de la situation', html`<div class="opt-list">${EMERGENCY_CATEGORIES.map((x, i) => html`<button type="button" data-act="cat" data-v="${x}" class="${i === 0 ? 'sel' : ''}">${x}</button>`)}</div><input type="hidden" name="category" value="${EMERGENCY_CATEGORIES[0]}">`) : ''}
       ${field(urgent ? 'Description de la situation' : 'Observation', html`<div class="input-wrap"><textarea name="text" id="obsText" required placeholder="${urgent ? 'Ce qui se passe, risques, personnes concernées…' : 'Pratique observée, constat…'}"></textarea>${voiceBtn('obsText')}</div>`, { required: true })}
@@ -54,9 +54,16 @@ async function captureForm({ urgent }) {
       el.textContent = `${fmtDateTime(nowISO())} · ${pos?.lat ? `GPS ${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)} (±${Math.round(pos.accuracy)} m)` : 'position indisponible'}${c.audit ? ' · audit ' + c.audit.number : ''}${c.prestation ? ' · prestation ' + c.prestation.ref : ''}`;
     },
     handlers: {
+      /** « Prendre une photo » ou « Importer depuis la galerie » : date de prise de vue reprise de la photo importée. */
       async photo(el) {
-        for (const f of el.files) { const r = await compressImage(f); photoFiles.push(r); const url = URL.createObjectURL(new Blob([r.bytes], { type: 'image/jpeg' })); this.root.querySelector('#obsThumbs').insertAdjacentHTML('beforeend', `<div class="thumb"><img src="${url}" alt=""></div>`); }
+        const files = [...el.files], source = inputSource(el);
         el.value = '';
+        for (const f of files) {
+          const r = await preparePhoto(f, { source });
+          photoFiles.push(r);
+          const url = URL.createObjectURL(new Blob([r.bytes], { type: 'image/jpeg' }));
+          this.root.querySelector('#obsThumbs').insertAdjacentHTML('beforeend', `<div class="thumb"><img src="${url}" alt="">${r.takenAtSource === 'import' ? '<span class="t-meta">date d’import</span>' : ''}</div>`);
+        }
       },
       cat(el) { this.root.querySelectorAll('[data-act=cat]').forEach(b => b.classList.toggle('sel', b === el)); this.root.querySelector('[name=category]').value = el.dataset.v; },
       async voice(el) { (await import('../ui/voice.js')).dictate(this.root.querySelector('#' + el.dataset.target)); },
@@ -73,7 +80,7 @@ async function captureForm({ urgent }) {
     prestationId: c.prestation?.id || null, linkedAuditId: c.audit?.id || null, linkedDeviationId: null, gps, status: urgent ? 'alerte' : 'nouvelle'
   };
   await store.put('observation', obs, { action: urgent ? 'emergency' : 'create' });
-  for (const p of photoFiles) await saveMedia(p.bytes, { mime: 'image/jpeg', kind: 'photo', link: { type: 'observation', id: obs.id }, gps, width: p.width, height: p.height, caption: urgent ? 'Situation critique' : 'Observation terrain' });
+  for (const p of photoFiles) await saveMedia(p.bytes, { mime: 'image/jpeg', kind: 'photo', link: { type: 'observation', id: obs.id }, gps: p.gps || (gps ? { ...gps, source: 'device' } : null), width: p.width, height: p.height, takenAt: p.takenAt, takenAtSource: p.takenAtSource, importedAt: p.importedAt, source: p.source, caption: urgent ? 'Situation critique' : 'Observation terrain' });
   if (urgent) {
     await store.put('alert', {
       id: uuid(), observationId: obs.id, level: 'critique', category: obs.category, message: obs.text, at: obs.at, by: session.user.name,

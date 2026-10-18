@@ -2,6 +2,11 @@
  * Calculs géographiques purs (aucune dépendance au DOM ni à l'état de l'application).
  * Projection utilisée : UTM (zone 21N ou 22N), ellipsoïde GRS80/WGS84 — conforme à la
  * projection "RGFG 95 / UTM 22N" utilisée par les fiches terrain OEG.
+ * Fuseaux de la Guyane : UTM 22N (RGFG95, EPSG:2972 — système de référence des fiches et du référentiel) et UTM 21N
+ * (ouest guyanais, EPSG:3313) ; conversion d'un fuseau à l'autre par la latitude / longitude (utmConvert), fuseau
+ * probable d'une saisie (guessUtmZone : les deux fuseaux sont disjoints en X sur la Guyane) et emprise de la Guyane
+ * et de ses eaux littorales (inGuyane). Les deux fuseaux supposent le RGFG95 (≈ WGS84) : des coordonnées d'anciennes
+ * cartes en CSG67 seraient décalées d'environ 115 m.
  *
  * Ce fichier est un vrai module ES (export/import) : il est chargé par l'application via
  * <script type="module"> et importé tel quel par les tests unitaires (tests/geo.test.js).
@@ -96,6 +101,41 @@ export function latLonToUtm(lat, lon, zone = 22) {
  */
 export function ecartGPS(xTheorique, yTheorique, xTerrain, yTerrain) {
   return Math.hypot(xTerrain - xTheorique, yTerrain - yTheorique);
+}
+
+/** Fuseaux UTM de la Guyane : clé ('22N', '21N') → numéro de fuseau. */
+export const UTM_ZONES = Object.freeze({ '22N': 22, '21N': 21 });
+const zoneNo = z => (typeof z === 'number' ? z : UTM_ZONES[String(z).toUpperCase()] || Number(String(z).replace(/\D/g, '')) || 22);
+
+/**
+ * Conversion de coordonnées UTM d'un fuseau à l'autre (via la latitude / longitude, même ellipsoïde) :
+ * utmConvert(829310, 608565, 21, 22) → [164412,4…, 608596,4…] (mètres, non arrondis).
+ */
+export function utmConvert(easting, northing, fromZone, toZone) {
+  const [lat, lon] = utmToLatLon(easting, northing, zoneNo(fromZone));
+  return latLonToUtm(lat, lon, zoneNo(toZone));
+}
+
+/** Emprise de la Guyane et de ses eaux littorales (WGS84 : contour du département ± 0,3° environ, soit ≈ 30 km). */
+export const GUYANE_BOUNDS = Object.freeze({ minLat: 1.8, maxLat: 6.3, minLon: -54.95, maxLon: -51.25 });
+/** La position (degrés décimaux WGS84) est-elle en Guyane ou au large de ses côtes ? */
+export function inGuyane(lat, lon) {
+  const b = GUYANE_BOUNDS;
+  return Number.isFinite(lat) && Number.isFinite(lon) && lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon;
+}
+
+/**
+ * Fuseau probable de coordonnées UTM saisies en Guyane : '22N', '21N' ou null (hors de la Guyane dans les deux).
+ * Sur la Guyane, X vaut environ 99 000 à 434 000 m en 22N et 766 000 à 1 101 000 m en 21N : la détection est sûre.
+ */
+export function guessUtmZone(easting, northing) {
+  const x = Number(easting), y = Number(northing);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  for (const key of ['22N', '21N']) {
+    const [lat, lon] = utmToLatLon(x, y, UTM_ZONES[key]);
+    if (inGuyane(lat, lon)) return key;
+  }
+  return null;
 }
 
 // Rendre les fonctions disponibles aux scripts classiques de l'application (portée globale

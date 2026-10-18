@@ -91,6 +91,7 @@
 .ss-map.is-offline{height:auto;min-height:clamp(200px,30cqi,300px)}
 .ss-map.is-offline .ss-map-fallback{position:relative;inset:auto;min-height:inherit;padding:14px clamp(14px,3vw,30px)}
 .ss-fb-k{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--oeg-muted);margin-top:4px}
+.ss-fb-k.ss-fb-origin{text-transform:none;letter-spacing:0;font-weight:600;font-style:italic}
 .ss-fb-v{display:flex;flex-wrap:wrap;gap:0 12px;font-weight:700;font-variant-numeric:tabular-nums}
 .ss-fb-v>span{white-space:nowrap}
 .ss-map-label{background:#ffffffe6;border:0;box-shadow:none;padding:1px 6px;font-family:var(--f-text);font-weight:700;font-size:13.5px;color:#14284b}
@@ -113,16 +114,24 @@
 .ss-photo figcaption b{font-weight:700}
 .ss-photo.is-empty{border:2px dashed #9cc3e0;background:#f4f9fd}
 .ss-photo-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 10px 36px;color:#7d97b3;text-align:center;font-size:13px;font-weight:600}
-.ss-photo-ph.is-add{cursor:pointer;color:var(--oeg-blue);font-size:14px}
+.ss-photo-ph.is-add{color:var(--oeg-blue);font-size:14px;gap:8px}
 .ss-photo-ph.is-add:hover{background:#eaf4fc}
 .ss-photo-ph.is-add:focus-within{outline:3px solid #ffb300;outline-offset:-3px}
-.ss-photo-ph.is-add .ico{width:44px;height:44px;padding:9px;border-radius:50%;background:var(--oeg-blue);color:#fff;box-shadow:0 2px 6px #0b5fae55}
+.ss-photo-ph.is-add>.ico{width:44px;height:44px;padding:9px;border-radius:50%;background:var(--oeg-blue);color:#fff;box-shadow:0 2px 6px #0b5fae55}
 .ss-photo-tools{position:absolute;right:6px;top:6px;display:flex;gap:6px}
 .ss-ph-btn{display:inline-flex;align-items:center;gap:5px;min-height:44px;min-width:44px;justify-content:center;padding:4px 10px;border-radius:999px;background:#ffffffeb;color:var(--oeg-navy);
   font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 1px 4px #0003;border:1px solid #0d357722}
 .ss-ph-btn:hover{background:#fff}
 .ss-ph-btn:focus-within{outline:3px solid #ffb300}
-@container ss (max-width:420px){.ss-ph-btn span{display:none}.ss-ph-btn{padding:4px}}
+/* Photographies RD / RG / AM / AV : « Prendre une photo » et « Importer depuis la galerie » (deux boutons distincts) ;
+   emplacement vide : boutons libellés ; photo présente : remplacement par « Photo » / « Galerie » en surimpression.
+   Fiche étroite : icônes seules (libellé en info-bulle et pour les lecteurs d'écran). */
+.ss-ph-btn .ic{display:inline-flex}
+.ss-ph-k{color:#4b6a8a;font-size:13px}
+.ss-ph-add{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.ss-ph-btn.is-big{background:var(--oeg-blue);color:#fff;border-color:transparent}
+.ss-ph-btn.is-big.ms-gallery{background:#fff;color:var(--oeg-blue);border-color:#0b5fae55}
+@container ss (max-width:420px){.ss-ph-btn .ms-l{display:none}.ss-ph-btn{padding:4px}.ss-ph-k{font-size:12px}}
 
 /* Accès / difficultés : grand pictogramme + texte */
 .ss-iconrow{display:flex;align-items:center;gap:clamp(12px,1.8vw,24px)}

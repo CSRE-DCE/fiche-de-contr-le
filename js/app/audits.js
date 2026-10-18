@@ -1,5 +1,6 @@
 /* Opérations métier sur les audits : création (instantanés), réponses, écarts, clôture, signatures,
- * verrouillage scellé, modifications motivées après signature et vérification d'intégrité.
+ * verrouillage scellé, modifications motivées après signature, vérification d'intégrité et annulation motivée
+ * d'une tournée non signée (« Annuler la tournée » : cancelTour).
  * Grilles en feuilles (CT-2026) — un audit = une TOURNÉE : type de tournée (audit.auditType : bio, ce, eso),
  * stations visitées dans l'ordre de passage (audit.stations : [{key, siteId, pointId, prestationId, addedAt}] ;
  * audit.siteId / prestationId / pointId = ceux de la 1re station, audit.prestationIds = toutes), compartiments
@@ -11,22 +12,30 @@
  * Tournée en BINÔME (tablette partagée) : contrôleurs OEG de la tournée (audit.controllerIds, noms figés dans
  * audit.controllerNames {id: nom}, historique audit.controllerLog ; audit antérieur sans contrôleurs : son auteur),
  * choisis à la création, rejoints (« Rejoindre la tournée ») ou retirés avec motif ; chaque saisie reste attribuée à
- * l'agent connecté (réponse : by / byName). */
+ * l'agent connecté (réponse : by / byName).
+ * REMPLISSAGE AUTOMATIQUE des informations redondantes (js/domain/links.js) : chaque saisie d'une source (date, météo,
+ * niveau d'eau, contrôleurs de F2 ; préleveurs de la tournée ; opérateurs présents sur la station…) remplit, dans la
+ * même écriture, les champs équivalents encore vides ou encore auto-remplis des autres feuilles (« Repris de F… »,
+ * prefilled, from, fromId ; attribués à l'agent dont la saisie les a produits) ; une valeur saisie par l'agent
+ * (valueManual) n'est jamais remplacée ; rien n'est propagé sur une tournée signée et verrouillée ou annulée.
+ * Reprise des réponses de la station précédente (copyPreviousStation) : à la demande, feuille par feuille. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
 import { can, canEditAudit } from '../core/auth.js';
-import { roleCan, auditControllerIds, auditControllers, controllerNamesText, isAuditController, canJoinAudit } from '../domain/permissions.js';
+import { roleCan, auditControllerIds, auditControllers, controllerNamesText, isAuditController, canJoinAudit, cancelTourRefusal } from '../domain/permissions.js';
 import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addDays, localDate, localTime } from '../core/util.js';
 import {
   allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, stationProgress, prefillResponses, normalizeCompartments,
   isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries,
-  isEnteredResponse
+  isEnteredResponse, visibleItems
 } from '../domain/grids.js';
+import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, LINKED_SHEET_KEYS } from '../domain/links.js';
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
 import { CT_GRID_ID, upToDateGrid } from '../domain/default-grids.js';
+import { operatorLabel } from '../domain/operators.js';
 import { nextNumber } from './numbering.js';
 import { applicableDocuments, snapshotDocument } from './documents.js';
 import { orgSettings } from './settings.js';
@@ -145,7 +154,8 @@ export function auditState(audit, { includeMissing = false } = {}) {
   const site = store.get('site', audit.siteId);
   const provider = store.get('provider', audit.providerId);
   const stations = stationsOf(audit);
-  const operators = [...(audit.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean), ...(audit.adHocOperators || [])];
+  // Préleveurs : fiche du référentiel, à défaut (fiche absente de la tablette) le libellé figé dans la tournée.
+  const operators = [...(audit.operatorIds || []).map(id => store.get('operator', id) || (audit.operatorNames?.[id] ? { id, code: '', firstName: '', lastName: audit.operatorNames[id], frozen: true } : null)).filter(Boolean), ...(audit.adHocOperators || [])];
   const settings = orgSettings();
   const prestations = stations.filter(st => st.prestation).map(st => ({ prestation: st.prestation, station: st }));
   const alerts = computeAlerts({ audit, grid, ctx, point, site, prestation, prestations, operators, settings, mediaCounts: counts, includeMissing, today: localDate(), stationSites: Object.fromEntries(stations.map(st => [st.key, st.site])) })
@@ -176,6 +186,54 @@ export function gridsFor(prestation) {
 const defaultPointId = siteId => store.find('point', p => p.siteId === siteId)?.id || null;
 const sessionStamp = at => ({ at, by: session.user.id, byName: session.user.name });
 
+/* ---------- Remplissage automatique des informations redondantes (js/domain/links.js) ---------- */
+/** Sources de tournée des groupes de champs liés (création de la tournée, ajout d'une station). */
+const TOUR_SOURCES = ['it-F2-1.4', 'it-F2-1.1', 'it-F2-1.9', 'it-F2-1.8', OPERATORS_SOURCE];
+/** Préleveurs de la tournée en clair : « Prénom Nom (INI) — fonction, … » (libellés figés dans la tournée). */
+export function tourOperatorsText(audit) {
+  return (audit?.operatorIds || []).map(id => audit.operatorNames?.[id] || operatorLabel(store.get('operator', id))).filter(Boolean).join(', ');
+}
+/** Données complémentaires des groupes liés : préleveurs de la tournée, prestataire. */
+export const linkExtra = audit => ({ operatorsText: tourOperatorsText(audit), providerName: store.get('provider', audit?.providerId)?.name || '' });
+/** Critères visibles de la grille effective d'un audit (version en cours de modification comprise). */
+function linkItems(a) {
+  if (!isSheetGrid(a?.gridSnapshot) || !(a.stations || []).length) return [];
+  const grid = expandGrid(a.gridSnapshot, a.stations, sitesById(a.stations), { provider: store.get('provider', a.providerId) });
+  return visibleItems(grid, a.responses || {}, auditContext(a)).map(x => x.item);
+}
+const emptyValue = v => v === undefined || v === null || (typeof v === 'string' && !v.trim()) || (typeof v === 'object' && !Object.values(v || {}).some(x => !emptyValue(x)));
+/**
+ * Applique EN PLACE (dans la fonction de modification d'updateAudit, une seule écriture) les reprises des sources
+ * `changed` : valeurs { value, prefilled: true, from, fromId } attribuées à l'agent connecté (sauf réponse déjà saisie :
+ * son auteur est conservé) ; encadrés liés (`<clé>From`). Rien sur une tournée signée et verrouillée ou annulée, ni
+ * sur une grille sans feuilles. Retourne le nombre de champs mis à jour.
+ */
+export function applyLinks(a, changed, at = nowISO()) {
+  if (!isSheetGrid(a?.gridSnapshot) || a.lock?.lockedAt || a.status === 'abandonne' || !session.user) return 0;
+  const ups = linkedUpdates({ items: linkItems(a), responses: a.responses || {}, sheets: a.sheets || {}, changed, extra: linkExtra(a) });
+  const stamp = sessionStamp(at);
+  a.responses = a.responses || {};
+  for (const u of ups) {
+    if (u.sheet) {
+      a.sheets = a.sheets || {};
+      const d = { ...(a.sheets[u.sheet] || {}) };
+      if (u.clear) { delete d[u.key]; delete d[u.key + 'From']; } else { d[u.key] = u.value; d[u.key + 'From'] = u.from; }
+      a.sheets[u.sheet] = d;
+      continue;
+    }
+    const r = a.responses[u.id];
+    if (u.clear) {
+      if (!r) continue;
+      const n = { ...r };
+      for (const k of ['value', 'prefilled', 'from', 'fromId']) delete n[k];
+      if (!n.status && emptyValue(n.comment)) delete a.responses[u.id]; else a.responses[u.id] = n;
+      continue;
+    }
+    a.responses[u.id] = { ...(r || {}), value: u.value, prefilled: true, from: u.from, fromId: u.fromId, ...(isEnteredResponse(r) ? {} : stamp) };
+  }
+  return ups.length;
+}
+
 /* ---------- Contrôleurs OEG de la tournée (binôme) ---------- */
 /** Noms des agents connus (profils « user ») : {id: nom} ; l'agent connecté avec son nom de session. */
 export function agentNames() {
@@ -193,7 +251,7 @@ export function tourAgents() {
 export const tourControllers = audit => auditControllers(audit, agentNames());
 /** « A. Dupont, B. Martin » : contrôleurs de la tournée (Agent(s) OEG, Contrôleur OEG, fiches, rapports, listes). */
 export const controllersLabel = audit => controllerNamesText(audit, agentNames());
-export { auditControllerIds, isAuditController, canJoinAudit };
+export { auditControllerIds, isAuditController, canJoinAudit, cancelTourRefusal };
 
 /** Contrôleurs demandés à la création : agent connecté toujours inclus (en tête), agents actifs autorisés à auditer. */
 function resolveControllers(ids) {
@@ -222,7 +280,7 @@ function refreshControllerPrefill(a, names) {
 function controllerChange(audit) {
   const cur = store.get('audit', audit.id);
   if (cur.lock?.lockedAt) throw new Error('Tournée signée et verrouillée : la liste des contrôleurs ne peut plus changer.');
-  if (cur.status === 'abandonne') throw new Error('Tournée abandonnée.');
+  if (cur.status === 'abandonne') throw new Error('Tournée annulée.');
   if (cur.signatures?.auditor) throw new Error('Tournée déjà signée par un contrôleur : rouvrez-la avant de modifier la liste des contrôleurs.');
   return cur;
 }
@@ -248,6 +306,7 @@ export async function addController(audit, userId = session.user?.id, { reason =
     a.controllerNames = Object.fromEntries(after.map(c => [c.id, c.name]));
     a.controllerLog = [...(a.controllerLog || []), { ...sessionStamp(now), action: 'ajout', userId: u.id, name: u.name, reason: reason || null }];
     refreshControllerPrefill(a, after.map(c => c.name).filter(Boolean).join(', '));
+    applyLinks(a, ['it-F2-1.1'], now);
   }, { action: 'controller-add', reason: reason || (self ? `${u.name} rejoint la tournée` : `${u.name} ajouté(e) aux contrôleurs de la tournée`) });
 }
 /** « Rejoindre la tournée » : l'agent connecté devient contrôleur de la tournée. */
@@ -271,6 +330,7 @@ export async function removeController(audit, userId, { reason = null } = {}) {
     a.controllerNames = Object.fromEntries(after.map(c => [c.id, c.name]));
     a.controllerLog = [...(a.controllerLog || []), { ...sessionStamp(now), action: 'retrait', userId, name: gone.name, reason }];
     refreshControllerPrefill(a, after.map(c => c.name).filter(Boolean).join(', '));
+    applyLinks(a, ['it-F2-1.1'], now);
   }, { action: 'controller-remove', reason: `${gone.name} retiré(e) des contrôleurs de la tournée — ${reason}` });
 }
 /**
@@ -352,6 +412,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     siteId: list[0]?.siteId || req[0].siteId || null,
     pointId: list[0]?.pointId || req[0].pointId || null,
     operatorIds: operatorIds.length ? operatorIds : [...new Set(prestations.flatMap(p => p.operatorIds || []))],
+    operatorNames: {},
     samplingTypeId: samplingTypeId || prestation?.samplingTypeId || typeDef?.samplingTypeId || null,
     matrixId: matrixId || prestation?.matrixId || site0?.matrixId || typeDef?.matrixId || null,
     campaignId: campaignId || prestation?.campaignId || null,
@@ -370,6 +431,8 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     signatures: {}, lock: null, amendments: [], reports: [], conclusions: { strengths: '', vigilance: '', comment: '', preconisations: '' },
     stationLog: [], removedStations: []
   };
+  // Préleveurs du prestataire : libellés figés dans la tournée (« Prénom Nom (INI) — fonction »).
+  audit.operatorNames = Object.fromEntries(audit.operatorIds.map(id => [id, operatorLabel(store.get('operator', id))]).filter(([, l]) => l));
   const sites = sitesById(list);
   if (grid.compartments?.length) {
     if (typeDef) {
@@ -395,6 +458,8 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     stations: list.map((st, i) => ({ key: st.key, site: sites[st.siteId], prestation: req.find(r => r.siteId === st.siteId)?.prestation || null, time: i === 0 ? time : '' })),
     ...sessionStamp(now)
   });
+  // Informations communes reprises dans les autres feuilles (date, contrôleurs, préleveurs…) : « Repris de F… ».
+  applyLinks(audit, TOUR_SOURCES, now);
   await store.put('audit', audit, { action: 'create', reason: kind === 'inopine' ? 'Audit inopiné' : null });
   for (const p of prestations) await addPrestationHistory(p, { event: 'audit-demarre', auditId: audit.id, label: `Audit ${number} démarré${list.length > 1 ? ` (tournée de ${list.length} stations)` : ''}` });
   return store.get('audit', audit.id);
@@ -404,12 +469,12 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
  * Ajoute une station à la tournée (fin de l'ordre de passage) : pré-remplit ses critères (date de la tournée —
  * auditDate() —, heure d'arrivée si la tournée est du jour, données de la station), met à jour le « Programme journalier (nombre de stations) » s'il est encore pré-rempli,
  * historise (audit.stationLog, journal, historique de la prestation). Refus : station déjà présente, audit
- * verrouillé ou abandonné, grille sans feuilles.
+ * verrouillé ou tournée annulée, grille sans feuilles.
  */
 export async function addStation(audit, { siteId = null, prestationId = null, pointId = null } = {}, { reason = null } = {}) {
   const cur = store.get('audit', audit.id);
   if (cur.lock?.lockedAt) throw new Error('Audit signé et verrouillé : impossible d’ajouter une station.');
-  if (cur.status === 'abandonne') throw new Error('Audit abandonné : impossible d’ajouter une station.');
+  if (cur.status === 'abandonne') throw new Error('Tournée annulée : impossible d’ajouter une station.');
   if (!isSheetGrid(cur.gridSnapshot)) throw new Error('Cette grille ne permet pas les tournées à plusieurs stations.');
   const prestation = prestationId ? store.get('prestation', prestationId) : null;
   if (prestationId && !prestation) throw new Error('Prestation introuvable.');
@@ -436,6 +501,8 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
     for (const [k, v] of Object.entries(pre)) if (!a.responses[k]) a.responses[k] = v;
     for (const id of countIds) { const r = a.responses[id]; if (!r || (r.prefilled && !r.status)) a.responses[id] = { ...(r || {}), value: stations.length, prefilled: true, ...sessionStamp(now) }; }
     a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'ajout', key: st.key, siteId, prestationId: st.prestationId, reason: reason || null }];
+    // Nouvelle station : date, contrôleurs, météo, niveau d'eau et préleveurs déjà saisis pour la tournée repris.
+    applyLinks(a, TOUR_SOURCES, now);
   }, { reason: reason || `Ajout de la station ${site.name} (${site.code}) à la tournée` });
   if (prestation) await addPrestationHistory(prestation, { event: 'audit-demarre', auditId: cur.id, label: `Audit ${cur.number} : station ajoutée à la tournée` });
   return store.get('audit', cur.id);
@@ -533,14 +600,27 @@ export async function updateAudit(audit, mutate, { reason = null, action = null 
   return store.put('audit', next, { action: action || undefined, reason });
 }
 
+/**
+ * Enregistre la réponse d'un critère (saisie de l'agent connecté). Une valeur modifiée par l'agent n'est plus
+ * « pré-remplie » ni « reprise » et ne sera plus remplacée par une reprise (valueManual) ; une reprise de la station
+ * précédente modifiée n'est plus marquée. La valeur saisie est reprise dans les champs liés des autres feuilles
+ * (applyLinks, même écriture) ; « Type d'audit » (F2.1.11) tient à jour audit.kind (inopiné / avec rendez-vous).
+ */
 export async function setResponse(audit, itemId, patch, { reason = null } = {}) {
   return updateAudit(audit, a => {
     const prev = a.responses[itemId] || {};
-    const r = { ...prev, ...patch, at: nowISO(), by: session.user.id, byName: session.user.name };
-    // Une valeur pré-remplie modifiée par l'auditeur n'est plus « pré-remplie ».
-    if (prev.prefilled && 'value' in patch && !('prefilled' in patch) && canonicalJSON(patch.value ?? null) !== canonicalJSON(prev.value ?? null)) delete r.prefilled;
+    const at = nowISO();
+    const r = { ...prev, ...patch, at, by: session.user.id, byName: session.user.name };
+    const valueChanged = 'value' in patch && canonicalJSON(patch.value ?? null) !== canonicalJSON(prev.value ?? null);
+    // Une valeur pré-remplie (ou reprise d'une autre feuille) modifiée par l'auditeur n'est plus « pré-remplie ».
+    if (valueChanged && !('prefilled' in patch)) { delete r.prefilled; delete r.from; delete r.fromId; r.valueManual = true; }
+    if (prev.copiedFrom && ('status' in patch || 'comment' in patch || valueChanged)) delete r.copiedFrom;
     for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
     a.responses[itemId] = r;
+    if (valueChanged) {
+      if (itemId === 'it-F2-1.11' && isSheetGrid(a.gridSnapshot)) { const k = { 'Inopiné': 'inopine', 'Avec rendez-vous': 'planifie' }[r.value]; if (k) a.kind = k; }
+      applyLinks(a, [itemId], at);
+    }
   }, { reason });
 }
 
@@ -576,9 +656,54 @@ export async function updateSheet(audit, no, patch = {}, { reason = null } = {})
         }
         next.instruments = ins;
       } else next[k] = v;
+      // Encadré lié (ex. « Agent(s) prestataire(s) / fonction » de F4, repris de F1.R4) : saisie de l'agent, plus de reprise.
+      if (LINKED_SHEET_KEYS.includes(k)) { delete next[k + 'From']; next[k + 'Manual'] = true; }
     }
     a.sheets[no] = next;
   }, { reason });
+}
+
+/**
+ * Reprise possible des réponses de la station précédente pour une feuille station (`instanceKey` « 4@<clé> ») :
+ * { prev: {key, index, name}, copies: [{id, fromId, status, comment?, value?}] } ou null (première station, feuille de
+ * tournée, tournée verrouillée ou annulée).
+ */
+export function previousStationPlan(audit, instanceKey) {
+  const cur = audit?.id ? store.get('audit', audit.id) || audit : audit;
+  if (!cur || cur.lock?.lockedAt || cur.status === 'abandonne' || !isSheetGrid(cur.gridSnapshot)) return null;
+  const [no, key] = String(instanceKey || '').split('@');
+  const i = (cur.stations || []).findIndex(st => st.key === key);
+  if (!key || i <= 0) return null;
+  const prev = cur.stations[i - 1];
+  const site = store.get('site', prev.siteId);
+  const copies = copyFromPreviousStation({ items: linkItems(cur), responses: cur.responses || {}, sheetNo: no, stationKey: key, prevKey: prev.key });
+  return { prev: { key: prev.key, index: i - 1, name: site?.name || prev.key }, copies };
+}
+/**
+ * « Reprendre les réponses de la station précédente » (feuille station d'une tournée à plusieurs stations, à la
+ * demande de l'agent, après confirmation) : les points VIDES de la feuille reçoivent le statut, l'observation (et un
+ * choix de liste) du même point de la station précédente ; chaque reprise est marquée copiedFrom {stationKey, fromId}
+ * et attribuée à l'agent connecté. Retourne { count, prev }.
+ */
+export async function copyPreviousStation(audit, instanceKey, { reason = null } = {}) {
+  const cur = store.get('audit', audit.id);
+  if (cur.lock?.lockedAt) throw new Error('Tournée signée et verrouillée : les réponses ne peuvent plus être reprises.');
+  if (cur.status === 'abandonne') throw new Error('Tournée annulée.');
+  const plan = previousStationPlan(cur, instanceKey);
+  if (!plan) throw new Error('Aucune station précédente pour cette feuille.');
+  if (!plan.copies.length) return { count: 0, prev: plan.prev };
+  const now = nowISO();
+  const stamp = sessionStamp(now);
+  await updateAudit(cur, a => {
+    for (const c of plan.copies) {
+      const r = a.responses[c.id] || {};
+      const n = { ...r, status: c.status, ...stamp, copiedFrom: { stationKey: plan.prev.key, fromId: c.fromId, ...stamp } };
+      if (c.comment) n.comment = c.comment;
+      if (c.value !== undefined) { n.value = c.value; delete n.prefilled; }
+      a.responses[c.id] = n;
+    }
+  }, { reason: reason || `Réponses de la station ${plan.prev.index + 1} (${plan.prev.name}) reprises pour la feuille ${String(instanceKey).split('@')[0]} : ${plan.copies.length} point(s)` });
+  return { count: plan.copies.length, prev: plan.prev };
 }
 
 /* ---------- Échantillons ---------- */
@@ -726,11 +851,44 @@ export async function verifyAuditSeal(audit) {
   };
 }
 
-export async function abandonAudit(audit, reason) {
-  if (audit.lock?.lockedAt) throw new Error('Un audit signé ne peut pas être abandonné.');
-  if (!(isAuditController(audit, session.user.id) || can('audit.delete'))) throw new Error('Droit insuffisant.');
-  return updateAudit(audit, a => { a.status = 'abandonne'; a.abandonReason = reason; a.endedAt = nowISO(); }, { action: 'abandon', reason });
+/**
+ * « Annuler la tournée » : statut 'abandonne' (valeur conservée : données existantes, échanges, filtres), motif
+ * OBLIGATOIRE (audit.abandonReason), auteur et date (cancelledAt, cancelledBy, cancelledByName). Permise à tout
+ * contrôleur de la tournée et aux profils autorisés (audit.delete) — règle pure cancelTourRefusal ; refus expliqué
+ * pour une tournée signée et verrouillée ou déjà annulée. Écarts OUVERTS de la tournée : refus (erreur `needsCancel`,
+ * e.openDeviations) sauf `cancelDeviations: true` — ils sont alors annulés avec le même motif (jamais d'écart ouvert
+ * rattaché à une tournée annulée). Les saisies sont conservées ; historique de chaque prestation (« Audit … annulé —
+ * motif ») : la prestation redevient à contrôler au planning. L'objet reçu est relu dans le magasin.
+ */
+export async function cancelTour(audit, reason, { cancelDeviations = false } = {}) {
+  const cur = store.get('audit', audit?.id);
+  const refusal = cancelTourRefusal(cur, session.user, { reason: reason ?? '' });
+  if (refusal) throw new Error(refusal);
+  const motif = String(reason).trim();
+  const open = auditDeviations(cur.id).filter(d => OPEN_DEVIATION.includes(d.status));
+  if (open.length && !cancelDeviations) {
+    const e = new Error(`La tournée ${cur.number} a ${open.length} écart(s) ouvert(s) (${open.map(d => d.number).join(', ')}) : ils doivent être annulés avec elle.`);
+    e.needsCancel = true; e.openDeviations = open.map(d => ({ id: d.id, number: d.number }));
+    throw e;
+  }
+  if (open.length && !(can('deviation.manage') || can('deviation.close'))) throw new Error('Votre profil ne permet pas d’annuler les écarts ouverts de cette tournée.');
+  for (const d of open) {
+    await updateDeviation(d, { status: 'annule', closedAt: nowISO(), closedBy: session.user.name, closureNote: `Tournée ${cur.number} annulée — ${motif}` }, { reason: motif, event: 'Annulation : tournée annulée' });
+  }
+  const now = nowISO();
+  const saved = await updateAudit(store.get('audit', cur.id), a => {
+    a.status = 'abandonne'; a.abandonReason = motif; a.endedAt = a.endedAt || now;
+    a.cancelledAt = now; a.cancelledBy = session.user.id; a.cancelledByName = session.user.name;
+  }, { action: 'abandon', reason: motif });
+  const ids = [...new Set([...(cur.prestationIds || []), cur.prestationId].filter(Boolean))];
+  for (const id of ids) {
+    const p = store.get('prestation', id);
+    if (p) await addPrestationHistory(p, { event: 'audit-annule', auditId: cur.id, label: `Audit ${cur.number} annulé${open.length ? ` (${open.length} écart(s) annulé(s))` : ''} — ${motif}`, reason: motif });
+  }
+  return saved;
 }
+/** Ancien nom de cancelTour (« Abandonner l'audit »). */
+export const abandonAudit = (audit, reason, opts) => cancelTour(audit, reason, opts);
 
 /** Critère (grille effective) par code (« F4.5·S2 », « F2.1.1 ») ou par identifiant. */
 export function itemByCode(audit, code) { return allItems(effectiveGrid(audit)).find(i => i.code === code || i.id === code) || null; }

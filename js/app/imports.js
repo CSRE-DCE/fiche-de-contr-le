@@ -6,7 +6,8 @@
  * existante (réseaux, commune, bassin, masse d'eau, coordonnées…). Réseaux : codes ramenés au référentiel « Réseaux »
  * (casse, accents, libellé : « rco », « Eaux littorales » → RCO, EL) ; une station présente sur plusieurs lignes (une par
  * réseau) cumule ses réseaux sur sa première ligne ; un code inconnu est signalé puis ajouté au référentiel à
- * l'application de l'import. */
+ * l'application de l'import. Coordonnées X / Y : RGFG95 / UTM 22N, ou UTM 21N (colonne « Fuseau UTM » ou fuseau
+ * reconnu d'après X) converties en UTM 22N avec la saisie d'origine (srs, x21, y21) ; point hors de la Guyane signalé. */
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { uuid, nowISO, normalize, sha256Hex, deepEqual } from '../core/util.js';
@@ -16,7 +17,7 @@ import { parseICS, expandEvents } from '../formats/ics.js';
 import { readXLSX, sheetToTable } from '../formats/xlsx.js';
 import { parseDate, parseTime, parseNumber, parseList, parseBool, guessMapping, resolveRef } from '../domain/normalize.js';
 import { PRESTATION_STATUS, CONTROL_LEVELS, PROVIDER_KINDS, DOC_TYPES, DOC_STATUS, EQUIPMENT_STATUS } from '../domain/model.js';
-import { utmToLatLon } from '../lib/geo.js';
+import { parseSrs, siteXY } from '../domain/coords.js';
 import { stationTypes, stationCompartments } from '../domain/seed.js';
 import { normalizeNetworkCodes, sameNetworks, sortNetworkCodes, AUDIT_TYPE_KEYS } from '../domain/networks.js';
 import { currentNetworkIndex, ensureNetworks } from './networks.js';
@@ -71,7 +72,8 @@ export const TARGETS = {
       { key: 'lat', label: 'Latitude (WGS84)', hints: ['latitude', 'lat'] },
       { key: 'lon', label: 'Longitude (WGS84)', hints: ['longitude', 'lon', 'lng'] },
       { key: 'x', label: 'X (RGFG95 / UTM 22N)', hints: ['x', 'x l93', 'easting'] },
-      { key: 'y', label: 'Y (RGFG95 / UTM 22N)', hints: ['y', 'northing'] }
+      { key: 'y', label: 'Y (RGFG95 / UTM 22N)', hints: ['y', 'northing'] },
+      { key: 'srs', label: 'Fuseau UTM (22N / 21N)', hints: ['fuseau', 'zone utm', 'projection', 'systeme de coordonnees', 'epsg'] }
     ]
   },
   point: {
@@ -239,10 +241,21 @@ function buildSite(row, mapping, ctx = {}) {
   const code = String(get(row, mapping, 'code')).trim(), name = String(get(row, mapping, 'name')).trim();
   if (!code) errors.push('code manquant'); if (!name) errors.push('nom manquant');
   let lat = parseNumber(get(row, mapping, 'lat')), lon = parseNumber(get(row, mapping, 'lon'));
-  const x = parseNumber(get(row, mapping, 'x')), y = parseNumber(get(row, mapping, 'y'));
-  if ((lat === null || lon === null) && x !== null && y !== null) [lat, lon] = utmToLatLon(x, y, 22);
+  let x = parseNumber(get(row, mapping, 'x')), y = parseNumber(get(row, mapping, 'y'));
   const existing = store.find('site', s => s.code === code);
   const warnings = [];
+  // X / Y : fuseau de la colonne « Fuseau UTM », sinon reconnu d'après X (UTM 21N converti en 22N, saisie gardée).
+  const srsRaw = String(get(row, mapping, 'srs') ?? '').trim();
+  const srsGiven = parseSrs(srsRaw);
+  if (srsRaw && !srsGiven) warnings.push(`fuseau « ${srsRaw} » non reconnu : fuseau déduit des coordonnées`);
+  let origin = null;
+  if (x !== null && y !== null) {
+    const c = siteXY(x, y, srsGiven);
+    if (c.srs === '21N') { origin = { srs: '21N', x21: c.x21, y21: c.y21 }; warnings.push(`coordonnées en UTM 21N${c.detected ? ' (fuseau reconnu d’après X)' : ''} converties en RGFG95 / UTM 22N : X ${c.x} · Y ${c.y}`); }
+    for (const i of c.issues) warnings.push(i.message);
+    if (lat === null || lon === null) { lat = c.lat; lon = c.lon; }
+    x = c.x; y = c.y;
+  }
   const idx = ctx.networkIndex || currentNetworkIndex();
   // Valeur du fichier ; colonne non associée ou cellule vide : valeur enregistrée conservée (jamais effacée).
   const text = k => String(get(row, mapping, k) ?? '').trim();
@@ -259,7 +272,7 @@ function buildSite(row, mapping, ctx = {}) {
   }
   // Coordonnées : remplacées seulement si le fichier donne une position (WGS84 ou RGFG95), sinon celles de la station.
   const pos = lat !== null && lon !== null
-    ? { lat: +lat.toFixed(6), lon: +lon.toFixed(6), x, y }
+    ? { lat: +lat.toFixed(6), lon: +lon.toFixed(6), x, y, ...(x !== null && y !== null ? { srs: origin?.srs, x21: origin?.x21, y21: origin?.y21 } : {}) }
     : { lat: existing?.lat ?? null, lon: existing?.lon ?? null, x: existing ? existing.x ?? null : x, y: existing ? existing.y ?? null : y };
   const entity = { id: existing?.id || 'site-' + code, code, name, networks, kind: String(get(row, mapping, 'kind') || existing?.kind || ''), commune: kept('commune'), bassin: kept('bassin'), masseEau: kept('masseEau'), ...pos };
   // Champs de la fiche station (grille CT-2026) : conservés s'ils ne sont pas fournis par le fichier.

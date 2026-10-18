@@ -157,15 +157,20 @@ export function confirmDialog({ title = 'Confirmer', message = '', okLabel = 'Co
   return m.result.then(v => v === true);
 }
 
-/** Saisie d'un texte (motif de modification, commentaire…). Retourne la chaîne ou null si annulé. */
-export function promptDialog({ title = '', label = '', value = '', required = true, multiline = true, placeholder = '', hint = '', okLabel = 'Valider', voice = true } = {}) {
+/**
+ * Saisie d'un texte (motif de modification, commentaire…). Retourne la chaîne ou null si annulé.
+ * dismissable: false — la fenêtre ne se ferme ni par un appui hors du cadre (ex. pour fermer le clavier d'une tablette
+ * Android) ni par Échap : seulement par ses boutons ; cancelLabel : libellé du bouton de renoncement ; danger : bouton
+ * de validation rouge (action irréversible).
+ */
+export function promptDialog({ title = '', label = '', value = '', required = true, multiline = true, placeholder = '', hint = '', okLabel = 'Valider', cancelLabel = 'Annuler', voice = true, dismissable = true, danger = false } = {}) {
   const m = openModal({
-    title,
+    title, dismissable,
     body: html`<div class="field"><label for="__prompt">${label}${required ? html` <span class="req">*</span>` : ''}</label>
       <div class="input-wrap">${multiline ? html`<textarea id="__prompt" placeholder="${placeholder}">${value}</textarea>` : html`<input id="__prompt" value="${value}" placeholder="${placeholder}">`}
       ${voice && hasSpeech() ? html`<button class="icon-btn" data-act="voice" title="Dicter">🎤</button>` : ''}</div>
       ${hint ? html`<div class="hint">${hint}</div>` : ''}<div class="hint" id="__prompt_err" style="color:var(--nc)"></div></div>`,
-    actions: [{ label: 'Annuler', act: 'cancel' }, { label: okLabel, cls: 'primary', act: 'ok' }],
+    actions: [{ label: cancelLabel, act: 'cancel' }, { label: okLabel, cls: danger ? 'danger' : 'primary', act: 'ok' }],
     handlers: {
       ok() {
         const v = this.root.querySelector('#__prompt').value.trim();

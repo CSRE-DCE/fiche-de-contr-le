@@ -18,6 +18,7 @@
 import { PDFDocument, A4 } from '../formats/pdf.js';
 import { THEMES, OEG } from '../ui/themes.js';
 import { DECOR } from '../ui/sheet-chrome.js';
+import { logoBytes } from '../ui/logo.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
 import { expandGrid, sheetsOf, parseItemId, gridTypes, gridType, resolveSheet, sheetOf, allItems, flatSections } from '../domain/grids.js';
 
@@ -189,12 +190,13 @@ const TYPE_FILE = { bio: 'biologie', ce: 'cours-eau', eso: 'eaux-souterraines' }
 export const attendusFilename = ({ auditType = null, preparationOnly = false } = {}) =>
   `${preparationOnly ? 'Preparation_tournee' : 'Attendus_prestataires'}_${TYPE_FILE[auditType] || 'tous'}.pdf`;
 
-/** Logo OEG rond rastérisé (RGBA) ou null (pas de canvas, fichier absent). */
+/** Logo rastérisé (RGBA) : celui choisi en Administration (js/ui/logo.js), sinon le logo rond de l'OEG ; null (pas de
+ * canvas, fichier absent). */
 async function loadLogo(doc, px = 220) {
   try {
-    const res = await fetch(asset('icons/logo-oeg-rond.png'));
-    if (!res.ok || typeof createImageBitmap !== 'function') return null;
-    const bmp = await createImageBitmap(await res.blob());
+    const bytes = await logoBytes();
+    if (!bytes || typeof createImageBitmap !== 'function') return null;
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
     const s = px / Math.max(bmp.width, bmp.height);
     const w = Math.max(1, Math.round(bmp.width * s)), h = Math.max(1, Math.round(bmp.height * s));
     const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });

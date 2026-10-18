@@ -24,6 +24,7 @@ import { refLabel } from './documents.js';
 import { orgSettings } from './settings.js';
 import { siteNetworks, siteNetworksText, prestationNetworkOf } from './networks.js';
 import { toJPEG } from '../ui/capture.js';
+import { logoBytes } from '../ui/logo.js';
 
 const COLORS = { C: '#1b7a43', P: '#b45309', NC: '#b3261e', NA: '#55636a', NO: '#8a5a00', NV: '#5d3f99' };
 /** Palette OEG des titres et tableaux (js/ui/themes.js, thème « océan »). */
@@ -37,11 +38,11 @@ async function branding(doc) {
     return { logo: await mod.oegLogo(doc), footer: mod.drawOegFooter, cond: doc.hasFont('condensed') ? 'condensed' : 'bold' };
   } catch (e) { return null; }
 }
+/** Logo (choisi en Administration, sinon celui de l'OEG) en JPEG : en-tête de repli sans le module des fiches. */
 async function logoJPEG() {
   try {
-    const res = await fetch(new URL('../../icons/logo-oeg-rond.png', import.meta.url));
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    return await toJPEG(bytes, 'image/png', 400);
+    const bytes = await logoBytes();
+    return bytes ? await toJPEG(bytes, 'image/png', 400) : null;
   } catch (e) { return null; }
 }
 async function imageFor(m, maxSide = 1400) {
@@ -345,7 +346,7 @@ export async function buildAuditReport(auditId) {
     });
   }
   const trail = store.filter('trail', t => t.entityId === audit.id || (t.entityType === 'deviation' && devs.some(d => d.id === t.entityId))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Abandon', 'controller-add': 'Contrôleur ajouté', 'controller-remove': 'Contrôleur retiré' };
+  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Annulation de la tournée', 'controller-add': 'Contrôleur ajouté', 'controller-remove': 'Contrôleur retiré' };
   doc.table({
     columns: [{ label: 'Date et heure', width: 78 }, { label: 'Utilisateur', width: 85 }, { label: 'Appareil', width: 70 }, { label: 'Action', width: 90 }, { label: 'Détail', width: 188 }],
     rows: trail.slice(-250).map(t => [fmtDateTime(t.at), t.userName || '', t.deviceName || '', `${ACTIONS[t.action] || t.action}${t.entityType === 'deviation' ? ' (écart ' + t.entityLabel + ')' : ''}`, `${t.reason ? 'Motif : ' + t.reason + '\n' : ''}${t.changeCount ? t.changeCount + ' champ(s) : ' + (t.changes || []).slice(0, 4).map(c => c.path).join(', ') : ''}`]), fontSize: 7.2

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="theme-color" content="#0d3577">
 <meta name="description" content="Fiches de contrôle terrain des prestations de prélèvement (cours d’eau, eaux souterraines, suivi biologique) — Office de l’Eau de Guyane. Fonctionne hors connexion.">
 <meta name="mobile-web-app-capable" content="yes">
@@ -44,6 +44,10 @@
 </head>
 <body>
 <div id="app"><div class="auth"><div class="auth-card"><img class="logo" src="icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="84" height="84"><h1>Fiches de contrôle terrain</h1><p class="sub">Office de l’Eau de Guyane — chargement…</p></div></div></div>
+<script>
+/* Logo choisi en Administration (copie locale de js/ui/logo.js) : affiché dès le chargement. */
+try{var oegLogo=JSON.parse(localStorage.getItem('oeg-ct:logo')||'null');if(oegLogo&&/^data:image\/png;base64,/.test(oegLogo.dataUrl)){var oegImg=document.querySelector('#app .logo');if(oegImg){oegImg.src=oegLogo.dataUrl;oegImg.className+=' is-custom';}}}catch(e){}
+</script>
 <div id="toast-root" aria-live="polite"></div>
 <noscript><p style="padding:20px">Cette application nécessite JavaScript.</p></noscript>
 <script src="vendor/leaflet/leaflet.js"></script>

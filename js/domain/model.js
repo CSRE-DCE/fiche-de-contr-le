@@ -68,7 +68,8 @@ export const ITEM_KINDS = {
  *    → la valeur est un OBJET {clé: valeur}. `choice` = cases exclusives ; `showIf` : champ utile seulement
  *      si value[showIf.key] === showIf.value (`value` peut être une liste : l'une des valeurs ; `showIf` peut
  *      être une liste de conditions : l'une suffit — voir fieldShown) ; `unitKey` : unité lue dans un autre champ (ex. mL / L) ;
- *      `gps: true` : le groupe contient x / y (RGFG95 / UTM 22N), le relevé GPS ajoute lat, lon, accuracy, at.
+ *      `gps: true` : le groupe contient x / y (RGFG95 / UTM 22N), le relevé GPS ajoute lat, lon, accuracy, at ; une
+ *      saisie en UTM 21N garde aussi srs '21N', x21, y21 (x / y restent en 22N : js/domain/coords.js).
  * Un critère « valeur seule » n'a pas d'`input` : son `kind` (text, number, select…) en tient lieu ; un critère
  * `kind: 'fields'` (+ `fields`, `gps`) porte une valeur objet sans statut (non proposé dans l'éditeur de grilles).
  */
@@ -134,7 +135,7 @@ export const AUDIT_STATUS = {
   en_cours: { label: 'En cours', cls: 'info' },
   termine: { label: 'Terminé — à signer', cls: 'warn' },
   signe: { label: 'Signé — verrouillé', cls: 'ok' },
-  abandonne: { label: 'Abandonné', cls: 'na' }
+  abandonne: { label: 'Annulée', cls: 'na' }   // « Annuler la tournée » (valeur 'abandonne' conservée : données existantes)
 };
 
 export const DEVIATION_STATUS = {
@@ -265,6 +266,8 @@ function scalarText(spec, v, unit) {
  * coordonnées techniques lat / lon / précision non reprises).
  * `unit: false` : sans l'unité définie par la grille (comparaison de deux tournées dont les grilles diffèrent
  * seulement par l'unité, ex. turbidité FNU puis NTU) ; l'unité choisie à la saisie (`unitKey`) est conservée.
+ * Groupe X / Y saisi en UTM 21N (`gps`, srs '21N', voir js/domain/coords.js) : X / Y convertis en UTM 22N suivis de
+ * la saisie d'origine — « X : 164412 · Y : 608596 (saisi en UTM 21N : X 829310 · Y 608565) ».
  */
 export function formatValue(item, value, { unit: withUnit = true } = {}) {
   if (blank(value)) return '';
@@ -283,7 +286,9 @@ export function formatValue(item, value, { unit: withUnit = true } = {}) {
       if (detail) { t = `${t} : ${scalarText(detail, value[detail.key])}`; used.add(detail.key); }
       parts.push(f.label ? `${f.label} : ${t}` : t);
     }
-    return parts.join(' · ');
+    const origin = input.gps && String(value.srs || '').toUpperCase() === '21N' && isFinite(value.x21) && isFinite(value.y21) && !blank(value.x21) && !blank(value.y21)
+      ? ` (saisi en UTM 21N : X ${Math.round(Number(value.x21))} · Y ${Math.round(Number(value.y21))})` : '';
+    return parts.join(' · ') + (parts.length ? origin : '');
   }
   return scalarText(input || {}, value, withUnit ? undefined : '');
 }

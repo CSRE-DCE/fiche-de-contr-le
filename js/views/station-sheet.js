@@ -18,6 +18,7 @@ import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { saveMedia, mediaURL } from '../core/media.js';
 import { toast } from '../ui/dom.js';
+import { mediaInputs } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines, assetURL, siteLatLon } from '../ui/sheet-chrome.js';
 import { createMap, tilesUsable, watchTiles, kindIcon, kindSVG, SAMPLING_KINDS, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
@@ -29,6 +30,7 @@ import { headerOf, resolveSheet, sheetOf, gridType, gridTypes, defaultAuditType,
 import { itemInput, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { effectiveGrid, auditTypeOf } from '../app/audits.js';
 import { utmToLatLon, latLonToUtm } from '../lib/geo.js';
+import { originText } from '../domain/coords.js';
 
 export const CT_GRID = 'grid-ct-2026-v1';
 /** Créneaux photographiques fixes de la fiche station. */
@@ -191,6 +193,7 @@ function mapCard(site, audit, { bio = true } = {}) {
       <div class="ss-map-fb">
         <b>${ll ? 'Fond de carte indisponible hors connexion' : 'Coordonnées de la station à renseigner'}</b>
         ${xy ? html`<span class="ss-fb-k">RGFG95 / UTM 22N</span><span class="ss-fb-v"><span>X&nbsp;: ${fmtXY(xy.x)}</span> <span>Y&nbsp;: ${fmtXY(xy.y)}</span></span>` : ''}
+        ${xy && originText(site) ? html`<span class="ss-fb-k ss-fb-origin">${originText(site)}</span>` : ''}
         ${ll ? html`<span class="ss-fb-k">WGS84</span><span class="ss-fb-v">${fmtLL(ll[0])}° · ${fmtLL(ll[1])}°</span>` : ''}
         ${near.length ? html`<ul>${near.map(p => html`<li>${raw(kindSVG(p.kind, 14))}${p.label} — à ${fmtDistance(p.d)} de la station</li>`)}</ul>` : ''}
       </div>
@@ -203,10 +206,11 @@ function mapCard(site, audit, { bio = true } = {}) {
 
 function photosCard(site, { editable, audit }) {
   const ph = site.photos || {};
-  // Un seul bouton : sans attribut « capture », le téléphone propose l'appareil photo OU la galerie / les fichiers.
-  const input = slot => html`<input type="file" accept="image/*" hidden data-change="st-photo" data-site="${site.id}" data-slot="${slot}" data-audit="${audit?.id || ''}">`;
-  const tools = slot => html`<div class="ss-photo-tools">
-    <label class="ss-ph-btn" title="Remplacer la photographie ${SLOT_LONG[slot].toLowerCase()} (appareil photo ou fichier)">${icon('refresh', { size: 18 })}<span>Remplacer</span>${input(slot)}</label>
+  // Deux choix distincts : « Prendre une photo » (appareil photo de la tablette) et « Importer depuis la galerie »
+  // (photo déjà dans l'appareil : date de prise de vue reprise de la photo) — js/ui/components.js, mediaInputs.
+  const inputs = (slot, opts) => mediaInputs(null, { auditId: audit?.id || '', act: 'st-photo', data: { site: site.id, slot }, ...opts });
+  const tools = slot => html`<div class="ss-photo-tools" role="group" aria-label="Remplacer la photographie ${SLOT_LONG[slot].toLowerCase()}">
+    ${inputs(slot, { cls: 'ss-ph-btn', labels: { camera: 'Photo', gallery: 'Galerie' } })}
   </div>`;
   const body = html`<div class="ss-photos">${SLOTS.map(([slot, def]) => {
     const p = ph[slot] || {};
@@ -217,7 +221,7 @@ function photosCard(site, { editable, audit }) {
     return html`<figure class="ss-photo${has ? '' : ' is-empty'}" data-slot="${slot}">
       ${p.mediaId ? html`<button type="button" class="ss-photo-open" data-act="st-photo-view" data-media="${p.mediaId}" aria-label="Agrandir la photographie ${alt}"><img data-st-media="${p.mediaId}" data-fallback="${src}" alt="${alt}"></button>`
         : p.src ? html`<img src="${src}" alt="${alt}">`
-        : editable ? html`<label class="ss-photo-ph is-add" title="Appareil photo ou fichier image">${icon('camera', { size: 38 })}<span>Ajouter la photographie ${SLOT_LONG[slot].toLowerCase()}</span>${input(slot)}</label>`
+        : editable ? html`<div class="ss-photo-ph is-add" role="group" aria-label="Ajouter la photographie ${SLOT_LONG[slot].toLowerCase()}"><span class="ss-ph-k">Photographie ${SLOT_LONG[slot].toLowerCase()}</span><span class="ss-ph-add">${inputs(slot, { cls: 'ss-ph-btn is-big' })}</span></div>`
         : html`<span class="ss-photo-ph">${icon('camera', { size: 38 })}<span>Photographie ${SLOT_LONG[slot].toLowerCase()} non disponible</span></span>`}
       <figcaption><b>${slot}</b> – ${cap}</figcaption>
       ${editable && has ? tools(slot) : ''}
@@ -427,18 +431,19 @@ export const stationHandlers = {
     const slot = el.dataset.slot;
     if (!SLOT_LONG[slot]) throw new Error('Emplacement de photo inconnu.');
     toast('Enregistrement de la photographie…', '', 1500);
-    const { compressImage } = await import('../ui/capture.js');
-    const { quickPosition } = await import('../ui/gps.js');
-    const { bytes, width, height } = await compressImage(file);
-    const gps = await quickPosition().catch(() => null);
+    // Photo prise (appareil photo) ou importée de la galerie : compression, date de prise de vue (EXIF, sinon date
+    // d'import signalée), position (js/ui/capture.js).
+    const { preparePhoto, inputSource } = await import('../ui/capture.js');
+    const source = inputSource(el);
+    const ph = await preparePhoto(file, { source });
     const prev = site.photos?.[slot] || {};
     const caption = prev.caption || SLOT_LONG[slot];
-    const m = await saveMedia(bytes, { mime: 'image/jpeg', kind: 'photo', name: file.name, caption: `${slot} – ${caption}`, link: { type: 'site', id: site.id, slot }, auditId: el.dataset.audit || null, gps, width, height });
+    const m = await saveMedia(ph.bytes, { mime: 'image/jpeg', kind: 'photo', name: file.name, caption: `${slot} – ${caption}`, link: { type: 'site', id: site.id, slot }, auditId: el.dataset.audit || null, gps: ph.gps, width: ph.width, height: ph.height, takenAt: ph.takenAt, takenAtSource: ph.takenAtSource, importedAt: ph.importedAt, source: ph.source });
     const cur = store.get('site', site.id);
     const replaced = !!(prev.mediaId || prev.src);
     await store.put('site', { ...cur, photos: { ...(cur.photos || {}), [slot]: { ...prev, caption, mediaId: m.id, previousMediaId: prev.mediaId || null } } },
-      { reason: `Photographie ${slot} (${caption}) de la station ${cur.name} ${replaced ? 'remplacée' : 'ajoutée'}` });
-    toast(`Photographie ${slot} enregistrée ✓`, 'ok');
+      { reason: `Photographie ${slot} (${caption}) de la station ${cur.name} ${replaced ? 'remplacée' : 'ajoutée'}${source === 'gallery' ? ' (importée de la galerie)' : ''}` });
+    toast(`Photographie ${slot} enregistrée ✓${ph.takenAtSource === 'import' ? ' — date de prise de vue inconnue : date d’import retenue' : ''}`, ph.takenAtSource === 'import' ? 'warn' : 'ok', ph.takenAtSource === 'import' ? 5000 : 3200);
     if (typeof this?.refresh === 'function') this.refresh();
   },
   async 'st-photo-view'(el) {

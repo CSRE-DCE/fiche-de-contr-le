@@ -1,6 +1,8 @@
 /* Liste et historique des audits : par prestataire, site, point, statut, période ; sélection de deux
- * audits à comparer. Contrôleurs OEG de chaque tournée (binôme) affichés ; « Mes audits » : tournées dont l'agent
- * connecté est contrôleur ; tournées en cours de l'agent connecté en tête de liste. */
+ * audits à comparer. Tournées annulées (« Annuler la tournée ») masquées par défaut, visibles sous la puce
+ * « Annulées » avec la date, l'auteur et le motif de l'annulation. Contrôleurs OEG de chaque tournée (binôme)
+ * affichés ; « Mes audits » : tournées dont l'agent connecté est contrôleur ; tournées en cours de l'agent connecté
+ * en tête de liste. */
 import { html, fmtDate, sortBy, normalize, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -20,6 +22,8 @@ function filtered(q) {
   if (q.point) list = list.filter(a => a.pointId === q.point || (a.stations || []).some(st => st.pointId === q.point));
   if (q.statut === 'verrouille') list = list.filter(a => a.lock?.lockedAt);
   else if (q.statut) list = list.filter(a => a.status === q.statut && !a.lock?.lockedAt);
+  // Tournées annulées : masquées par défaut (vues « Tous », « Mes audits », « Historique ») ; puce « Annulées ».
+  else list = list.filter(a => a.status !== 'abandonne');
   if (q.mine) list = list.filter(a => isAuditController(a, session.user.id));
   if (q.du) list = list.filter(a => auditDate(a) >= q.du);
   if (q.au) list = list.filter(a => auditDate(a) <= q.au);
@@ -34,13 +38,15 @@ export default {
   async render(params, q) {
     const list = filtered(q);
     const historique = q.vue === 'historique';
+    // Annulées masquées par la vue courante (même filtres, sans statut) : signalées sous la liste.
+    const hidden = q.statut ? 0 : filtered({ ...q, statut: 'abandonne' }).length;
     const audited = new Set(store.all('audit').flatMap(auditSiteIds));
     const sitesWithAudits = sortBy(store.all('site').filter(s => audited.has(s.id)), 'name');
     const points = q.site ? store.filter('point', p => p.siteId === q.site) : [];
     return html`
-      ${pageTitle(historique ? 'Historique et comparaison' : 'Audits', `${list.length} audit(s)`, html`<a class="btn accent" href="#/nouvel-audit">⚡ Audit inopiné</a>`)}
+      ${pageTitle(historique ? 'Historique et comparaison' : 'Audits', `${list.length} audit(s)${hidden ? ` · ${hidden} annulée${hidden > 1 ? 's' : ''} masquée${hidden > 1 ? 's' : ''}` : ''}`, html`<a class="btn accent" href="#/nouvel-audit">⚡ Audit inopiné</a>`)}
       <div class="chips" style="margin-bottom:10px">
-        ${[['', 'Tous'], ['en_cours', 'En cours'], ['termine', 'À signer'], ['verrouille', 'Signés'], ['abandonne', 'Abandonnés']].map(([k, l]) => html`<button class="chip ${(q.statut || '') === k ? 'sel' : ''}" data-act="q" data-k="statut" data-v="${k}">${l}</button>`)}
+        ${[['', 'Tous'], ['en_cours', 'En cours'], ['termine', 'À signer'], ['verrouille', 'Signés'], ['abandonne', 'Annulées']].map(([k, l]) => html`<button class="chip ${(q.statut || '') === k ? 'sel' : ''}" data-act="q" data-k="statut" data-v="${k}" aria-pressed="${String((q.statut || '') === k)}">${l}</button>`)}
         <button class="chip ${q.mine ? 'sel' : ''}" data-act="q" data-k="mine" data-v="${q.mine ? '' : '1'}">Mes audits</button>
       </div>
       <details class="card" ${historique || q.prestataire || q.site ? 'open' : ''}><summary>Rechercher dans l’historique</summary>
@@ -60,9 +66,11 @@ export default {
           <a class="li-main" href="#/audit/${a.id}" style="text-decoration:none;color:inherit"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div>
             <div class="li-sub">${fmtDate(auditDate(a))} · ${providerName(a.providerId)} · <span class="au-ctrl" title="Contrôleur(s) OEG de la tournée">${controllersLabel(a) || a.auditorName}</span>${isAuditController(a, session.user?.id) ? ' (vous)' : ''} · ${a.kind === 'inopine' ? 'inopiné' : 'planifié'}</div>
             <div class="row" style="gap:6px;margin-top:6px">${auditBadge(a)}${badge(`${n.C} C · ${n.P || 0} P · ${n.NC} NC`, n.NC ? 'nc' : n.P ? 'perf' : 'ok')}${devs ? badge(`${devs} écart(s)`, 'warn') : ''}${(a.amendments || []).length ? badge(`${a.amendments.length} modif. après signature`, 'nv') : ''}</div>
-            ${a.status === 'en_cours' ? html`<div style="margin-top:6px">${progressBar(st.progress.percent)}</div>` : ''}</a>
+            ${a.status === 'en_cours' ? html`<div style="margin-top:6px">${progressBar(st.progress.percent)}</div>` : ''}
+            ${a.status === 'abandonne' ? html`<div class="li-sub au-cancel">Annulée${a.cancelledAt ? ` le ${fmtDate(a.cancelledAt)}` : ''}${a.cancelledByName ? ` par ${a.cancelledByName}` : ''} — motif : « ${a.abandonReason || 'non précisé'} »</div>` : ''}</a>
           <span class="chev">›</span></div>`; })}</div>`
-        : html`<div class="card">${empty('📋', 'Aucun audit pour cette sélection.')}</div>`}`;
+        : html`<div class="card">${empty('📋', 'Aucun audit pour cette sélection.')}</div>`}
+      ${hidden ? html`<p class="note au-hidden">${hidden} tournée${hidden > 1 ? 's' : ''} annulée${hidden > 1 ? 's' : ''} non affichée${hidden > 1 ? 's' : ''} : puce « Annulées » pour ${hidden > 1 ? 'les' : 'la'} voir.</p>` : ''}`;
   },
   handlers: {
     q(el) { const q = { ...this.query, [el.dataset.k]: el.dataset.v }; if (!el.dataset.v) delete q[el.dataset.k]; navigate('/audits?' + new URLSearchParams(q), { replace: true }); },

@@ -135,6 +135,8 @@ async function enterApp() {
   if (previousAgent && previousAgent !== session.user?.id && !/^#\/audit\//.test(location.hash)) history.replaceState(null, '', '#/');
   previousAgent = null;
   renderShell(app, { lock: () => lockApp('changement d’agent') });
+  // Logo de l'application (Administration) : copie locale accordée au réglage de l'organisation (reçu d'une autre tablette…).
+  import('./app/logo.js').then(m => m.watchLogo()).catch(() => null);
   watchActivity();
   watchBackground();
   initSync({ revoked: onRevoked, disabled: () => lockApp('compte désactivé') });

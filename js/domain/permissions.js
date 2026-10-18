@@ -1,6 +1,6 @@
 /* Profils et matrice des droits — partagés par l'application (affichage, contrôles locaux) et par le
- * serveur de synchronisation (contrôle effectif des écritures) ; contrôleurs OEG d'une tournée (binôme) et droit
- * de saisie dans une tournée. Fichier pur. */
+ * serveur de synchronisation (contrôle effectif des écritures) ; contrôleurs OEG d'une tournée (binôme), droit
+ * de saisie dans une tournée et droit de l'annuler. Fichier pur. */
 export const ROLES = {
   admin: 'Administrateur',
   rq: 'Responsable qualité',
@@ -14,7 +14,7 @@ export const PERMISSIONS = {
   'audit.edit': ['admin', 'rq', 'superviseur', 'auditeur'],
   'audit.editOthers': ['admin', 'rq', 'superviseur'],
   'audit.amend': ['admin', 'rq'],                 // modification d'un audit signé (avec motif)
-  'audit.delete': ['admin', 'rq'],                // abandon d'un audit non signé
+  'audit.delete': ['admin', 'rq'],                // annulation d'une tournée non signée (en plus de ses contrôleurs)
   'deviation.manage': ['admin', 'rq', 'superviseur', 'auditeur'],
   'deviation.close': ['admin', 'rq', 'superviseur'],
   'observation.create': ['admin', 'rq', 'superviseur', 'auditeur'],
@@ -73,6 +73,26 @@ export function canJoinAudit(audit, user) {
   if (audit.lock?.lockedAt || audit.status === 'abandonne' || audit.status === 'signe' || audit.signatures?.auditor) return false;
   return !isAuditController(audit, user.id);
 }
+/**
+ * « Annuler la tournée » (statut 'abandonne', fonction pure) : null si `user` peut l'annuler, sinon le refus expliqué.
+ * Permise à tout contrôleur OEG de la tournée (binôme compris, pas seulement à celui qui l'a créée) et aux profils
+ * autorisés (audit.delete : administrateur, responsable qualité) ; jamais pour une tournée signée et verrouillée ni
+ * déjà annulée. `reason` fourni : motif obligatoire (contrôle omis si `reason` n'est pas passé).
+ */
+export function cancelTourRefusal(audit, user, { reason } = {}) {
+  if (!audit) return 'Tournée introuvable sur cette tablette.';
+  const no = audit.number ? `Tournée ${audit.number}` : 'Tournée';
+  if (audit.lock?.lockedAt) return `${no} signée et verrouillée : elle ne peut plus être annulée. Le responsable qualité ou l’administrateur peut encore la modifier avec un motif (« Modifier (avec motif) »).`;
+  if (audit.status === 'abandonne') return `${no} déjà annulée.`;
+  const controller = !!user && isAuditController(audit, user.id) && roleCan(user.role, 'audit.edit');
+  if (!controller && !(user && roleCan(user.role, 'audit.delete'))) {
+    return canJoinAudit(audit, user)
+      ? 'Seuls les contrôleurs de la tournée, le responsable qualité et l’administrateur peuvent l’annuler : rejoignez d’abord la tournée (« Rejoindre la tournée »).'
+      : 'Votre profil ne permet pas d’annuler cette tournée (contrôleurs de la tournée, responsable qualité ou administrateur).';
+  }
+  if (reason !== undefined && !String(reason ?? '').trim()) return 'Le motif de l’annulation est obligatoire.';
+  return null;
+}
 
 /* ---------- Identité des agents (profils « user ») ---------- */
 const plain = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -98,6 +118,8 @@ export const REFERENTIAL_TYPES = ['provider', 'operator', 'site', 'point', 'equi
 
 /** Droit requis pour enregistrer un objet d'un type donné (null = refusé, '*' = tout profil). */
 export function writePermission(type) {
+  // Opérateurs des prestataires : aussi ajoutés sur le terrain par les agents qui réalisent les tournées.
+  if (type === 'operator') return ['ref.manage', 'audit.edit'];
   if (REFERENTIAL_TYPES.includes(type)) return ['ref.manage'];
   switch (type) {
     case 'trail': return '*';

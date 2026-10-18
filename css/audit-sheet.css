@@ -13,6 +13,14 @@
 .as-pct b{font-family:var(--font-cond);font-weight:800;font-size:26px;color:var(--brand);font-variant-numeric:tabular-nums}
 .as-top .progress{grid-column:1 / -1;height:8px;margin-top:6px}
 .as-top .type-badge{font-size:12.5px}
+/* « Annuler la tournée » : en-tête (à droite de l'identification, passe à la ligne sur téléphone) et onglet Infos. */
+.as-top .as-cancel{margin-left:auto;min-height:40px;padding:6px 12px;font-size:14px}
+.as-cancel-block{margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#d7e3ea)}
+.as-cancel-block .note{margin:8px 0 0}
+.as-cancel-why{display:flex;gap:6px;align-items:flex-start}
+.as-cancel-why svg{flex:none;margin-top:2px}
+.banner.as-cancelled{display:flex;gap:8px;align-items:flex-start}
+.banner.as-cancelled svg{flex:none;margin-top:2px}
 @media(max-width:520px){.as-pct .save-state{max-width:9em;font-size:11.5px;line-height:1.2;text-align:right}.as-num{font-size:18px}}
 .tour-stations{margin-bottom:8px}
 .ts-rm{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:56px;padding:6px 12px;border:2px solid #efc4bf;border-radius:14px;background:#fff;color:var(--nc);font:inherit;font-weight:700;font-size:14px;cursor:pointer}
@@ -127,6 +135,21 @@
 .st-table .as-now{padding:2px 7px}.st-table .as-now span{display:none}
 .as-suggest{display:inline-flex;align-items:center;gap:6px;margin-top:4px;min-height:34px;padding:2px 10px;border:1.5px dashed var(--th-main);border-radius:999px;background:var(--th-light);color:var(--th-dark);font:inherit;font-size:.86em;cursor:pointer}
 .as-gps-meta{font-size:.82em;color:var(--oeg-muted);white-space:nowrap}
+/* Valeur reprise d'une autre feuille (« repris de F2.1.9 ») ou de la station précédente ; valeur proposée */
+.as-from{display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:1px 7px;border-radius:999px;background:#e6f0fa;color:#24527f;font-size:.78em;font-weight:600;line-height:1.5;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.as-from.is-copy{background:#efe9fa;color:#4b3486}
+.as-from .ico{flex:none}
+.as-rep .as-rep-row>.as-from,.as-rep .as-rep-row>.as-suggest{flex-basis:auto;margin:0 0 4px}
+.as-rep .as-rep-row>.as-from{order:3}
+.st-table td.c-value>.as-from,.st-rc-value>.as-from{display:flex;width:fit-content}
+.as-copyprev{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0;padding:8px 12px;border:1.5px dashed var(--th-line);border-radius:10px;background:var(--th-light)}
+.as-copyprev .note{margin:0;flex:1 1 18em}
+/* Coordonnées X / Y : système (UTM 22N RGFG95 / UTM 21N) sur sa propre ligne, conversion en 22N et alerte de cohérence */
+.st-fields.is-xy>.st-field.is-srs{flex-basis:100%}
+.st-fields.is-xy>.st-field.is-srs>select{flex:0 1 auto;max-width:100%;min-height:36px}
+.as-xy-conv{flex-basis:100%;font-size:.86em;font-weight:600;color:var(--th-dark,var(--oeg-navy))}
+.as-xy-warn{flex-basis:100%;display:flex;align-items:flex-start;gap:5px;font-size:.86em;line-height:1.35;color:#8a4b00;background:#fff4e0;border-radius:6px;padding:4px 7px}
+.as-xy-warn .ico{flex:none;margin-top:1px;color:#b86e00}
 .as-body :is(input,select,textarea).is-prefilled{color:#2b5a8a!important;font-style:italic!important}
 .as-obs-cell{display:flex;align-items:flex-start;gap:4px}
 .as-obs-cell>textarea{flex:1 1 auto;min-width:0}
@@ -137,6 +160,11 @@ textarea.as-obs.need::placeholder{color:var(--nc);opacity:.9}
 .as-tool{display:inline-grid;place-items:center;width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:var(--th-main);cursor:pointer;position:relative}
 .as-tool:hover{background:var(--th-light)}
 .as-tool.nc{color:var(--nc)}.as-tool.p{color:var(--perf-ink)}
+/* « Ajouter une preuve » (ligne de tableau) et ses trois choix (fenêtre) : prendre une photo, importer depuis la galerie, joindre un document. */
+.as-proof .as-plus{position:absolute;right:3px;bottom:2px;font-weight:800;font-size:13px;line-height:1}
+.as-proof-for{margin:0 0 12px;color:var(--brand)}
+.as-proof-choices{display:grid;gap:10px}
+.as-proof-choices .ms-btn{justify-content:flex-start;width:100%}
 .as-count{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:-8px;margin-top:-18px;padding:0 4px;border-radius:999px;background:var(--th-main);color:#fff;font-size:11px;font-weight:800}
 .as-frame .st-table tr.as-sub>td{background:#fff!important;padding:4px 10px 8px;border-top:0}
 .as-sub-in{display:flex;flex-direction:column;gap:6px}

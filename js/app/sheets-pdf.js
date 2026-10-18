@@ -32,8 +32,10 @@ import { fmtDate, fmtDateTime, nowISO, sha256Hex, haversine, fmtDistance } from 
 import { THEMES, OEG } from '../ui/themes.js';
 import { icon } from '../ui/icons.js';
 import { DECOR, DEFAULT_HEADER, siteLatLon } from '../ui/sheet-chrome.js';
+import { logoBytes, isCustomLogo } from '../ui/logo.js';
 import { GUYANE, guyaneXY } from '../lib/guyane.js';
 import { latLonToUtm } from '../lib/geo.js';
+import { originText } from '../domain/coords.js';
 import { SAMPLING_KINDS, kindSVG } from '../ui/map.js';
 import { GRID_CT_2026, INSTRUMENTS, INSTRUMENT_FIELDS, CALIBRATION_FIELDS } from '../domain/grid-ct-2026.js';
 import { upToDateGrid } from '../domain/default-grids.js';
@@ -129,21 +131,19 @@ class Assets {
       return this.doc.addRGBA(ctx.getImageData(0, 0, px, px));
     });
   }
-  /** Logo rond de l'OEG (icons/logo-oeg-rond.png, sinon icons/logo-oeg.png). */
+  /** Logo : celui choisi en Administration (PNG, js/ui/logo.js), sinon le logo rond de l'OEG (icons/logo-oeg-rond.png,
+   * à défaut icons/logo-oeg.png). RGBA : transparence conservée ; proportions conservées (drawImageContain). */
   logo(px = 220) {
     return this.once('logo', async () => {
-      for (const p of ['icons/logo-oeg-rond.png', 'icons/logo-oeg.png']) {
-        try {
-          const res = await fetch(asset(p));
-          if (!res.ok) continue;
-          const img = await decode(new Uint8Array(await res.arrayBuffer()), 'image/png');
-          const [w, h] = dims(img), s = px / Math.max(w, h);
-          const c = newCanvas(Math.round(w * s), Math.round(h * s)), ctx = c.getContext('2d');
-          ctx.drawImage(img, 0, 0, c.width, c.height);
-          return await this.doc.addRGBA(ctx.getImageData(0, 0, c.width, c.height));
-        } catch (e) { /* fichier suivant */ }
-      }
-      return null;
+      try {
+        const bytes = await logoBytes();
+        if (!bytes) return null;
+        const img = await decode(bytes, 'image/png');
+        const [w, h] = dims(img), s = px / Math.max(w, h);
+        const c = newCanvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))), ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        return await this.doc.addRGBA(ctx.getImageData(0, 0, c.width, c.height));
+      } catch (e) { return null; }
     });
   }
   /** Octets d'une photo : média chiffré de l'appareil (mediaId) ou fichier statique de l'application (src). */
@@ -507,7 +507,8 @@ class SheetsRenderer {
     const ink = band ? '#ffffff' : NAVY;
     const logo = await this.A.logo();
     const ls = landscape ? 56 : 60;
-    if (logo && band) d.circle(M + ls / 2, 7 + ls / 2, ls / 2 + 1.8, { fill: '#ffffff', opacity: 0.85 });
+    // Bandeau bleu : pastille blanche derrière le logo (logo choisi en Administration : cadre arrondi, jamais rogné).
+    if (logo && band) { if (isCustomLogo()) d.roundRect(M - 2, 5, ls + 4, ls + 4, 6, { fill: '#ffffff', opacity: 0.92 }); else d.circle(M + ls / 2, 7 + ls / 2, ls / 2 + 1.8, { fill: '#ffffff', opacity: 0.85 }); }
     if (logo) d.drawImageContain(logo, M, 7, ls, ls);
     const right = landscape && stationBlock ? 160 : 0;
     const tagW = 108;
@@ -1426,7 +1427,7 @@ class SheetsRenderer {
       line(ll ? 'Fond de carte indisponible' : 'Coordonnées de la station à renseigner', F.bold, 8, NAVY);
       if (ll) line('(hors connexion ou tuiles non préchargées)', F.italic, 6.6, MUTED);
       ty += 3;
-      if (present(site.x) && present(site.y)) { line('RGFG95 / UTM 22N', F.semi, 6.8, MUTED); line(`X : ${fmtXY(site.x)}   Y : ${fmtXY(site.y)}`, F.bold, 8, NAVY); ty += 2; }
+      if (present(site.x) && present(site.y)) { line('RGFG95 / UTM 22N', F.semi, 6.8, MUTED); line(`X : ${fmtXY(site.x)}   Y : ${fmtXY(site.y)}`, F.bold, 8, NAVY); if (originText(site)) line(`(${originText(site)})`, F.italic, 6.6, MUTED); ty += 2; }
       else if (ll) { const [ux, uy] = latLonToUtm(ll[0], ll[1], 22); line('RGFG95 / UTM 22N', F.semi, 6.8, MUTED); line(`X : ${fmtXY(ux)}   Y : ${fmtXY(uy)}`, F.bold, 8, NAVY); ty += 2; }
       if (ll) { line('WGS84', F.semi, 6.8, MUTED); line(`${fmtLL(ll[0], 'N', 'S')} · ${fmtLL(ll[1], 'E', 'O')}`, F.semi, 7.4, NAVY); ty += 3; }
       for (const p of points.slice(0, 5)) {

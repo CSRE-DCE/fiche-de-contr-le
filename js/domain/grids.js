@@ -22,6 +22,7 @@
  * comptés qu'UNE fois (allItems, progress, validateResponses, synthèse, comparaison).
  */
 import { DEFAULT_RESPONSES, itemInput, isEmptyValue, fieldShown } from './model.js';
+import { coordIssues } from './coords.js';
 
 const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const blank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
@@ -583,7 +584,8 @@ export function isAnswered(item, r) {
 
 /**
  * Contrôle d'une valeur saisie (nombres du champ `input` / `kind: 'number'` et des groupes « fields ») :
- * [{level:'error'|'warning', field, message}]. Nombre illisible ⇒ erreur ; hors bornes min / max ⇒ avertissement.
+ * [{level:'error'|'warning', field, message}]. Nombre illisible ⇒ erreur ; hors bornes min / max ⇒ avertissement ;
+ * groupe X / Y (`gps`) : coordonnées d'UTM 21N saisies en 22N, point hors de la Guyane ⇒ avertissement (coordIssues).
  */
 export function valueIssues(item, value) {
   const out = [];
@@ -603,6 +605,7 @@ export function valueIssues(item, value) {
   };
   if (input.type === 'number') check(input, value);
   else if (input.type === 'fields' && isPlainObject(value)) for (const f of input.fields || []) if (f.type === 'number' && fieldShown(f, value)) check(f, value[f.key], f.label || f.key);
+  if (input.type === 'fields' && input.gps && isPlainObject(value)) for (const c of coordIssues(value)) out.push({ level: c.level, field: 'x', code: c.code, message: c.message });
   return out;
 }
 export function allowedResponses(item) {

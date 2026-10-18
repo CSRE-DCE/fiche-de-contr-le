@@ -16,10 +16,12 @@ import { icon } from './icons.js';
 import { GUYANE, guyaneXY } from '../lib/guyane.js';
 import { utmToLatLon } from '../lib/geo.js';
 import { networkColors } from '../domain/networks.js';
+import { logoImg } from './logo.js';
 
 /** Adresse d'un fichier de l'application (résolue depuis ce module : fonctionne depuis index.html,
  * docs/charte.html ou un sous-chemin GitHub Pages). */
 export const assetURL = path => new URL('../../' + path, import.meta.url).href;
+/** Logo par défaut de l'OEG ; logo affiché (logo choisi en Administration, sinon celui-ci) : logoURL() de js/ui/logo.js. */
 export const LOGO_URL = assetURL('icons/logo-oeg-rond.png');
 
 /** Textes par défaut de l'en-tête (remplacés par grid.header). */
@@ -104,7 +106,8 @@ export function oegHeader({ grid = null, sheet = null, site = null, sheetCount =
   const kicker = sheet?.kicker && sheetTitle && !norm(sheet.kicker).includes(norm(sheetTitle)) && !norm(sheetTitle).includes(norm(sheet.kicker)) ? sheet.kicker : '';
   const tour = present(stationIndex) && Number(stationTotal) > 1 ? html`<span class="oh-st-tour">${icon('route', { size: 14 })}Station ${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : '';
   const sheetNo = no !== '' ? html`Feuille <b>${no}&nbsp;/&nbsp;${count}</b>` : '';
-  const logo = html`<img class="oh-logo" src="${LOGO_URL}" alt="Office de l’Eau de Guyane" width="96" height="96">`;
+  // Logo choisi en Administration (proportions conservées) ou logo rond de l'OEG.
+  const logo = logoImg({ cls: 'oh-logo', alt: h.org || 'Office de l’Eau de Guyane', width: 96, height: 96 });
   if (variant === 'compact') {
     return html`<header class="oeg-header compact">
       ${logo}

@@ -3,6 +3,8 @@
  * auteur, audit, objet contrôlé, GPS, empreinte SHA-256…) forment une entité « media » synchronisée
  * et journalisée comme les autres. Un média n'est jamais modifié : une photo annotée est un nouveau
  * média qui référence l'original (derivedFrom), l'original restant conservé intact.
+ * Origine d'une photo (source : appareil photo ou galerie), date d'import et provenance de la date de prise de vue :
+ * voir js/ui/capture.js (hors contenu scellé d'une tournée : seuls id, empreinte, lien, takenAt et derivedFrom y sont).
  */
 import { idb } from './db.js';
 import { encryptBytes, decryptBytes } from './crypto.js';
@@ -30,7 +32,10 @@ export async function saveMedia(bytes, info = {}) {
     takenAt: info.takenAt || nowISO(), author: session.user?.id || null, authorName: session.user?.name || '',
     auditId: info.auditId || null, link: info.link || null, gps: info.gps || null,
     width: info.width || null, height: info.height || null, derivedFrom: info.derivedFrom || null,
-    annotation: info.annotation || null
+    annotation: info.annotation || null,
+    // Origine (camera : appareil photo de la tablette, gallery : importée depuis la galerie, document) et date d'import ;
+    // takenAtSource : 'exif' (date de prise de vue lue dans la photo), 'capture' (instant de la prise), 'import'.
+    source: info.source || null, importedAt: info.importedAt || null, takenAtSource: info.takenAtSource || null
   };
   await store.put('media', entity, { action: info.derivedFrom ? 'annotate' : 'create' });
   return store.get('media', id);

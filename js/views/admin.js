@@ -1,5 +1,6 @@
 /* Administration : agents de la tablette et profils, appareils (désactivation d'un appareil perdu), paramètres
- * de l'organisation, données (dont la mise à niveau du référentiel) ; écran « Mon compte ».
+ * de l'organisation (dont « Logo de l'application »), données (dont la mise à niveau du référentiel) ; écran « Mon
+ * compte ».
  * Tablette partagée (deux tablettes pour quatre agents) : « Agents de cette tablette » (comptes du trousseau :
  * connexion possible ici ; « Ajouter un agent » — nom, prénom, initiales, profil, mot de passe saisi par l'agent —,
  * modifier, « Retirer de cette tablette » — entrée locale seulement) et « Agents pas encore sur cette tablette »
@@ -20,9 +21,12 @@ import { toast, openModal, formValues, promptDialog, confirmDialog } from '../ui
 import { pageTitle, kv, badge, empty, options, field } from '../ui/components.js';
 import { orgSettings, saveOrgSettings, pref, setPref, applyDisplayPrefs } from '../app/settings.js';
 import { exchangePasswordInfo, knownDevices, acceptHeld, refuseHeld } from '../app/exchange.js';
+import { LOGO_ACCEPT } from '../app/logo.js';
+import { logoImg } from '../ui/logo.js';
+import { icon } from '../ui/icons.js';
 import { passwordDialog, heldCard } from './exchange.js';
 
-const PERM_LABELS = { 'audit.create': 'Créer un audit', 'audit.edit': 'Réaliser ses audits', 'audit.editOthers': 'Modifier les audits des autres', 'audit.amend': 'Modifier un audit signé (motif)', 'audit.delete': 'Abandonner un audit', 'deviation.manage': 'Enregistrer / suivre les écarts', 'deviation.close': 'Clôturer les écarts', 'observation.create': 'Observations et urgences', 'planning.manage': 'Gérer le planning et les imports', 'ref.manage': 'Gérer référentiels, documents, grilles', 'trail.view': 'Consulter le journal', 'users.manage': 'Gérer les utilisateurs', 'devices.manage': 'Gérer les appareils', 'settings.manage': 'Paramétrer l’application', export: 'Exporter' };
+const PERM_LABELS = { 'audit.create': 'Créer un audit', 'audit.edit': 'Réaliser ses audits', 'audit.editOthers': 'Modifier les audits des autres', 'audit.amend': 'Modifier un audit signé (motif)', 'audit.delete': 'Annuler une tournée non signée (en plus de ses contrôleurs)', 'deviation.manage': 'Enregistrer / suivre les écarts', 'deviation.close': 'Clôturer les écarts', 'observation.create': 'Observations et urgences', 'planning.manage': 'Gérer le planning et les imports', 'ref.manage': 'Gérer référentiels, documents, grilles', 'trail.view': 'Consulter le journal', 'users.manage': 'Gérer les utilisateurs', 'devices.manage': 'Gérer les appareils', 'settings.manage': 'Paramétrer l’application', export: 'Exporter' };
 const SETTINGS = [
   ['orgName', 'Nom de l’organisme', 'text'], ['gpsThresholdM', 'Seuil d’alerte d’écart GPS (m)', 'number'], ['autoLockMinutes', 'Verrouillage automatique après inactivité (min)', 'number'],
   ['transportMaxHours', 'Délai maximal prélèvement → remise (h, par défaut)', 'number'], ['dateToleranceDays', 'Tolérance de date avant alerte « prestation différente » (jours)', 'number'],
@@ -191,6 +195,19 @@ async function teamCards() {
       <a class="btn ghost sm" style="margin-top:10px" href="#/synchronisation">Aide et état de la synchronisation</a></div>`;
 }
 
+/**
+ * « Logo de l'application » (administrateur) : aperçu du logo affiché, « Choisir une image… » (PNG, JPEG, WebP ou SVG,
+ * aperçu avant validation), « Rétablir le logo OEG » ; js/app/logo.js. L'icône de l'application installée ne change pas.
+ */
+function logoCard(org) {
+  const l = org.logo || null;
+  return html`<div class="card" id="logoCard"><h2>Logo de l’application</h2>
+    <div class="logo-admin"><div class="logo-prev">${logoImg({ cls: 'logo-prev-img', alt: l ? 'Logo de l’application' : 'Logo de l’OEG', width: 96, height: 96 })}</div>
+      <div class="logo-admin-txt">${kv([['Logo affiché', l ? `Logo choisi — ${l.name || 'image'} (${l.width} × ${l.height} px)` : 'Logo de l’OEG (par défaut)'], ['Choisi le', l?.updatedAt ? `${fmtDateTime(l.updatedAt)}${l.byName ? ' par ' + l.byName : ''}` : '']])}
+        <div class="btn-row" style="margin-top:8px"><label class="btn primary" id="logoPick">${icon('upload', { size: 18 })}Choisir une image…<input type="file" accept="${LOGO_ACCEPT}" hidden data-change="logo-pick"></label>${l ? html`<button type="button" class="btn ghost" data-act="logo-reset" id="logoReset">Rétablir le logo OEG</button>` : ''}</div></div></div>
+    <p class="note">Image PNG, JPEG, WebP ou SVG de 2 Mo au plus, convertie en PNG (512 px au plus, transparence et proportions conservées, sans recadrage). Elle remplace le logo de l’OEG dans l’en-tête, les écrans de connexion, l’accueil, les feuilles à l’écran et imprimées et tous les PDF (fiches de tournée, fiches vierges, fiche station, rapport, attendus) et part vers l’autre tablette avec le prochain fichier d’échange. Un PDF déjà enregistré garde le logo du moment où il a été produit. L’icône de l’application installée sur la tablette (écran d’accueil) ne change pas : c’est toujours celle de l’OEG.</p></div>`;
+}
+
 export default {
   nav: 'admin', title: 'Administration',
   async render() {
@@ -213,6 +230,7 @@ export default {
         ['Autres tablettes', devices.filter(d => !d.self).map(d => `${d.name || 'Tablette'}${d.number ? ' (n° ' + d.number + ')' : ''}${d.seenAt ? ' — dernier fichier reçu le ' + fmtDateTime(d.seenAt) : ''}`).join(' ; ') || 'aucune (connue à la réception de son premier fichier)']])}
         <div class="btn-row" style="margin-top:10px">${can('settings.manage') ? html`<button class="btn ${xpw ? 'ghost' : 'primary'}" data-act="xch-password">${xpw ? 'Changer le mot de passe d’échange' : 'Définir le mot de passe d’échange'}</button>` : ''}<a class="btn ghost" href="#/synchronisation">Envoyer ou recevoir un fichier</a></div>
         <p class="note">Le même mot de passe d’échange sur toutes les tablettes de l’équipe : il chiffre les fichiers (Quick Share, Bluetooth, e-mail, Teams, clé USB). Un changement de profil ou de statut d’un agent reçu dans un fichier n’est appliqué d’office que si le fichier a été envoyé par un administrateur de cette tablette ; sinon il attend votre validation (ci-dessus).</p></div>` : ''}
+      ${can('settings.manage') ? logoCard(org) : ''}
       ${can('settings.manage') ? html`<div class="card"><h2>Paramètres de l’organisation</h2><form id="setf"><div class="grid2">${SETTINGS.map(([key, l, t]) => field(l, html`<input name="${key}" type="${t === 'number' ? 'number' : 'text'}" value="${org[key] ?? ''}">`))}</div>
         <button class="btn primary" type="button" data-act="save-settings">Enregistrer les paramètres</button></form></div>` : ''}
       <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
@@ -326,6 +344,36 @@ export default {
       const { setDeviceRevoked } = await import('../app/sync.js');
       try { await setDeviceRevoked(el.dataset.id, false); toast('Appareil réactivé', 'ok'); this.refresh(); } catch (e) { toast(errText(e), 'err', 6000); }
     },
+    /** Logo : image choisie → aperçu (en-tête, feuilles, connexion) → « Utiliser ce logo ». */
+    async 'logo-pick'(el) {
+      const file = el.files?.[0];
+      el.value = '';
+      if (!file) return;
+      const L = await import('../app/logo.js');
+      let prep;
+      try { prep = await L.prepareLogo(file); } catch (e) { toast(e.message, 'err', 6000); return; }
+      const m = openModal({
+        title: 'Nouveau logo de l’application', wide: true,
+        body: html`<div class="logo-previews">
+            <figure><div class="lp-top"><img class="logo is-custom" src="${prep.dataUrl}" alt="" width="46" height="46"><span>Fiches de contrôle terrain</span></div><figcaption>En-tête de l’application</figcaption></figure>
+            <figure><div class="lp-sheet"><img class="oh-logo is-custom" src="${prep.dataUrl}" alt="" width="96" height="96"><span>En-tête des feuilles</span></div><figcaption>Feuilles, impression et PDF</figcaption></figure>
+            <figure><div class="lp-auth"><img src="${prep.dataUrl}" alt=""></div><figcaption>Écran de connexion</figcaption></figure>
+          </div>
+          <p class="note">${prep.name} — ${prep.width} × ${prep.height} px, converti en PNG. L’icône de l’application installée ne change pas.</p>`,
+        actions: [{ label: 'Annuler' }, { label: 'Utiliser ce logo', cls: 'primary', act: 'ok', id: 'logoUse' }],
+        handlers: { ok() { this.close(true); } }
+      });
+      if (!(await m.result)) return;
+      try { await L.setAppLogo(prep); } catch (e) { toast(e.message, 'err', 6000); return; }
+      toast('Logo de l’application remplacé : en-tête, connexion, feuilles et PDF', 'ok', 5000);
+      this.refresh();
+    },
+    async 'logo-reset'() {
+      if (!(await confirmDialog({ title: 'Rétablir le logo OEG', message: 'Le logo de l’OEG remplace le logo choisi partout (écrans, feuilles et PDF), sur cette tablette puis sur l’autre au prochain fichier d’échange. Continuer ?', okLabel: 'Rétablir le logo OEG' }))) return;
+      try { await (await import('../app/logo.js')).resetAppLogo(); } catch (e) { toast(e.message, 'err', 6000); return; }
+      toast('Logo de l’OEG rétabli', 'ok');
+      this.refresh();
+    },
     async 'save-settings'() {
       const v = formValues(document.getElementById('setf'));
       for (const [key, , t] of SETTINGS) if (t === 'number') v[key] = Number(v[key]);
@@ -353,6 +401,7 @@ export default {
       const v = await promptDialog({ title: 'Effacer cette tablette', label: 'Tapez EFFACER pour confirmer', multiline: false, voice: false });
       if (v !== 'EFFACER') return;
       await destroyDB();
+      try { localStorage.removeItem('oeg-ct:logo'); } catch (e) { /* copie locale du logo (js/ui/logo.js) */ }
       try { const keys = await caches.keys(); await Promise.all(keys.filter(key => key.startsWith('oeg-ct-tiles')).map(key => caches.delete(key))); } catch (e) { /* ignore */ }
       location.reload();
     }

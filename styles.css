@@ -280,6 +280,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 .audit-head{position:sticky;top:var(--top-h);z-index:30;background:var(--paper);padding:8px 0 8px;margin:-12px 0 8px}
 .audit-head .ah-row{display:flex;gap:10px;align-items:center;justify-content:space-between}
 .audit-head .ah-num{font-family:var(--font-cond);font-weight:800;color:var(--brand);font-size:17px;letter-spacing:.02em}
+.audit-head .ah-num .as-cancel{margin-left:6px;vertical-align:middle;font-family:var(--font-text);font-weight:600;letter-spacing:0;font-size:14px}
 .audit-head .ah-meta{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .audit-head .progress{margin-top:6px}
 .sec-chips{display:flex;gap:8px;overflow-x:auto;padding:8px 0 4px;scroll-snap-type:x proximity}
@@ -330,13 +331,27 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb .t-meta{position:absolute;left:0;right:0;bottom:0;background:#0d3577b3;color:#fff;font-size:10.5px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .thumb .t-badge{position:absolute;top:4px;left:4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:6px;padding:1px 5px}
+.thumb .t-badge.t-gal{background:var(--brand)}
+/* Ajout de preuves (js/ui/components.js, mediaInputs) : « Prendre une photo », « Importer depuis la galerie », « Joindre un document ». */
+.ms-btn{position:relative}
+.ms-btn .ic{display:inline-flex}
+/* Préleveurs du prestataire (création de tournée, feuille Organisation) : initiales en pastille, nom et fonction. */
+.an-ops,.as-ops-list{grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr))}
+.an-ops .check,.as-ops-list .check{align-items:center;gap:10px}
+.as-op-ini{flex:none;display:grid;place-items:center;min-width:34px;height:34px;padding:0 6px;border-radius:17px;background:#e6f2fb;color:var(--brand);border:1px solid #0d357733;font-size:13px;font-weight:700;letter-spacing:.02em}
+.as-op-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.as-op-txt b{color:var(--brand);font-size:15.5px;overflow-wrap:anywhere}
+.as-op-txt small{font-size:12.5px;color:var(--muted)}
+.as-ops h2 small{font-weight:600;color:var(--muted);font-size:14px;margin-left:6px;text-transform:none;letter-spacing:0}
+.as-ops [data-act=op-new]{margin-top:10px}
+.op-propose{flex-wrap:wrap;gap:8px}
 .thumb.file{display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:12px;font-weight:600;color:var(--brand);text-align:center;padding:6px}
 .thumb.file .ic{font-size:30px}
 
 /* ---------- Modale / feuille ---------- */
 .modal-back{position:fixed;inset:0;z-index:200;background:#0a1e3c99;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
 @media(min-width:700px){.modal-back{align-items:center;padding:20px}}
-.modal{background:#fff;width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + var(--safe-b));box-shadow:0 -8px 30px #0d357766}
+.modal{background:#fff;width:100%;max-width:720px;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + var(--safe-b));box-shadow:0 -8px 30px #0d357766}
 @media(min-width:700px){.modal{border-radius:22px}}
 .modal.wide{max-width:1000px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;position:sticky;top:-16px;background:#fff;padding:6px 0;z-index:2;border-bottom:2px solid var(--soft)}
@@ -403,6 +418,23 @@ button.kpi{font:inherit;cursor:pointer}
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 90' preserveAspectRatio='none'%3E%3Cpath d='M0 90V78C260 84 470 72 690 54S1020 18 1200 8V90Z' fill='%23ffffff' fill-opacity='.18'/%3E%3Cpath d='M380 90C640 86 880 64 1020 46S1160 24 1200 20V90Z' fill='%23ffffff' fill-opacity='.22'/%3E%3C/svg%3E") no-repeat bottom/100% 100%}
 .auth-card{position:relative;z-index:1;background:#fff;border-radius:24px;padding:24px 22px;width:100%;max-width:540px;box-shadow:0 14px 44px #04163d66}
 .auth-card .logo{display:block;height:84px;margin:0 auto 10px;object-fit:contain}
+/* Logo choisi en Administration (js/ui/logo.js) : proportions conservées sur fond blanc, jamais recadré en rond. */
+.app-top .logo.is-custom,.hm-logo.is-custom{object-fit:contain;border-radius:10px;background:#fff;padding:3px;box-sizing:border-box}
+.auth-card .logo.is-custom{max-width:min(320px,100%)}
+.logo-admin{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.logo-prev{flex:none;display:grid;place-items:center;width:112px;height:112px;border-radius:14px;border:1px solid var(--line);background:repeating-conic-gradient(#eef3f7 0 25%,#fff 0 50%) 0 0/16px 16px}
+.logo-prev-img{width:96px;height:96px;object-fit:contain}
+.logo-prev-img:not(.is-custom){border-radius:50%}
+.logo-admin-txt{flex:1 1 260px;min-width:0}
+.logo-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.logo-previews figure{margin:0}
+.logo-previews figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+.lp-top{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:linear-gradient(90deg,#0d3577,#1a6fb5);color:#fff;font-family:var(--font-cond);font-weight:800;text-transform:uppercase;min-width:0}
+.lp-top img{width:46px;height:46px;flex:none;object-fit:contain;border-radius:10px;background:#fff;padding:3px;box-sizing:border-box}
+.lp-sheet{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--brand);font-weight:700}
+.lp-sheet img{width:64px;height:64px;flex:none;object-fit:contain}
+.lp-auth{display:grid;place-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.lp-auth img{height:84px;max-width:100%;object-fit:contain}
 .auth-card h1{text-align:center;font-family:var(--font-cond);font-size:26px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--brand);margin:0 0 4px;line-height:1.1}
 .auth-card .sub{text-align:center;color:var(--muted);margin-bottom:16px;font-size:14.5px}
 .auth-card h3{font-family:var(--font-cond);font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
