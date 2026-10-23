@@ -7,7 +7,8 @@
  * rang de Strahler, typologie, pressions), point d'eau souterraine (nature, usage, aquifère), accès et difficultés,
  * compartiments à contrôler et listes biologiques, points de prélèvement (station, invertébrés, diatomées,
  * ichtyofaune), légendes et source des photographies. Enregistrement par store.put avec motif obligatoire (journal
- * d'audit). */
+ * d'audit) ; informations de la station reprises dans F3 des tournées en cours non signées recalculées
+ * (refreshStationInfo, js/domain/links.js). */
 import { html, raw, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
@@ -23,6 +24,7 @@ import { latLonToUtm, utmConvert, guessUtmZone } from '../lib/geo.js';
 import { SRS, srsOf, entryOf, siteXY, convertedText } from '../domain/coords.js';
 import { TYPE_STYLES, TYPE_ORDER, SAMPLING_KINDS } from '../ui/map.js';
 import { ctGrid, SLOTS, siteTypes } from './station-sheet.js';
+import { refreshStationInfo } from '../app/audits.js';
 
 const MODES = ['4x4', 'Bateau motorisé / pirogue', 'À pied', 'Hélicoptère', 'Avion', 'Autre'];
 const USAGES = ['Alimentation en eau potable', 'Surveillance (piézomètre)', 'Usage agricole', 'Usage industriel', 'Autre'];
@@ -252,7 +254,10 @@ export default {
           await store.put('point', { ...pt, lat, lon }, { reason: `${reason} (position de la station)` });
         }
       }
-      toast(created.length ? `Station enregistrée ✓ — réseau(x) ajouté(s) au référentiel : ${created.map(n => n.code).join(', ')}` : 'Station enregistrée ✓', 'ok', created.length ? 6000 : undefined);
+      // Informations de la station reprises dans F3 des tournées en cours (encore auto-remplies) : recalculées.
+      const tours = await refreshStationInfo([s.id], { reason: `${reason} : informations de la station ${code} reprises dans la tournée` });
+      const msg = [created.length ? `réseau(x) ajouté(s) au référentiel : ${created.map(n => n.code).join(', ')}` : '', tours ? `informations mises à jour dans ${tours} tournée${tours > 1 ? 's' : ''} en cours` : ''].filter(Boolean).join(' ; ');
+      toast(msg ? `Station enregistrée ✓ — ${msg}` : 'Station enregistrée ✓', 'ok', msg ? 6000 : undefined);
       navigate('/station/' + encodeURIComponent(s.id));
     }
   }

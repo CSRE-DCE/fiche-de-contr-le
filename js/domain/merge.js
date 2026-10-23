@@ -16,6 +16,11 @@
  *    coordonnées d'une station (COORD_FIELDS : x, y, lat, lon et saisie d'origine en UTM 21N srs, x21, y21) et valeur
  *    d'un groupe X / Y d'une feuille ({x, y, srs?, x21?, y21?, lat?, lon?…}) ; modifiée des deux côtés : un conflit,
  *    la plus récente est retenue entière ;
+ *  - la valeur d'une réponse d'audit et sa PROVENANCE (saisie de l'agent ou reprise d'une autre feuille :
+ *    VALUE_GROUPS.response — value, prefilled, from, fromId, valueManual, js/domain/links.js) sont fusionnées d'un
+ *    bloc, de même un encadré lié d'une feuille et ses marques (VALUE_GROUPS.sheet) : jamais la valeur saisie d'un
+ *    côté avec la marque « repris de F… » de l'autre ; modifiées des deux côtés : la réponse la plus récente (horodatage
+ *    de la réponse) est retenue entière et l'autre valeur conservée dans le rapport ;
  *  - un même champ modifié des deux côtés avec des valeurs différentes est un CONFLIT : la version la
  *    plus récente (horodatage) est retenue et l'autre valeur est conservée dans le rapport de conflit,
  *    consultable et restaurable par l'utilisateur ;
@@ -36,22 +41,37 @@ export const SET_FIELDS = { site: new Set(['networks', 'types']) };
 const isSimpleList = v => v === undefined || v === null || (Array.isArray(v) && v.every(x => x === null || typeof x !== 'object'));
 /** Champs de position d'une entité fusionnés d'un bloc (X / Y RGFG95 / UTM 22N, WGS84, saisie d'origine en UTM 21N). */
 export const COORD_FIELDS = { site: ['x', 'y', 'lat', 'lon', 'srs', 'x21', 'y21'] };
+/** Valeur d'une réponse d'audit et sa provenance ; encadré lié d'une feuille (« Agent(s) prestataire(s) ») et ses marques. */
+export const VALUE_GROUPS = { response: ['value', 'prefilled', 'from', 'fromId', 'valueManual'], sheet: ['agents', 'agentsFrom', 'agentsManual'] };
 /** Valeur d'un groupe X / Y (feuilles) ou d'un point : objet portant des coordonnées planes (nombres). */
 const PLANE = ['x', 'y', 'x21', 'y21'];
 const isCoord = c => typeof c === 'number' || (typeof c === 'string' && c.trim() !== '' && Number.isFinite(Number(c.replace(',', '.'))));
 const isPosition = v => isObj(v) && PLANE.some(k => v[k] !== undefined) && PLANE.every(k => v[k] === undefined || v[k] === null || isCoord(v[k]));
 
-/** Fusion d'un groupe de champs d'un bloc : modifié d'un seul côté → ce côté ; des deux côtés → le plus récent entier. */
-function mergeGroup(keys, base, local, remote, ctx) {
+/**
+ * Fusion d'un groupe de champs d'un bloc : modifié d'un seul côté → ce côté ; des deux côtés → le plus récent entier.
+ * opts (groupe d'une réponse ou d'un encadré) : { prefix (chemin), reason, report: [clés signalées au rapport],
+ * localStamp, remoteStamp } ; par défaut : position d'une entité (chaque clé différente signalée).
+ */
+function mergeGroup(keys, base, local, remote, ctx, opts = {}) {
   const pick = o => { const out = {}; for (const k of keys) if (o?.[k] !== undefined) out[k] = o[k]; return out; };
   const gb = pick(base), gl = pick(local), gr = pick(remote);
   if (deepEqual(gl, gr) || deepEqual(gb, gr)) return clone(gl);
   if (deepEqual(gb, gl)) return clone(gr);
-  const keepLocal = String(ctx.localStamp) > String(ctx.remoteStamp);
-  for (const k of keys) {
-    if (!deepEqual(gl[k], gr[k])) ctx.conflicts.push({ path: k, kept: keepLocal ? 'local' : 'remote', reason: 'position modifiée des deux côtés : la plus récente est retenue entière', localValue: gl[k] ?? null, remoteValue: gr[k] ?? null });
+  const keepLocal = String(opts.localStamp ?? ctx.localStamp) > String(opts.remoteStamp ?? ctx.remoteStamp);
+  for (const k of opts.report || keys) {
+    if (!deepEqual(gl[k], gr[k])) ctx.conflicts.push({ path: opts.prefix ? `${opts.prefix}.${k}` : k, kept: keepLocal ? 'local' : 'remote', reason: opts.reason || 'position modifiée des deux côtés : la plus récente est retenue entière', localValue: gl[k] ?? null, remoteValue: gr[k] ?? null });
   }
   return clone(keepLocal ? gl : gr);
+}
+/** Groupe fusionné d'un bloc à ce niveau : position d'une entité (niveau 0), réponse ou encadré d'un audit (niveau 2). */
+function groupAt(ctx, path, depth, l, r) {
+  if (depth === 0) return COORD_FIELDS[ctx.type] ? { keys: COORD_FIELDS[ctx.type], opts: {} } : null;
+  if (depth !== 2 || ctx.type !== 'audit') return null;
+  const stamps = { localStamp: stamp(l) || ctx.localStamp, remoteStamp: stamp(r) || ctx.remoteStamp, prefix: path };
+  if (path.startsWith('responses.')) return { keys: VALUE_GROUPS.response, opts: { ...stamps, report: ['value'], reason: 'valeur modifiée des deux côtés (saisie ou reprise d’une autre feuille) : la réponse la plus récente est retenue entière' } };
+  if (path.startsWith('sheets.')) return { keys: VALUE_GROUPS.sheet, opts: { ...stamps, report: ['agents'], reason: 'encadré modifié des deux côtés (saisie ou reprise) : le plus récent est retenu entier' } };
+  return null;
 }
 /**
  * Fusion d'ensembles : un élément retiré d'un côté (présent dans la version commune) est retiré ; un élément ajouté
@@ -74,8 +94,9 @@ function mergeValue(base, local, remote, path, ctx, depth) {
   if (!position && depth < 4 && (isObj(local) || local === undefined) && (isObj(remote) || remote === undefined) && (isObj(local) || isObj(remote))) {
     const b = isObj(base) ? base : {}, l = local || {}, r = remote || {};
     const out = {};
-    const group = depth === 0 ? COORD_FIELDS[ctx.type] : null;
-    if (group) Object.assign(out, mergeGroup(group, b, l, r, ctx));
+    const g = groupAt(ctx, path, depth, l, r);
+    const group = g?.keys || null;
+    if (group) Object.assign(out, mergeGroup(group, b, l, r, ctx, g.opts));
     for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
       if (depth === 0 && META.has(k)) continue;
       if (group?.includes(k)) continue;

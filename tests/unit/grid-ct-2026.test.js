@@ -26,7 +26,7 @@ import { compareAudits } from '../../js/domain/compare.js';
 import { parseInputValue } from '../../js/domain/normalize.js';
 import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN, baseReferential } from '../../js/domain/seed.js';
 import { canonicalJSON } from '../../js/core/util.js';
-import { LINK_GROUPS } from '../../js/domain/links.js';
+import { LINK_GROUPS, isVirtualSource } from '../../js/domain/links.js';
 
 const G = GRID_CT_2026;
 const IDX = itemIndex(G);
@@ -663,11 +663,12 @@ const SAME_INFO_OK = [
 const pairKey = (a, b) => [a, b].sort().join('|');
 
 /** Graphe (non orienté) des groupes de champs liés de js/domain/links.js : deux critères reliés ⇒ information reprise
- * automatiquement ou proposée, jamais saisie deux fois. */
+ * automatiquement ou proposée, jamais saisie deux fois. Une source VIRTUELLE (fiche de la station, préleveurs, appareils
+ * de mesure…) alimente des informations différentes (bassin, commune, code…) : elle ne relie pas ses cibles entre elles. */
 function linkComponents() {
   const adj = new Map();
   const edge = (a, b) => { for (const [x, y] of [[a, b], [b, a]]) { if (!adj.has(x)) adj.set(x, new Set()); adj.get(x).add(y); } };
-  for (const g of LINK_GROUPS) for (const to of g.to) edge(g.from, to);
+  for (const g of LINK_GROUPS) for (const to of g.to) edge(isVirtualSource(g.from) ? `${g.from}→${to}` : g.from, to);
   const comp = new Map();
   for (const start of adj.keys()) {
     if (comp.has(start)) continue;

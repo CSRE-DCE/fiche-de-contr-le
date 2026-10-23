@@ -14,7 +14,7 @@ import { navigate } from '../ui/router.js';
 import { toast, promptDialog, confirmDialog, openModal, downloadBlob, choiceDialog } from '../ui/dom.js';
 import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar, auditBadge, critBadge, deviationBadge, empty, operatorName, siteName, providerName, kindBadge } from '../ui/components.js';
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
-import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate, OPEN_DEVIATION, auditKindLabel } from '../domain/model.js';
+import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate, OPEN_DEVIATION, auditKindLabel, auditTimeTexts } from '../domain/model.js';
 import { allowedResponses, isAnswered, isAnswerable, needsJustification, isEnteredResponse } from '../domain/grids.js';
 import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, cancelTour, cancelTourRefusal, auditDeviations, controllersLabel, canJoinAudit } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
@@ -97,7 +97,7 @@ function identificationStep(audit, st, editable) {
   return html`
     <div class="card"><h2>Identification de l’audit</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type', auditKindLabel(audit.kind, { long: true })],
-      ['Date', fmtDate(auditDate(audit))], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
+      ['Date', fmtDate(auditDate(audit))], ['Heure de début', auditTimeTexts(audit).start], ['Heure de fin', auditTimeTexts(audit).end],
       ['Contrôleur(s) OEG', controllersLabel(audit)], ['Créé par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],

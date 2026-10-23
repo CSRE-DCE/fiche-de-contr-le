@@ -40,6 +40,42 @@ export function auditDate(audit) {
   const d = audit.startedAt ? new Date(audit.startedAt) : null;
   return d && !isNaN(d) ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
 }
+/** Critères « Début du contrôle » / « Fin du contrôle » de la feuille de tournée (grille CT-2026, F2 1.5 / 1.6). */
+export const TOUR_START_ITEM = 'it-F2-1.5';
+export const TOUR_END_ITEM = 'it-F2-1.6';
+const HHMM = /^\d{2}:\d{2}/;
+const clock = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ''; };
+const dayOf = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : ''; };
+/**
+ * Heures d'une tournée (« HH:MM »), rapprochées de la feuille Organisation (écrans, rapport, exports) : début =
+ * « Début du contrôle » (F2 1.5) s'il est renseigné, sinon heure de création de la tournée (startedAt) ; fin = « Fin du
+ * contrôle » (F2 1.6), sinon heure de clôture (endedAt). { start, end, startFromSheet, endFromSheet, enteredAt (heure
+ * de création), enteredDay (jour de création, AAAA-MM-JJ), closedAt (heure de clôture) }.
+ */
+export function auditTimes(audit) {
+  const v = id => { const x = audit?.responses?.[id]?.value; return typeof x === 'string' && HHMM.test(x) ? x.slice(0, 5) : ''; };
+  const s = v(TOUR_START_ITEM), e = v(TOUR_END_ITEM);
+  const enteredAt = clock(audit?.startedAt), closedAt = clock(audit?.endedAt);
+  return { start: s || enteredAt, end: e || closedAt, startFromSheet: !!s, endFromSheet: !!e, enteredAt, enteredDay: dayOf(audit?.startedAt), closedAt };
+}
+/**
+ * Textes « Heure de début » / « Heure de fin » d'une tournée : « 07:45 (début du contrôle, F2.1.5) — saisie démarrée à
+ * 08:02 », « 08:02 (saisie démarrée le 17/10/2026) » quand la tournée a été saisie un autre jour que sa date,
+ * « 16:30 (fin du contrôle, F2.1.6) », sinon heure de clôture ou `open` (« en cours »).
+ */
+export function auditTimeTexts(audit, { open = 'en cours' } = {}) {
+  const t = auditTimes(audit);
+  const date = auditDate(audit);
+  const otherDay = t.enteredDay && date && t.enteredDay !== date ? t.enteredDay.split('-').reverse().join('/') : '';
+  let start = t.start;
+  if (t.startFromSheet) {
+    if (t.enteredAt && (otherDay || t.enteredAt !== t.start)) start += ` (début du contrôle, F2.1.5) — saisie démarrée ${otherDay ? `le ${otherDay} ` : ''}à ${t.enteredAt}`;
+    else start += ' (début du contrôle, F2.1.5)';
+  } else if (otherDay) start += ` (saisie démarrée le ${otherDay})`;
+  let end = t.end || open;
+  if (t.endFromSheet) end += t.closedAt && t.closedAt !== t.end ? ` (fin du contrôle, F2.1.6) — tournée clôturée à ${t.closedAt}` : ' (fin du contrôle, F2.1.6)';
+  return { start, end };
+}
 /** Comparateur d'audits : date de l'audit (auditDate) la plus récente d'abord, puis création la plus récente. */
 export function byAuditDateDesc(a, b) {
   return auditDate(b).localeCompare(auditDate(a)) || String(b?.startedAt || '').localeCompare(String(a?.startedAt || ''));

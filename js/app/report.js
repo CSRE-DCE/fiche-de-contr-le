@@ -14,8 +14,8 @@ import { PDFDocument } from '../formats/pdf.js';
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
-import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO, localDate } from '../core/util.js';
-import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate, auditKindLabel } from '../domain/model.js';
+import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO } from '../core/util.js';
+import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate, auditKindLabel, auditTimeTexts } from '../domain/model.js';
 import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace, tourControllers, entriesByAgent } from './audits.js';
@@ -76,7 +76,6 @@ export async function buildAuditReport(auditId) {
   const sheetGrid = isSheetGrid(st.grid);
   // Date de l'audit = date de la tournée (la même que celle des écrans et des fiches de contrôle PDF).
   const date = auditDate(audit);
-  const entryDay = audit.startedAt ? localDate(new Date(audit.startedAt)) : '';
   // Contrôleurs OEG de la tournée (binôme) : partout où figure le contrôleur OEG.
   const controllers = tourControllers(audit);
   const controllersText = controllers.map(c => c.name).filter(Boolean).join(', ') || audit.auditorName || '';
@@ -155,7 +154,8 @@ export async function buildAuditReport(auditId) {
   doc.heading('1. Identification de l’audit');
   doc.keyValues([
     ['Numéro d’audit', audit.number], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
-    ['Date', fmtDate(date)], ['Heure de début', `${fmtTime(audit.startedAt)}${entryDay && entryDay !== date ? ` (saisie démarrée le ${fmtDate(entryDay)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
+    // Heures rapprochées de la feuille Organisation (« Début / Fin du contrôle », F2.1.5 / 1.6), comme l'onglet Infos.
+    ['Date', fmtDate(date)], ['Heure de début', auditTimeTexts(audit, { open: 'non clôturé' }).start], ['Heure de fin', auditTimeTexts(audit, { open: 'non clôturé' }).end],
     [controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG (auditeur)', controllersText],
     ['Tournée créée par', `${audit.auditorName} (${audit.auditorRole || ''})`],
     ...(controllers.length > 1 || (audit.controllerLog || []).length ? [['Saisies par agent', entriesByAgent(audit).map(r => `${r.name} : ${r.responses} réponse(s)`).join(' ; ')]] : []),

@@ -7,8 +7,9 @@
  * Sites (stations des fiches de contrôle 2026) : les champs non décrits par le schéma (types de tournée, code
  * BSS, compartiments, accès, photos, points de prélèvement…) sont conservés ; une nouvelle station reçoit les
  * champs « station » vides et ses types / compartiments déduits des réseaux (cases à cocher du référentiel) ; la
- * modification complète se fait dans la fiche station (#/station/:id/modifier). Campagnes : réseau choisi dans la
- * liste du référentiel. */
+ * modification complète se fait dans la fiche station (#/station/:id/modifier) ; une station modifiée met à jour les
+ * informations de F3 des tournées en cours non signées (refreshStationInfo). Campagnes : réseau choisi dans la liste du
+ * référentiel. */
 import { html, raw, uuid, sortBy, normalize, localDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
@@ -23,6 +24,7 @@ import { networkId, networkColors, sortNetworkCodes, AUDIT_TYPE_KEYS } from '../
 import { currentNetworkIndex, currentNetworkList, networkUsage } from '../app/networks.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { latLonToUtm } from '../lib/geo.js';
+import { refreshStationInfo } from '../app/audits.js';
 
 const ref = (type, label = x => x.label || x.name) => ({ type: 'ref', ref: type, label });
 export const SCHEMAS = {
@@ -152,6 +154,11 @@ export function editEntity(type, e = null) {
         if (type === 'equipment') next.statusLabel = EQUIPMENT_STATUS[next.status];
         if (type === 'site') next = stationDefaults(next, isNew, isNew ? null : e);
         await store.put(type, next, { reason: isNew ? 'Création' : 'Modification du référentiel' });
+        // Station modifiée : informations de F3 recalculées dans les tournées en cours qui la visitent (links.js).
+        if (type === 'site' && !isNew) {
+          const tours = await refreshStationInfo([next.id], { reason: `Modification du référentiel : informations de la station ${next.code} reprises dans la tournée` });
+          if (tours) toast(`Informations de la station mises à jour dans ${tours} tournée${tours > 1 ? 's' : ''} en cours`, 'ok', 5000);
+        }
         this.close(next);
       }
     }

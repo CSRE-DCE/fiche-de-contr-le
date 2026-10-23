@@ -17,7 +17,10 @@
  * niveau d'eau, contrôleurs de F2 ; préleveurs de la tournée ; opérateurs présents sur la station…) remplit, dans la
  * même écriture, les champs équivalents encore vides ou encore auto-remplis des autres feuilles (« Repris de F… »,
  * prefilled, from, fromId ; attribués à l'agent dont la saisie les a produits) ; une valeur saisie par l'agent
- * (valueManual) n'est jamais remplacée ; rien n'est propagé sur une tournée signée et verrouillée ou annulée.
+ * (valueManual) n'est jamais remplacée ; rien n'est propagé sur une tournée signée et verrouillée ou annulée, ni à la
+ * réception d'un fichier d'échange. Fiche d'une station modifiée (référentiel) : informations de F3 recalculées dans les
+ * tournées en cours non signées (refreshStationInfo). Valeurs seulement proposées (accès, supports, marché, effectif,
+ * sondes…) : données complémentaires linkExtra.
  * Reprise des réponses de la station précédente (copyPreviousStation) : à la demande, feuille par feuille. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
@@ -28,9 +31,9 @@ import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addD
 import {
   allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, stationProgress, prefillResponses, normalizeCompartments,
   isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries,
-  isEnteredResponse, visibleItems
+  isEnteredResponse, visibleItems, resolveSheet, sheetStoreKey
 } from '../domain/grids.js';
-import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, LINKED_SHEET_KEYS } from '../domain/links.js';
+import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, SITE_SOURCE, LINKED_SHEET_KEYS } from '../domain/links.js';
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
@@ -189,12 +192,38 @@ const sessionStamp = at => ({ at, by: session.user.id, byName: session.user.name
 /* ---------- Remplissage automatique des informations redondantes (js/domain/links.js) ---------- */
 /** Sources de tournée des groupes de champs liés (création de la tournée, ajout d'une station). */
 const TOUR_SOURCES = ['it-F2-1.4', 'it-F2-1.1', 'it-F2-1.9', 'it-F2-1.8', OPERATORS_SOURCE];
+/** Source « fiche de la station » d'une station de la tournée (informations de F3 recalculées). */
+const siteSource = key => `${SITE_SOURCE}@${key}`;
 /** Préleveurs de la tournée en clair : « Prénom Nom (INI) — fonction, … » (libellés figés dans la tournée). */
 export function tourOperatorsText(audit) {
   return (audit?.operatorIds || []).map(id => audit.operatorNames?.[id] || operatorLabel(store.get('operator', id))).filter(Boolean).join(', ');
 }
-/** Données complémentaires des groupes liés : préleveurs de la tournée, prestataire. */
-export const linkExtra = audit => ({ operatorsText: tourOperatorsText(audit), providerName: store.get('provider', audit?.providerId)?.name || '' });
+/** Appareils du module « Appareils de mesure » (F4, donnée de tournée) : [{ key, label, model, serial, calibration… }]. */
+function tourInstruments(audit) {
+  const sh = (audit?.gridSnapshot?.sheets || []).find(s => (s.modules || []).includes('instruments'));
+  if (!sh) return [];
+  const r = resolveSheet(sh, auditTypeOf(audit));
+  const data = audit.sheets?.[sheetStoreKey(r, 'instruments')]?.instruments || {};
+  return (r.instruments || []).map(ins => ({ key: ins.key, label: ins.label, ...(data[ins.key] || {}) }));
+}
+/**
+ * Données complémentaires des groupes liés (js/domain/links.js) : préleveurs de la tournée et prestataire, fiches des
+ * stations (informations de F3, moyens d'accès, difficultés), compartiments contrôlés, référence du marché des
+ * prestations (lots du contrat du prestataire), appareils de mesure de F4.
+ */
+export function linkExtra(audit) {
+  const provider = store.get('provider', audit?.providerId);
+  const stations = (audit?.stations || []).map(st => ({ key: st.key, site: store.get('site', st.siteId) || null }));
+  const prestations = [...new Set([...(audit?.prestationIds || []), audit?.prestationId].filter(Boolean))].map(id => store.get('prestation', id)).filter(p => p?.marketRef);
+  return {
+    operatorsText: tourOperatorsText(audit), operatorsCount: (audit?.operatorIds || []).length, providerName: provider?.name || '',
+    sites: Object.fromEntries(stations.map(s => [s.key, s.site])),
+    stations: stations.map(({ key, site }) => ({ key, name: site?.name || key, modes: [...(site?.access?.modes || []), ...(site?.transportModes || [])], difficulties: site?.difficulties || '' })),
+    compartments: (audit?.gridSnapshot?.compartments || []).filter(c => !c.always && (audit.compartments || []).includes(c.key)).map(c => ({ key: c.key, label: c.label })),
+    markets: prestations.map(p => ({ ref: p.marketRef, lots: (provider?.contracts || []).find(k => k.ref === p.marketRef)?.lots || '' })),
+    instruments: tourInstruments(audit)
+  };
+}
 /** Critères visibles de la grille effective d'un audit (version en cours de modification comprise). */
 function linkItems(a) {
   if (!isSheetGrid(a?.gridSnapshot) || !(a.stations || []).length) return [];
@@ -232,6 +261,32 @@ export function applyLinks(a, changed, at = nowISO()) {
     a.responses[u.id] = { ...(r || {}), value: u.value, prefilled: true, from: u.from, fromId: u.fromId, ...(isEnteredResponse(r) ? {} : stamp) };
   }
   return ups.length;
+}
+/**
+ * Fiche d'une station modifiée dans le référentiel (« Modifier la station », Référentiels › Sites, import) : les
+ * informations de la station reprises dans F3 (bassin, cours d'eau, nom, codes, Strahler, pressions, commune, HER)
+ * sont recalculées dans les tournées EN COURS qui la visitent quand elles sont encore auto-remplies (jamais une saisie
+ * ni une valeur déjà cotée : la nouvelle valeur y est seulement proposée) ; jamais une tournée signée (même pas encore
+ * verrouillée : la signature couvre le contenu), terminée, verrouillée ou annulée. Valeurs attribuées à l'agent
+ * connecté (auteur de la modification de la fiche), une écriture par tournée (journal). Retourne le nombre de tournées
+ * mises à jour. Pas d'appel à la réception d'un fichier d'échange (la valeur est alors proposée sur la feuille).
+ */
+export async function refreshStationInfo(siteIds, { reason = null } = {}) {
+  const ids = new Set([].concat(siteIds || []).filter(Boolean));
+  if (!ids.size || !session.user) return 0;
+  const open = store.filter('audit', a => a.status === 'en_cours' && !a.lock?.lockedAt && !Object.keys(a.signatures || {}).length
+    && isSheetGrid(a.gridSnapshot) && (a.stations || []).some(s => ids.has(s.siteId)));
+  let n = 0;
+  for (const cur of open) {
+    const sts = cur.stations.filter(s => ids.has(s.siteId));
+    const changed = sts.map(s => siteSource(s.key));
+    if (!applyLinks(clone(cur), changed)) continue;
+    const names = sts.map(s => store.get('site', s.siteId)?.name || s.key).join(', ');
+    const now = nowISO();
+    await updateAudit(cur, a => { applyLinks(a, changed, now); }, { reason: reason || `Informations de la station ${names} reprises de la fiche station (référentiel modifié)` });
+    n++;
+  }
+  return n;
 }
 
 /* ---------- Contrôleurs OEG de la tournée (binôme) ---------- */
@@ -458,8 +513,9 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     stations: list.map((st, i) => ({ key: st.key, site: sites[st.siteId], prestation: req.find(r => r.siteId === st.siteId)?.prestation || null, time: i === 0 ? time : '' })),
     ...sessionStamp(now)
   });
-  // Informations communes reprises dans les autres feuilles (date, contrôleurs, préleveurs…) : « Repris de F… ».
-  applyLinks(audit, TOUR_SOURCES, now);
+  // Informations communes reprises dans les autres feuilles (date, contrôleurs, préleveurs, fiche de chaque station…) :
+  // « Repris de F… ».
+  applyLinks(audit, [...TOUR_SOURCES, ...list.map(st => siteSource(st.key))], now);
   await store.put('audit', audit, { action: 'create', reason: kind === 'inopine' ? 'Audit inopiné' : null });
   for (const p of prestations) await addPrestationHistory(p, { event: 'audit-demarre', auditId: audit.id, label: `Audit ${number} démarré${list.length > 1 ? ` (tournée de ${list.length} stations)` : ''}` });
   return store.get('audit', audit.id);
@@ -501,8 +557,9 @@ export async function addStation(audit, { siteId = null, prestationId = null, po
     for (const [k, v] of Object.entries(pre)) if (!a.responses[k]) a.responses[k] = v;
     for (const id of countIds) { const r = a.responses[id]; if (!r || (r.prefilled && !r.status)) a.responses[id] = { ...(r || {}), value: stations.length, prefilled: true, ...sessionStamp(now) }; }
     a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'ajout', key: st.key, siteId, prestationId: st.prestationId, reason: reason || null }];
-    // Nouvelle station : date, contrôleurs, météo, niveau d'eau et préleveurs déjà saisis pour la tournée repris.
-    applyLinks(a, TOUR_SOURCES, now);
+    // Nouvelle station : date, contrôleurs, météo, niveau d'eau et préleveurs déjà saisis pour la tournée repris,
+    // informations de sa fiche station marquées « repris de la fiche station ».
+    applyLinks(a, [...TOUR_SOURCES, siteSource(st.key)], now);
   }, { reason: reason || `Ajout de la station ${site.name} (${site.code}) à la tournée` });
   if (prestation) await addPrestationHistory(prestation, { event: 'audit-demarre', auditId: cur.id, label: `Audit ${cur.number} : station ajoutée à la tournée` });
   return store.get('audit', cur.id);

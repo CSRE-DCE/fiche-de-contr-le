@@ -139,6 +139,12 @@
 .as-from{display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:1px 7px;border-radius:999px;background:#e6f0fa;color:#24527f;font-size:.78em;font-weight:600;line-height:1.5;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .as-from.is-copy{background:#efe9fa;color:#4b3486}
 .as-from .ico{flex:none}
+/* Proposition longue (sondes, difficultés d'accès…) : retour à la ligne dans le bouton ; plusieurs choix côte à côte */
+.as-link-suggest{flex-wrap:wrap;column-gap:6px;row-gap:0;max-width:100%;border-radius:14px;text-align:left}
+.as-link-suggest .as-link-k{white-space:nowrap}
+.as-link-suggest b{min-width:0;overflow-wrap:anywhere}
+.as-link-choices{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;max-width:100%}
+.as-link-choices>.as-link-k{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:var(--th-dark);font-size:.86em;white-space:nowrap}
 .as-rep .as-rep-row>.as-from,.as-rep .as-rep-row>.as-suggest{flex-basis:auto;margin:0 0 4px}
 .as-rep .as-rep-row>.as-from{order:3}
 .st-table td.c-value>.as-from,.st-rc-value>.as-from{display:flex;width:fit-content}
@@ -297,7 +303,7 @@ body.sun textarea.as-obs.need{border-bottom-color:#8a0000!important}
 
 /* ---------- Impression : feuille seule ---------- */
 @media print{
-  .as-top,.as-tabs,.as-f1-actions,.as-tools,.as-help,.as-now,.as-suggest,.st-gps,.as-footer,.tour-stations{display:none!important}
+  .as-top,.as-tabs,.as-f1-actions,.as-tools,.as-help,.as-now,.as-suggest,.as-link-choices,.as-copyprev,.st-gps,.as-footer,.tour-stations{display:none!important}
   .as-hd-full{display:block!important}.as-hd-compact{display:none!important}
   .as-frame .st-table textarea{max-height:none}
   .as-lined{background:none;border-bottom:1px dotted #8ea9c3!important}

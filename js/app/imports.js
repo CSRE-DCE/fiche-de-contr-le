@@ -8,7 +8,8 @@
  * réseau) cumule ses réseaux sur sa première ligne ; un code inconnu est signalé puis ajouté au référentiel à
  * l'application de l'import. Coordonnées X / Y : RGFG95 / UTM 22N, ou UTM 21N (colonne « Fuseau UTM » ou fuseau
  * reconnu d'après X) converties en UTM 22N avec la saisie d'origine (srs, x21, y21) ; latitude / longitude seules :
- * X / Y recalculés en UTM 22N ; point hors de la Guyane signalé. */
+ * X / Y recalculés en UTM 22N ; point hors de la Guyane signalé. Stations modifiées : informations de F3 recalculées
+ * dans les tournées en cours non signées qui les visitent (refreshStationInfo). */
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { uuid, nowISO, normalize, sha256Hex, deepEqual } from '../core/util.js';
@@ -23,6 +24,7 @@ import { latLonToUtm, inGuyane } from '../lib/geo.js';
 import { stationTypes, stationCompartments } from '../domain/seed.js';
 import { normalizeNetworkCodes, sameNetworks, sortNetworkCodes, AUDIT_TYPE_KEYS } from '../domain/networks.js';
 import { currentNetworkIndex, ensureNetworks } from './networks.js';
+import { refreshStationInfo } from './audits.js';
 
 const statusFromLabel = (map, v) => { const n = normalize(v); return Object.keys(map).find(k => normalize(k) === n || normalize(map[k]?.label || map[k]) === n) || null; };
 
@@ -436,6 +438,8 @@ export async function applyImport(target, source, preview, selected = null) {
   await store.bulkPut(type, list, { reason, label: `${list.length} ${TARGETS[target].label.toLowerCase()}` });
   for (const x of extras) await store.bulkPut(x.type, [x.entity], { reason });
   const counts = { new: rows.filter(r => r.status === 'new').length, update: rows.filter(r => r.status === 'update').length, same: preview.filter(r => r.status === 'same').length, error: preview.filter(r => r.status === 'error').length, merged: preview.filter(r => r.status === 'merged').length, networks: networks.map(n => n.code) };
+  // Stations modifiées : informations de F3 recalculées dans les tournées en cours qui les visitent (js/domain/links.js).
+  if (type === 'site') counts.tours = await refreshStationInfo(rows.filter(r => r.status === 'update').map(r => r.existing?.id).filter(Boolean), { reason: `${reason} : informations des stations reprises dans les tournées en cours` });
   await store.put('importBatch', { id: batchId, at: nowISO(), by: session.user.name, target, source: { kind: source.kind, name: source.name, sha256: source.sha256, sheet: source.sheet || null, url: source.url || null }, counts, ids: list.map(e => e.id) }, { action: 'import', reason });
   return counts;
 }

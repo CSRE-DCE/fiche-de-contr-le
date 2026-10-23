@@ -82,7 +82,7 @@ export default {
     pick(el) { const i = Number(el.dataset.i); if (el.checked) wiz.selected.add(i); else wiz.selected.delete(i); },
     async apply() {
       const c = await applyImport(wiz.target, wiz.source, wiz.preview, wiz.selected);
-      toast(`Import terminé : ${c.new} nouveau(x), ${c.update} modifié(s)${c.networks?.length ? ` ; réseau(x) ajouté(s) au référentiel : ${c.networks.join(', ')}` : ''}`, 'ok', 6000);
+      toast(`Import terminé : ${c.new} nouveau(x), ${c.update} modifié(s)${c.networks?.length ? ` ; réseau(x) ajouté(s) au référentiel : ${c.networks.join(', ')}` : ''}${c.tours ? ` ; informations des stations mises à jour dans ${c.tours} tournée(s) en cours` : ''}`, 'ok', 6000);
       wiz = { ...wiz, source: null, preview: null, mapping: {} };
       this.refresh();
     },

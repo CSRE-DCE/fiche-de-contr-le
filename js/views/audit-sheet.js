@@ -16,9 +16,12 @@
  *   (observations, notes, photos, conclusion) et pied de page ; la feuille 1 est la fiche station de
  *   js/views/station-sheet.js (import dynamique, repli si indisponible) avec les « Repères terrain » saisissables.
  * Remplissage automatique (js/domain/links.js) : valeur reprise d'une autre feuille marquée « repris de F… » (modifiable,
- * jamais une saisie écrasée) ; valeur proposée (« Proposé : … », bouton) quand la cible a été saisie ou validée, ou pour
- * les liens « proposés » (heures, coordonnées, température) ; feuilles d'une station suivante : « Reprendre les réponses
- * de la station précédente » (points vides seulement, confirmation, reprises marquées « repris de la station n »).
+ * jamais une saisie écrasée ; « repris de la fiche station » pour les informations du référentiel) ; valeur proposée
+ * (« Proposé (…) : … », bouton ; un bouton par choix quand plusieurs valeurs sont possibles) quand la cible a été saisie,
+ * validée ou est restée en retard sur sa source, ou pour les liens « proposés » (heures, coordonnées, température, accès,
+ * supports, lot / marché, effectif, sondes et calibration) ; feuilles d'une station suivante : « Reprendre les réponses
+ * de la station précédente » (points vides seulement, confirmation, reprises marquées « repris de la station n ») ;
+ * onglet Infos : heures de début / fin rapprochées de F2.1.5 / F2.1.6 (auditTimeTexts).
  * Coordonnées X / Y : « UTM 22N (RGFG95) » ou « UTM 21N » (converties en 22N, saisie d'origine conservée).
  * Preuves : « Prendre une photo » (appareil photo de la tablette), « Importer depuis la galerie » (date de prise de vue
  * reprise de la photo) et « Joindre un document » — boutons libellés dans les cartes et les encadrés, bouton « Ajouter
@@ -27,7 +30,7 @@
  * appui sur le statut choisi l'annule ; observation obligatoire pour P et NC (contrôle avant clôture) ; critères
  * « Commun à la tournée » : une seule réponse partagée par toutes les stations (identifiant sans « @ »).
  * Lecture seule si l'audit est verrouillé (sauf modification motivée en cours). */
-import { html, raw, fmtDate, fmtTime, fmtDateTime, normalize, sortBy, localDate } from '../core/util.js';
+import { html, raw, fmtDate, fmtTime, fmtDateTime, normalize, sortBy } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { can } from '../core/auth.js';
@@ -42,7 +45,7 @@ import {
   oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, sheetFooter, sheetFrame, STATUS_SCALE, statusHeadCells,
   statusLegend, sharedBadge, tourStations, assetURL
 } from '../ui/sheet-chrome.js';
-import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue, auditKindLabel } from '../domain/model.js';
+import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue, auditKindLabel, auditTimeTexts } from '../domain/model.js';
 import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
 } from '../domain/grids.js';
@@ -129,7 +132,7 @@ export function issueHrefFor(audit, st) {
 /** Critères pouvant recevoir une valeur reprise ou proposée (identifiants de base). */
 const LINK_TARGETS = new Set(LINK_GROUPS.flatMap(g => g.to));
 /** Source d'une valeur reprise, en clair : « F2.1.9 (Conditions météo) ». */
-const fromText = (c, id) => { const i = sourceInfo(id, c.linkItems); return i.label ? `${i.code} (${i.label})` : i.code; };
+const fromText = (c, id) => sourceInfo(id, c.linkItems).text;
 /** Marque « repris de F… » (valeur reprise d'une autre feuille) ou « repris de la station n » (reprise demandée). */
 function fromBadge(c, it) {
   const r = c.audit.responses?.[it.id];
@@ -138,15 +141,18 @@ function fromBadge(c, it) {
     return html`<span class="as-from is-copy" title="Statut et observation repris de la station ${st ? st.index + 1 : ''} (${st?.name || r.copiedFrom.stationKey}) par ${r.copiedFrom.byName || ''} — à vérifier, modifiable">${icon('refresh', { size: 13 })}repris de la station ${st ? st.index + 1 : r.copiedFrom.stationKey}</span>`;
   }
   if (!r?.prefilled || !r.from || blankStr(typeof r.value === 'object' ? Object.values(r.value || {}).join('') : r.value)) return '';
-  return html`<span class="as-from" title="Repris de ${fromText(c, r.fromId)} — à vérifier sur place, modifiable">${icon('link', { size: 13 })}repris de ${r.from}</span>`;
+  return html`<span class="as-from" title="Repris de ${fromText(c, r.fromId)} — à vérifier sur place, modifiable">${icon('link', { size: 13 })}repris de ${sourceInfo(r.fromId, c.linkItems).short || r.from}</span>`;
 }
 /** Bouton « Proposé : … » d'une valeur liée (jamais appliquée seule ; action link-take). */
 function linkSuggest(c, it) {
   if (!c.editable || !LINK_TARGETS.has(it.baseId || it.id)) return '';
   const p = linkProposal({ items: c.linkItems, responses: c.audit.responses || {}, item: it, extra: c.linkExtra });
   if (!p) return '';
+  const title = `Valeur ${p.mode === 'suggest' ? 'proposée' : 'de la source'} : ${fromText(c, p.fromId)} — non appliquée automatiquement`;
+  // Plusieurs valeurs possibles (liste de choix : moyens d'accès de plusieurs stations…) : un bouton par valeur.
+  if (p.choices) return html`<span class="as-link-choices" title="${title}"><span class="as-link-k">${icon('refresh', { size: 15 })}Proposé (${p.from}) :</span> ${p.choices.map((v, i) => html`<button type="button" class="as-suggest as-link-suggest" data-act="link-take" data-item="${it.id}" data-choice="${i}" title="${title}"><b>${formatValue(it, v) || String(v)}</b></button>`)}</span>`;
   const shown = formatValue(it, p.value) || String(p.value);
-  return html`<button type="button" class="as-suggest as-link-suggest" data-act="link-take" data-item="${it.id}" title="Valeur ${p.mode === 'suggest' ? 'proposée' : 'de la source'} : ${fromText(c, p.fromId)} — non appliquée automatiquement">${icon('refresh', { size: 15 })}Proposé (${p.from}) : <b>${shown}</b></button>`;
+  return html`<button type="button" class="as-suggest as-link-suggest" data-act="link-take" data-item="${it.id}" title="${title}">${icon('refresh', { size: 15 })}<span class="as-link-k">Proposé (${p.from}) :</span> <b>${shown}</b></button>`;
 }
 
 /* ---------- Champs de saisie ---------- */
@@ -531,10 +537,12 @@ function infosView(c) {
   const prov = store.get('provider', audit.providerId);
   const comps = (c.baseGrid.compartments || []).filter(x => (audit.compartments || []).includes(x.key));
   const canRemove = c.editable && !c.locked && c.stations.length > 1;
+  const times = auditTimeTexts(audit);
   return html`
     <div class="card"><h2>Identification de la tournée</h2>${kv([
       ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
-      ['Date', fmtDate(c.date)], ['Heure de début', `${fmtTime(audit.startedAt)}${audit.startedAt && localDate(new Date(audit.startedAt)) !== c.date ? ` (saisie démarrée le ${fmtDate(audit.startedAt)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
+      // Heures rapprochées de la feuille Organisation : « Début / Fin du contrôle » (F2.1.5 / 1.6) si renseignés.
+      ['Date', fmtDate(c.date)], ['Heure de début', times.start], ['Heure de fin', times.end],
       [c.controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', c.controllersText], ['Tournée créée par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
@@ -828,8 +836,9 @@ export const sheetHandlers = {
     const p = it ? linkProposal({ items: st.sheets.flatMap(sh => sh.items), responses: audit.responses || {}, item: it, extra: linkExtra(audit) }) : null;
     if (!p) { await refreshKeep(this); return; }
     const cur = audit.responses?.[id];
-    await setResponse(audit, id, { value: p.value, status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
-    toast(`Valeur reprise de ${p.from}${p.label ? ` (${p.label})` : ''}`, 'ok', 3000);
+    const value = p.choices && el.dataset.choice !== undefined ? p.choices[Number(el.dataset.choice)] ?? p.value : p.value;
+    await setResponse(audit, id, { value, status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
+    toast(`Valeur reprise de ${sourceInfo(p.fromId, st.sheets.flatMap(sh => sh.items)).text}`, 'ok', 3000);
     await refreshKeep(this);
   },
   /** « Reprendre les réponses de la station précédente » (feuille d'une station suivante) : points vides, confirmation. */
@@ -876,6 +885,8 @@ export const sheetHandlers = {
   async instr(el) {
     const v = el.value.trim();
     await updateSheet(store.get('audit', this.params.id), el.dataset.sheet || '4', { instruments: { [el.dataset.ins]: { [el.dataset.k]: v || null } } }, { reason: this.amendReason });
+    // Date de calibration : alerte et propositions de F4.18 / F4.2 à jour (les autres champs : au prochain affichage,
+    // sans réafficher la feuille pendant la frappe du champ suivant).
     if (el.dataset.k === 'calibration') await refreshKeep(this); else saved();
   },
   async 'instr-choice'(el) {
