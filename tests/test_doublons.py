@@ -68,9 +68,9 @@ def test_mise_a_niveau_tournee_signee_intacte(page, app_url):
     new = create_tour(page, 'ce', [ATHANASE], 'prov-TL1')
     snap = js(page, """const { itemIndex } = await import('./js/domain/grids.js'); const g = store.get('audit', arg).gridSnapshot, i = itemIndex(g);
         return { version: g.version, f16: i.get('it-F4-16').scope || null, h: i.get('it-F2-1.5').label, n: i.get('it-F2-2.8').noScore || false };""", new['id'])
-    assert snap == {'version': '1.2', 'f16': 'tournee', 'h': 'Heure début du contrôle (OEG)', 'n': True}, snap
+    assert snap == {'version': '1.2', 'f16': 'tournee', 'h': 'Début du contrôle', 'n': True}, snap
     blank = ' '.join(pdf_texts(page, "const P = await import('./js/app/sheets-pdf.js'); await P.generateBlankSheetsPdf({ auditType: 'ce', siteIds: [arg] });", ATHANASE))
-    assert 'contrôle (OEG)' in blank and 'tournée (prestataire)' in blank, 'fiches vierges : libellés 1.2'
+    assert 'Début du contrôle' in blank and 'prévu au planning' in blank, 'fiches vierges : libellés 1.2'
 
     # ----- Mise à niveau
     res = js(page, "return (await import('./js/app/bootstrap.js')).upgradeReferentiel2026();")
@@ -84,11 +84,11 @@ def test_mise_a_niveau_tournee_signee_intacte(page, app_url):
     assert after == before, 'tournée signée intacte'
     texts = pdf_texts(page, "const P = await import('./js/app/sheets-pdf.js'); await P.generateSheetsPdf({ auditId: arg });", old['id'])
     joined = ' '.join(texts)
-    assert 'Heure début' in joined and 'contrôle (OEG)' not in joined, 'la tournée signée imprime ses libellés 1.1'
+    assert 'Heure début' in joined and 'Début du contrôle' not in joined, 'la tournée signée imprime ses libellés 1.1'
     assert not any('ATTENTION' in t for t in texts), 'sceau vérifié'
     js(page, "await A.setResponse(store.get('audit', arg), 'it-F2-1.5', { value: '07:30' });", new['id'])
     joined = ' '.join(pdf_texts(page, "const P = await import('./js/app/sheets-pdf.js'); await P.generateSheetsPdf({ auditId: arg });", new['id']))
-    assert 'contrôle (OEG)' in joined and 'tournée (prestataire)' in joined, 'nouvelle tournée : libellés 1.2'
+    assert 'Début du contrôle' in joined and 'prévu au planning' in joined, 'nouvelle tournée : libellés 1.2'
 
     # Idempotence : rien à refaire
     again = js(page, "return (await import('./js/app/bootstrap.js')).upgradeReferentiel2026();")
@@ -112,7 +112,7 @@ def test_fenetre_aide_et_attendu(page, app_url):
         view = page.locator('#view')
         assert view.locator('[data-act=item-help]').count() == 0, f'{name} : plus de bouton d’aide séparé'
         assert view.locator('[data-act=item-attendu]:visible').count() >= 40, f'{name} : un bouton ⓘ « Aide et attendu » par point'
-        for item, label in (('it-F2-1.5', 'Heure début du contrôle (OEG)'), ('it-F2-5.2', 'Heure début de la tournée (prestataire)')):
+        for item, label in (('it-F2-1.5', 'Début du contrôle'), ('it-F2-5.2', 'Début de tournée (prévu au planning)')):
             assert label in page.locator(f'[id={attr(pfx[1:] + item)}]').first.inner_text(), f'{name} : {label}'
         page.locator(f'[id={attr(pfx[1:] + "it-F2-2.8")}] [data-act=item-attendu]').first.click()
         page.wait_for_selector('.modal .att-crit')

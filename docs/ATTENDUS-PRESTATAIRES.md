@@ -218,8 +218,8 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 | F2.1.2 | Structure accompagnatrice | organisme qui accompagne le contrôleur OEG pendant la tournée, le cas échéant (partenaire, gestionnaire du site…). L’accompagnant du préleveur sur un point d’eau est relevé en F3.29. |
 | F2.1.3 | Agent(s) accompagnateur(s) | nom des personnes qui accompagnent le contrôleur OEG, le cas échéant. |
 | F2.1.4 | Date mission | date de la tournée (obligatoire). |
-| F2.1.5 | Heure début du contrôle (OEG) | heure de début du contrôle par l’OEG (le départ de la tournée du prestataire est jugé en F2.5.2). |
-| F2.1.6 | Heure fin du contrôle (OEG) | heure de fin du contrôle par l’OEG (la fin de la tournée du prestataire est jugée en F2.5.3). |
+| F2.1.5 | Début du contrôle | heure de début du contrôle par l’OEG (le départ de la tournée du prestataire est jugé en F2.5.2). |
+| F2.1.6 | Fin du contrôle | heure de fin du contrôle par l’OEG (la fin de la tournée du prestataire est jugée en F2.5.3). |
 | F2.1.7 | Moyens OEG | moyens mobilisés par l’OEG (véhicule, embarcation, matériel). |
 | F2.1.8 | Niveau d’eau | situation hydrologique générale de la journée ; le niveau d’eau de chaque station est relevé en F1.R6. Sans objet pour les eaux souterraines. |
 | F2.1.9 | Conditions météo | conditions météorologiques de la journée ; la météo de chaque station est relevée en F1.R5. |
@@ -417,7 +417,7 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 - **Références :** CCTP du marché
 - **À préciser (OEG) :** Délai de transmission du planning et des modifications à l’OEG : à préciser par l’OEG d’après le CCTP.
 
-#### F2.5.2 – Heure début de la tournée (prestataire)
+#### F2.5.2 – Début de tournée (prévu au planning)
 
 - **Attendu :** La tournée du prestataire commence à l’heure annoncée, ou à une heure qui permet de tenir le programme et les délais de dépôt des échantillons. Pour les eaux souterraines, chaque rendez-vous de point d’eau est jugé en F3.31.
 - **Vérification :** Le contrôleur saisit l’heure de départ de la tournée du prestataire (« Valeur / réponse ») et la compare à l’horaire annoncé ; l’heure du contrôle OEG est relevée en F2.1.5.
@@ -425,7 +425,7 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 - **P** (perfectible) : Retard limité, sans conséquence sur le programme.
 - **NC** (non conforme) : Retard important ou début non annoncé qui compromet le programme ou le contrôle.
 
-#### F2.5.3 – Heure fin de la tournée (prestataire)
+#### F2.5.3 – Fin de tournée (prévue)
 
 - **Attendu :** La tournée du prestataire se termine à une heure cohérente avec le programme et qui permet le dépôt ou l’expédition des échantillons dans les délais.
 - **Vérification :** Le contrôleur saisit l’heure de fin de la tournée du prestataire (« Valeur / réponse ») ; l’heure de fin du contrôle OEG est relevée en F2.1.6.

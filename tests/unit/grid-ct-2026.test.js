@@ -684,7 +684,7 @@ test('doublons : libellés identiques entre critères — seulement ceux de la l
   deepEq(found.sort(), SAME_LABEL_OK.map(g => g.join(' = ')).sort(), 'libellés en double (hors liste blanche : à préciser)');
   // Les quatre heures de F2 ne se confondent plus : contrôle OEG (section 1) / tournée du prestataire (section 5)
   deepEq(['it-F2-1.5', 'it-F2-1.6', 'it-F2-5.2', 'it-F2-5.3'].map(id => item(id).label),
-    ['Heure début du contrôle (OEG)', 'Heure fin du contrôle (OEG)', 'Heure début de la tournée (prestataire)', 'Heure fin de la tournée (prestataire)']);
+    ['Début du contrôle', 'Fin du contrôle', 'Début de tournée (prévu au planning)', 'Fin de tournée (prévue)']);
   // Les maquettes gardent leur « Référence courte »
   deepEq(['it-F2-1.5', 'it-F2-5.2'].map(id => item(id).short), ['Hdébut', 'Hdébut']);
 });
@@ -778,7 +778,7 @@ test('mise à niveau 1.1 → 1.2 : grille enregistrée remplacée, instantané d
   const before = canonicalJSON(audit.gridSnapshot);
   const r = upgradeStoredGrid({ ...structuredClone(old), createdAt: '2026-10-10T08:00:00.000Z' }, G);
   assert(r.replaced && r.from === '1.1' && r.to === '1.2', 'grille enregistrée 1.1 → 1.2');
-  eq(itemIndex(r.grid).get('it-F2-1.5').label, 'Heure début du contrôle (OEG)');
+  eq(itemIndex(r.grid).get('it-F2-1.5').label, 'Début du contrôle');
   eq(itemIndex(r.grid).get('it-F4-16').scope, 'tournee');
   eq(canonicalJSON(audit.gridSnapshot), before, 'instantané de la tournée inchangé');
   eq(await sha256Hex(canonicalJSON(audit.gridSnapshot)), audit.gridSha256, 'empreinte de la grille de la tournée inchangée');

@@ -572,7 +572,7 @@
     "it-F2-1.5": {
       "feuille": 2,
       "no": "1.5",
-      "libelle": "Heure début du contrôle (OEG)",
+      "libelle": "Début du contrôle",
       "section": "Identification mission",
       "types": [
         "bio",
@@ -586,7 +586,7 @@
     "it-F2-1.6": {
       "feuille": 2,
       "no": "1.6",
-      "libelle": "Heure fin du contrôle (OEG)",
+      "libelle": "Fin du contrôle",
       "section": "Identification mission",
       "types": [
         "bio",
@@ -1089,7 +1089,7 @@
     "it-F2-5.2": {
       "feuille": 2,
       "no": "5.2",
-      "libelle": "Heure début de la tournée (prestataire)",
+      "libelle": "Début de tournée (prévu au planning)",
       "section": "Planning et déroulé de mission",
       "types": [
         "bio",
@@ -1107,7 +1107,7 @@
     "it-F2-5.3": {
       "feuille": 2,
       "no": "5.3",
-      "libelle": "Heure fin de la tournée (prestataire)",
+      "libelle": "Fin de tournée (prévue)",
       "section": "Planning et déroulé de mission",
       "types": [
         "bio",
