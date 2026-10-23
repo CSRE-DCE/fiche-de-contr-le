@@ -6,8 +6,12 @@
  *   « PROVISOIRE » tant que l'audit n'est pas verrouillé ; n° d'audit, empreinte du contenu imprimé et pagination
  *   en pied de page. Tournée modifiée après signature : mention « MODIFIÉ APRÈS SIGNATURE » en pied de chaque page,
  *   empreinte scellée rappelée et récapitulatif des modifications (date, auteur, motif, avant → après) en synthèse.
- * - generateBlankSheetsPdf({ auditType, siteId | siteIds, compartments }) : fiches vierges imprimables d'une
- *   tournée (valeurs du référentiel seulement, cases vides, pointillés).
+ * - generateBlankSheetsPdf({ auditType, siteId | siteIds, compartments, parts }) : fiches vierges imprimables d'une
+ *   tournée (valeurs du référentiel seulement, cases vides, pointillés) ; `parts` (ex. ['bio', 'ce']) : station(s)
+ *   contrôlée(s) pour plusieurs parties (tournée mixte : opérations communes une seule fois).
+ * Tournée mixte (biologie + chimie du même prestataire) : en-tête avec les programmes des deux types, feuille 1 de
+ * chaque station avec son périmètre (« Contrôlé à cette station : Biologie + Chimie ») et ses compartiments, synthèse
+ * « Type de tournée » joint et périmètre de chaque station ; une tournée d'un seul type est imprimée comme avant.
  * - generateStationSheetPdf({ siteId, auditType }) : fiche station seule (feuille 1).
  * Chaque fonction retourne { bytes, filename, pages, provisional }.
  *
@@ -41,7 +45,8 @@ import { GRID_CT_2026, INSTRUMENTS, INSTRUMENT_FIELDS, CALIBRATION_FIELDS } from
 import { upToDateGrid } from '../domain/default-grids.js';
 import {
   expandGrid, sheetsOf, groupSheets, headerOf, sectionHeaders, sheetStoreKey, prefillResponses, auditCompartments, normalizeCompartments,
-  typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName, allItems
+  typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName, allItems, normalizeParts, tourCompartments,
+  orderedParts, partsText, stationCompartmentKeys
 } from '../domain/grids.js';
 import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditDate as dateOfAudit, auditKindLabel } from '../domain/model.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
@@ -300,23 +305,28 @@ function plannedProvider(sites, type, grid) {
 /**
  * Modèle des fiches VIERGES (fonction pure) : tournée fictive des stations `sites` (ordre donné), compartiments du
  * type (biologie : ceux des stations, ou `compartments`), valeurs pré-remplies du référentiel uniquement (site.*).
- * mode : 'blank' (toutes les feuilles) ou 'station' (feuille 1 seule).
+ * mode : 'blank' (toutes les feuilles) ou 'station' (feuille 1 seule). parts : parties contrôlées aux stations (tournée
+ * mixte, ex. ['bio', 'ce'] : feuilles communes une fois, feuilles propres à chaque partie en plus).
  */
-export function blankSheetsModel({ grid = GRID_CT_2026, sites = [], auditType = '', compartments = null, provider = null, campaign = null, mode = 'blank' } = {}) {
+export function blankSheetsModel({ grid = GRID_CT_2026, sites = [], auditType = '', compartments = null, provider = null, campaign = null, mode = 'blank', parts = null } = {}) {
   const list = sites.filter(Boolean);
   if (!list.length) throw new Error('Station introuvable.');
-  const type = auditType && gridType(grid, auditType) ? auditType : inferAuditType(grid, { site: list[0] });
-  const stations = list.map(s => makeStation({ siteId: s.id }));
+  const want = normalizeParts(grid, parts);
+  const type0 = auditType && gridType(grid, auditType) ? auditType : want ? want[0] : inferAuditType(grid, { site: list[0] });
+  const type = want && !want.includes(type0) ? want[0] : type0;
+  const mixed = !!want && want.length > 1;
+  const stations = list.map(s => ({ ...makeStation({ siteId: s.id }), ...(mixed ? { parts: want } : {}) }));
   const siteMap = Object.fromEntries(list.map(s => [s.id, s]));
-  const fromSites = type === 'bio' ? [...new Set(list.flatMap(s => s.compartments || []))] : [];
+  const fromSites = type === 'bio' || (mixed && want.includes('bio')) ? [...new Set(list.flatMap(s => s.compartments || []))] : [];
   const wanted = Array.isArray(compartments) && compartments.length ? compartments : fromSites.length ? fromSites : null;
-  const comps = gridTypes(grid).length ? auditCompartments(grid, type, wanted) : normalizeCompartments(grid, wanted);
+  const comps = !gridTypes(grid).length ? normalizeCompartments(grid, wanted) : mixed ? tourCompartments(grid, want, wanted) : auditCompartments(grid, type, wanted);
   const eff = expandGrid(grid, stations, siteMap, { provider });
   const ctx = { auditType: type, compartments: comps };
   const responses = prefillResponses(eff, { stations: stations.map(st => ({ key: st.key, site: siteMap[st.siteId] })), compartments: comps, auditType: type });
+  const header = headerOf(grid, { provider, auditType: type, campaign, auditTypes: mixed ? want : null });
   return {
-    mode, grid: eff, baseGrid: grid, auditType: type, typeDef: gridType(grid, type), ctx,
-    header: headerOf(grid, { provider, auditType: type, campaign }),
+    mode, grid: eff, baseGrid: grid, auditType: type, typeDef: gridType(grid, type), ctx, mixed, typeLabel: header.typeLabel,
+    header,
     instances: sheetsOf(eff, responses, ctx), sites: siteMap, responses, sheetsData: {}, audit: null, provider,
     compartments: comps, chosenCompartments: Array.isArray(compartments) && compartments.length ? comps : null,
     deviations: [], mediaCounts: {}, sheetMedia: () => [], number: '', fingerprint: '', provisional: false, amendments: [], sealOk: true,
@@ -342,6 +352,8 @@ export async function sheetsModelFromAudit(audit) {
   const expected = amendments.length ? amendments[amendments.length - 1].hashAfter : audit.lock?.contentHash || '';
   return {
     mode: 'filled', grid: st.grid, baseGrid: st.baseGrid, auditType: st.auditType, typeDef: st.type, ctx: st.ctx,
+    // Tournée mixte (plusieurs types) : libellé joint et périmètre de chaque station (feuille 1, synthèse).
+    mixed: !!st.mixed, typeLabel: st.mixed ? st.header?.typeLabel || '' : '',
     header: st.header || headerOf(st.baseGrid, { provider, auditType: st.auditType }),
     instances: st.sheets, sites, responses: audit.responses || {}, sheetsData: audit.sheets || {}, audit, provider,
     compartments: st.ctx.compartments || audit.compartments || [], chosenCompartments: null,
@@ -1344,7 +1356,7 @@ class SheetsRenderer {
     if (eso) yr += await this.esoCard(site, xR, yr, colW) + 8;
     yr += await this.accessCard(site, xR, yr, colW, t) + 8;
     yr += await this.difficultiesCard(site, xR, yr, colW) + 8;
-    yr += await this.compartmentsCard(site, xR, yr, colW, t) + 8;
+    yr += await this.compartmentsCard(site, xR, yr, colW, t, sh) + 8;
     yr += await this.reperesCard(sh, xR, yr, colW, bottom - yr, t) + 8;
     if (site.photoSource) d.text(site.photoSource, M, this.bottom - 9, { font: F.italic, size: 6.8, color: MUTED, align: 'center', width: cw });
     this.y = Math.max(yl, yr);
@@ -1450,7 +1462,8 @@ class SheetsRenderer {
     d.text('N', nx, ny + 15.5, { font: F.bold, size: 7, color: '#14284b', align: 'center', width: 15 });
     d.restore();
     // Légende.
-    const bio = this.m.auditType === 'bio';
+    // Tournée mixte : symboles biologiques si la biologie est contrôlée à CETTE station.
+    const bio = this.m.mixed && sh?.station ? orderedParts(this.m.baseGrid, sh.station, this.m.auditType).includes('bio') : this.m.auditType === 'bio';
     const legend = ['station', ...['prelevement', 'invertebres', 'diatomees', 'ichtyofaune'].filter(k => bio || kinds.has(k) || k === 'prelevement')];
     const lw = Math.min(bw * 0.58, 4 + Math.max(...legend.map(k => d.width(k === 'station' ? `Station : ${upper(site.name)}` : SAMPLING_KINDS[k].label, k === 'station' ? F.bold : F.text, 6.2))) + 14);
     const lh = legend.length * 8.6 + 6;
@@ -1526,18 +1539,25 @@ class SheetsRenderer {
     const lines = txt ? (txt.length <= 90 && !txt.includes('\n') ? txt.split(/,\s+/).map((s, i, a) => s + (i < a.length - 1 ? ',' : '')) : txt.split(/\n+/)) : [];
     return this.iconTextCard(x, y, w, { ...t, title: NAVY }, { title: 'Difficultés / points d’attention', barIcon: 'warning', barFill: '#e8471c', bigIcon: 'mountain', bigColor: '#1f7fc4', lines, empty: 'Aucune difficulté signalée.', tint: '#fffaf6', bar: '#fdeee4' });
   }
-  async compartmentsCard(site, x, y, w, t) {
+  async compartmentsCard(site, x, y, w, t, sh = null) {
     const d = this.doc;
     const g = this.m.baseGrid;
     const all = g?.compartments || [];
-    const keys = gridType(g, this.m.auditType) ? typeCompartments(g, this.m.auditType) : all.map(c => c.key);
-    const chosen = new Set(this.m.audit && !this.blank ? this.m.compartments : this.m.chosenCompartments || site.compartments || []);
+    // Tournée mixte : compartiments des parties contrôlées à CETTE station et ligne « Contrôlé à cette station : … ».
+    const parts = this.m.mixed && sh?.station ? orderedParts(g, sh.station, this.m.auditType) : null;
+    const keys = parts ? [...new Set(parts.flatMap(k => typeCompartments(g, k)))] : gridType(g, this.m.auditType) ? typeCompartments(g, this.m.auditType) : all.map(c => c.key);
+    const chosen = new Set(parts ? stationCompartmentKeys(g, this.m.compartments, parts) : this.m.audit && !this.blank ? this.m.compartments : this.m.chosenCompartments || site.compartments || []);
     const list = all.filter(c => keys.includes(c.key));
     const year = (String(g?.code || '').match(/\d{4}/) || [])[0] || String(new Date().getFullYear());
-    const rh = 15.5, h = 22 + list.length * rh + 8;
+    const rh = 15.5, ph = parts ? 13 : 0, h = 22 + ph + list.length * rh + 8;
     d.roundRect(x, y, w, h, 8, { fill: '#ffffff', stroke: t.line, lineWidth: 0.8 });
     await this.cardBar(x, y, w, `Compartiments à contrôler – campagne ${year}`, 'clipboard', t);
     let cy = y + 26;
+    if (parts) {
+      const txt = `Contrôlé à cette station : ${partsText(g, parts)}`;
+      d.text(txt, x + 10, cy, { font: F.semi, size: d.fitSize(txt, F.semi, 7.6, w - 20, 5.5), color: NAVY });
+      cy += ph;
+    }
     for (const c of list) {
       const on = chosen.has(c.key);
       await this.pastille(x + 15, cy + 6, 6.6, { iconName: c.icon || 'check', fill: on ? t.main : '#9fb3c8' });
@@ -1676,10 +1696,10 @@ class SheetsRenderer {
     const amended = amendments.length > 0, lastAm = amendments[amendments.length - 1];
     const amendedText = amended ? `${amendments.length} modification(s), la dernière le ${fmtDateTime(lastAm.at)} par ${lastAm.byName || ''}` : '';
     const ident = [
-      ['N° d’audit', m.number], ['Type de tournée', m.typeDef?.label || AUDIT_TYPES[m.auditType] || ''],
+      ['N° d’audit', m.number], ['Type de tournée', (m.mixed && m.typeLabel ? `${m.typeLabel} (tournée mixte)` : '') || m.typeDef?.label || AUDIT_TYPES[m.auditType] || ''],
       ['Prestataire', provider ? `${providerHeaderName(provider)}${provider.kind && PROVIDER_KINDS[provider.kind] ? ' — ' + PROVIDER_KINDS[provider.kind] : ''}` : '—'],
       ['Date', fmtDate(m.auditDate)], [(m.controllerCount || 1) > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', m.auditorName], ['Type d’audit', auditKindLabel(a.kind)],
-      ['Stations', this.stationList.map(s => `${s.index + 1}. ${upper(s.name)} (${s.code})`).join(' · ')],
+      ['Stations', this.stationList.map(s => `${s.index + 1}. ${upper(s.name)} (${s.code})${m.mixed ? ` — ${partsText(m.baseGrid, orderedParts(m.baseGrid, s, m.auditType)).toLocaleLowerCase('fr-FR')}` : ''}`).join(' · ')],
       ['Statut', a.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}${amended ? ` — MODIFIÉ APRÈS SIGNATURE : ${amendedText}` : ''}` : 'PROVISOIRE — tournée non signée ou non verrouillée'],
       // Empreinte du contenu IMPRIMÉ (celle du pied de page) ; tournée modifiée après signature : empreinte scellée à
       // la signature rappelée à part.
@@ -1860,14 +1880,15 @@ function sitesFor({ siteId = null, siteIds = null } = {}) {
 const typeKey = (grid, auditType, site) => (auditType && gridType(grid, auditType) ? auditType : inferAuditType(grid, { site }));
 
 /** Fiches vierges d'une tournée (une ou plusieurs stations) : { bytes, filename, pages, provisional: false }. */
-export async function generateBlankSheetsPdf({ auditType = '', siteId = null, siteIds = null, compartments = null } = {}) {
+export async function generateBlankSheetsPdf({ auditType = '', siteId = null, siteIds = null, compartments = null, parts = null } = {}) {
   const grid = ctGridFromStore();
   const sites = sitesFor({ siteId, siteIds });
-  const type = typeKey(grid, auditType, sites[0]);
-  const model = blankSheetsModel({ grid, sites, auditType: type, compartments, provider: plannedProvider(sites, type, grid), mode: 'blank' });
+  const want = normalizeParts(grid, parts);
+  const type = want && !(auditType && want.includes(auditType)) ? want[0] : typeKey(grid, auditType, sites[0]);
+  const model = blankSheetsModel({ grid, sites, auditType: type, compartments, provider: plannedProvider(sites, type, grid), mode: 'blank', parts: want });
   const { bytes, pages } = await buildSheetsPdf(model, { title: `Fiches vierges de contrôle terrain – ${sites.map(s => s.name).join(', ')}` });
   const names = sites.slice(0, 3).map(s => fileToken(s.name || s.code)).join('-') + (sites.length > 3 ? `-et-${sites.length - 3}-autres` : '');
-  return { bytes, filename: `Fiches_vierges_${type}_${names}.pdf`, pages, provisional: false };
+  return { bytes, filename: `Fiches_vierges_${model.mixed ? want.join('-') : type}_${names}.pdf`, pages, provisional: false };
 }
 
 /** Fiche station seule (feuille 1, portrait) : { bytes, filename, pages, provisional: false }. */

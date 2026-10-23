@@ -21,7 +21,7 @@ import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty, networkBadges, networkDot, networkVars } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
-import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid, tourTypes, tourCompartments, partsText } from '../domain/grids.js';
+import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid, tourTypes, tourCompartments, partsText, partLabel } from '../domain/grids.js';
 import { agentInitials } from '../domain/permissions.js';
 import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
 import { providerOperators, canAddOperator, operatorDisplay } from '../app/operators.js';
@@ -176,7 +176,7 @@ function selectedHTML(d) {
         <button type="button" class="icon-btn an-del" data-act="removeSt" data-i="${i}" title="Retirer" aria-label="Retirer ${site?.name || ''} de la tournée">${icon('close', { size: 20 })}</button>
       </span></li>`;
   })}</ol>`;
-  return html`${list}${several ? html`<p class="note an-parts-note">${icon('info', { size: 16 })} Station sur plusieurs réseaux : cochez ce qui y est <b>réellement contrôlé</b>. Même prestataire : une seule tournée, les opérations communes (organisation, accès et station, mesures in situ, prélèvement, conservation et transport) sont saisies une seule fois. Partie réalisée par un autre prestataire : tournée distincte.</p>` : ''}`;
+  return html`${list}${several ? html`<p class="note an-parts-note">${icon('info', { size: 16 })}<span>Station sur plusieurs réseaux : cochez ce qui y est <b>réellement contrôlé</b>. Même prestataire : une seule tournée, les opérations communes (organisation, accès et station, mesures in situ, prélèvement, conservation et transport) sont saisies une seule fois. Partie réalisée par un autre prestataire : tournée distincte.</span></p>` : ''}`;
 }
 
 // Agents de cette tablette (trousseau) : relus à chaque affichage de l'écran de création.
@@ -208,8 +208,8 @@ function tourForm(q) {
   const comps = chosenCompartments(grid, d);
   const typeDef = gridType(grid, d.type);
   // Types de la tournée (mixte : biologie + chimie…) ; compartiment imposé par un type qui n'en a qu'un (chimie : physico).
-  const types = draftTypes(grid, d), mixed = types.length > 1;
-  const typeDefs = types.map(k => gridType(grid, k)).filter(Boolean);
+  const tour = draftTypes(grid, d), mixed = tour.length > 1;
+  const typeDefs = tour.map(k => gridType(grid, k)).filter(Boolean);
   const forced = key => mixed && typeDefs.some(t => t.compartments.length === 1 && t.compartments[0] === key);
   const ops = d.providerId ? providerOperators(d.providerId, { include: d.operatorIds || [] }) : [];
   const step = (n, title, sub = '') => html`<h2 class="an-step"><span class="an-step-no">${n}</span><span>${title}${sub ? html`<small>${sub}</small>` : ''}</span></h2>`;
@@ -264,8 +264,8 @@ function tourForm(q) {
             <p class="note">Cochez les préleveurs présents. Un préleveur absent de la liste : « Ajouter un opérateur » (nom, prénom, initiales, fonction) — rattaché à ${providerHeaderName(prov)}, sans doublon. La liste reste modifiable dans la tournée (feuille Organisation).</p>`}</section>
 
       <div class="an-submit">
-        <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}${mixed ? types.filter(k => k !== d.type).map(k => html`<span class="type-badge t-${k}">${icon(TYPE_STYLES[k]?.icon || 'drop', { size: 15 })}+ ${TYPE_STYLES[k]?.label || k}</span>`) : ''}
-          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}${(d.controllerIds || []).length > 1 ? ` · ${d.controllerIds.length} contrôleurs` : ''}${mixed ? html` · <span class="an-recap-mixed">tournée ${partsText(grid, types).toLocaleLowerCase('fr-FR')}</span>` : ''}</span></div>
+        <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}${mixed ? tour.filter(k => k !== d.type).map(k => html`<span class="type-badge t-${k}">${icon(TYPE_STYLES[k]?.icon || 'drop', { size: 15 })}+ ${partLabel(grid, k)}</span>`) : ''}
+          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}${(d.controllerIds || []).length > 1 ? ` · ${d.controllerIds.length} contrôleurs` : ''}${mixed ? html` · <span class="an-recap-mixed">tournée ${partsText(grid, tour).toLocaleLowerCase('fr-FR')}</span>` : ''}</span></div>
         <button class="btn primary lg" type="submit" ${d.providerId && d.stations.length ? '' : 'disabled'}><span class="ic">${icon('route')}</span>Démarrer la tournée</button>
       </div>
     </form>`;

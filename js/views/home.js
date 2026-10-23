@@ -32,7 +32,7 @@ import { TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { agentPref, setAgentPref } from '../app/settings.js';
 import { providerHeaderName } from '../domain/grids.js';
 import { ctGrid, siteTypes, primaryType, stationStatus, plannedLabel, typeBadges, siteSearchText } from './station-sheet.js';
-import { tourControllers, isAuditController } from '../app/audits.js';
+import { tourControllers, isAuditController, tourTypesOf } from '../app/audits.js';
 import { NO_NETWORK, groupSitesByNetwork, inNetwork, networkId, siteNetworkCodes, sortNetworkCodes } from '../domain/networks.js';
 import { currentNetworkIndex, currentNetworkOf } from '../app/networks.js';
 
@@ -180,7 +180,9 @@ export default {
         const names = (a.stations || []).map(s => store.get('site', s.siteId)?.name || s.key);
         const mine = isAuditController(a, session.user?.id);
         const ctrls = tourControllers(a);
-        return html`<a class="hm-tour${mine ? ' is-mine' : ''}" href="#/audit/${a.id}" data-tour="${a.id}"><span class="hm-tour-top"><b>${a.number}</b>${tt ? html`<span class="type-badge t-${a.auditType}">${icon(tt.icon, { size: 14 })}${tt.label}</span>` : ''}</span>
+        // Tournée mixte (biologie + chimie…) : un badge par type contrôlé.
+        const more = tourTypesOf(a).filter(k => k !== a.auditType && TYPE_STYLES[k]);
+        return html`<a class="hm-tour${mine ? ' is-mine' : ''}" href="#/audit/${a.id}" data-tour="${a.id}"><span class="hm-tour-top"><b>${a.number}</b>${tt ? html`<span class="type-badge t-${a.auditType}">${icon(tt.icon, { size: 14 })}${tt.label}</span>` : ''}${more.map(k => html`<span class="type-badge t-${k}">${icon(TYPE_STYLES[k].icon, { size: 14 })}${TYPE_STYLES[k].label}</span>`)}</span>
           <span class="hm-tour-st">${names.length ? names.map((n, i) => html`<span><i>${i + 1}</i>${n}</span>`) : '—'}</span>
           <span class="hm-tour-meta">${providerHeaderName(store.get('provider', a.providerId)) || '—'} · ${fmtDate(auditDate(a))}${a.device?.id && a.device.id !== session.device?.id ? ` · commencée sur ${a.device.name || 'une autre tablette'}` : ''}</span>
           <span class="hm-tour-ctrl" title="Contrôleurs OEG de la tournée">${icon('people', { size: 15 })}${ctrls.map(c => c.name).filter(Boolean).join(', ') || '—'}</span>

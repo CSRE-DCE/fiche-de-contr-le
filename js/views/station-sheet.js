@@ -141,7 +141,7 @@ export function partPrestationIds(site, parts, { grid = ctGrid(), providerId = '
 export function perimeterChecks(choices, { act = 'setPart', attrs = '', name = '', compact = false } = {}) {
   const n = choices.filter(c => c.checked).length;
   const pres = c => c.own ? html`<small class="pm-pres">${icon('calendar', { size: 13 })}${c.own.ref} · ${plannedLabel(c.own)}</small>`
-    : c.others.length ? html`<small class="pm-pres is-other">Programmée pour ${c.others.map(o => providerHeaderName(o.provider) || '?').filter((v, i, a) => a.indexOf(v) === i).join(', ')} : tournée distincte</small>`
+    : c.others.length ? html`<small class="pm-pres is-other">${c.checked ? 'Hors programme du prestataire (programmée pour ' : 'Programmée pour '}${c.others.map(o => providerHeaderName(o.provider) || '?').filter((v, i, a) => a.indexOf(v) === i).join(', ')}${c.checked ? ')' : ' : tournée distincte'}</small>`
       : html`<small class="pm-pres is-none">Hors programme</small>`;
   return html`<div class="pm-checks" role="group" aria-label="Parties contrôlées à cette station">${choices.map(c => html`<label class="check pm-check t-${c.key}${c.checked ? ' sel' : ''}"><input type="checkbox" value="${c.key}" data-change="${act}" ${raw(attrs)} ${name ? raw(`name="${name}"`) : ''} ${c.checked ? 'checked' : ''} ${c.checked && n === 1 ? raw('disabled title="Au moins une partie est contrôlée"') : ''}><span class="pm-txt"><b>${c.label}</b>${compact ? '' : pres(c)}</span></label>`)}</div>`;
 }
@@ -308,7 +308,7 @@ function compartmentsCard(grid, type, { site, audit, parts = null }) {
   // Station d'une tournée mixte (`parts` donné) : compartiments de ses parties, cochés selon le périmètre contrôlé.
   const multi = (parts || []).length > 0;
   const keys = multi ? [...new Set(parts.flatMap(t => typeCompartments(grid, t)))] : gridType(grid, type) ? typeCompartments(grid, type) : all.map(c => c.key);
-  const chosen = new Set(multi ? stationCompartmentKeys(grid, audit?.compartments, parts) : audit ? normalizeCompartments(grid, audit.compartments) : (site.compartments || []));
+  const chosen = new Set(multi && audit ? stationCompartmentKeys(grid, audit.compartments, parts) : audit ? normalizeCompartments(grid, audit.compartments) : (site.compartments || []));
   const year = (String(grid?.code || '').match(/\d{4}/) || [])[0] || String(new Date().getFullYear());
   const body = html`${multi ? html`<p class="ss-perim">${icon('route', { size: 16 })}<span>Contrôlé à cette station : <b>${partsText(grid, parts)}</b>${parts.length > 1 ? ' — opérations communes saisies une seule fois' : ''}</span></p>` : ''}<ul class="ss-comp">${all.filter(c => keys.includes(c.key)).map(c => html`<li class="${chosen.has(c.key) ? 'on' : ''}">
       <span class="ss-comp-ic">${icon(c.icon || 'check', { size: 24 })}</span><span class="ss-comp-l">${c.label}</span>${checkSquare({ checked: chosen.has(c.key), cls: 'lg' })}</li>`)}</ul>`;

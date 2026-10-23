@@ -16,21 +16,25 @@ import { toCSV, objectsToRows } from '../formats/csv.js';
 import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
 import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, AUDIT_TYPES, CODE_TYPES, auditDate, auditKindLabel, auditTimes } from '../domain/model.js';
-import { allItems, sheetOf, gridType } from '../domain/grids.js';
+import { allItems, sheetOf, gridType, tourTypeLabel, partsText } from '../domain/grids.js';
 import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
 import { upToDateGrid } from '../domain/default-grids.js';
 import { NO_NETWORK, prestationNetwork, sortNetworkCodes, groupSitesByNetwork, auditTypesOf } from '../domain/networks.js';
 import { currentNetworkIndex } from './networks.js';
 import { controllerNamesText } from '../domain/permissions.js';
-import { auditState, effectiveGrid, auditContext, auditTypeOf, deviationPlace } from './audits.js';
+import { auditState, effectiveGrid, auditContext, auditTypeOf, deviationPlace, tourTypesOf, stationPartsOf } from './audits.js';
 
 const name = (type, id, f = x => x.name || x.label) => { const e = store.get(type, id); return e ? f(e) : ''; };
 const crit = code => store.all('criticality').find(c => c.code === code)?.label || code || '';
-/** Libellé du type de tournée d'un audit (grille CT-2026), '' pour une grille historique. */
-const typeLabel = a => gridType(a.gridSnapshot, auditTypeOf(a))?.label || '';
+/** Libellé du type de tournée d'un audit (grille CT-2026 ; tournée mixte : types joints par « + »), '' pour une grille historique. */
+const typeLabel = a => { const t = tourTypesOf(a); return t.length > 1 ? tourTypeLabel(a.gridSnapshot, t) : gridType(a.gridSnapshot, auditTypeOf(a))?.label || ''; };
 /** Stations de la tournée : « ATHANASE (09271503) ; … ». */
-const stationsLabel = a => (a.stations || []).map(st => { const s = store.get('site', st.siteId); return s ? `${s.name} (${s.code})` : st.key; }).join(' ; ');
+const stationsLabel = a => {
+  // Tournée mixte : périmètre contrôlé à chaque station (« Acarouany (09160201) — Biologie + Chimie »).
+  const mixed = tourTypesOf(a).length > 1;
+  return (a.stations || []).map(st => { const s = store.get('site', st.siteId); return (s ? `${s.name} (${s.code})` : st.key) + (mixed ? ` — ${partsText(a.gridSnapshot, stationPartsOf(a, st))}` : ''); }).join(' ; ');
+};
 /** Station d'un écart (deviationPlace) : nom de la station (« (retirée) » si elle a été retirée de la tournée) ;
  * écart commun à une tournée de plusieurs stations : « Tournée (A, B) ». */
 const deviationStation = d => deviationPlace(d, { codes: false });
