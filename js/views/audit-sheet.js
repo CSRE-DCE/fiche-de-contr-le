@@ -6,6 +6,9 @@
  * - étapes : feuille-<no> (feuille de tournée), feuille-<no>@<clé> (feuille d'une station), ecarts, synthese,
  *   signatures, infos (identification de l'audit, contrôleurs OEG de la tournée et saisies par agent, stations,
  *   documents figés, alertes, continuer plus tard, « Annuler la tournée ») ;
+ * - PÉRIMÈTRE contrôlé d'une station sur plusieurs réseaux (« Biologie », « Chimie ») : choisi à l'ajout de la station
+ *   et modifiable avant la signature (onglet Infos, « Périmètre contrôlé » : motif si des saisies deviennent masquées) ;
+ *   tournée mixte : badges des types dans l'en-tête, périmètre de chaque station (Infos, synthèse, feuille 1) ;
  * - « Annuler la tournée » (motif obligatoire) dans l'en-tête et l'onglet Infos pour tout contrôleur de la tournée et
  *   l'encadrement autorisé ; sinon la raison est expliquée (tournée signée et verrouillée, tournée à rejoindre) ;
  * - tournée en binôme : bandeau « Tournée de … — Rejoindre la tournée » pour un agent qui n'en est pas contrôleur ;
@@ -47,13 +50,14 @@ import {
 } from '../ui/sheet-chrome.js';
 import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue, auditKindLabel, auditTimeTexts } from '../domain/model.js';
 import {
-  isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
+  isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf,
+  orderedParts, partsText, partLabel
 } from '../domain/grids.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { agentInitials } from '../domain/permissions.js';
 import {
   addStation, removeStation, updateSheet, setResponse, auditMedia, auditTypeOf, stationLabel, tourControllers, tourAgents, entriesByAgent, canJoinAudit,
-  joinTour, addController, removeController, linkExtra, previousStationPlan, copyPreviousStation, auditState
+  joinTour, addController, removeController, linkExtra, previousStationPlan, copyPreviousStation, auditState, setStationParts, stationPartsOf
 } from '../app/audits.js';
 import { linkProposal, sourceInfo, LINK_GROUPS } from '../domain/links.js';
 import { alertBox, documentsCard, signaturesStep, deviationChips, findItem, allowClear, cancelTourButton, cancelTourBlock, cancelledBanner, tourOperatorsCard, openOperatorForm } from './audit-modules.js';
@@ -426,7 +430,9 @@ function stationSheetView(c, sh, site) {
   const reperes = reperesHTML(c, sh);
   const theme = sh.theme || 'ocean';
   const inner = c.SS && site
-    ? c.SS.stationSheet({ site, grid: c.baseGrid, audit: c.audit, editable: c.editable && !c.locked && can('ref.manage'), reperes, variant: 'body', auditType: c.type })
+    ? c.SS.stationSheet({ site, grid: c.baseGrid, audit: c.audit, editable: c.editable && !c.locked && can('ref.manage'), reperes, variant: 'body', auditType: c.type,
+      // Tournée mixte : variante, compartiments et périmètre propres aux parties contrôlées à cette station.
+      parts: c.st.mixed && sh.station ? orderedParts(c.baseGrid, sh.station, c.type) : null })
     : html`${stationBanner({ site, kicker: sh.kicker || c.st.header?.program || '', theme, stationIndex: sh.station ? sh.station.index + 1 : null, stationTotal: c.stations.length || null })}
       ${infoStrip(site, { codeType: site?.codeType })}
       <p class="note">Fiche station détaillée (carte, photographies, accès) indisponible sur cet appareil.</p>
@@ -502,11 +508,11 @@ function synthesisView(c) {
   const head = html`<thead><tr><th scope="col">Feuille</th><th class="n-c" scope="col" title="Conforme / satisfaisant">C</th><th class="n-p" scope="col" title="Perfectible">P</th><th class="n-nc" scope="col" title="Non conforme">NC</th><th class="n-na" scope="col" title="Non applicable">N/A</th><th class="n-u" scope="col" title="Non renseignés">Non rens.</th><th scope="col">Conclusion</th></tr></thead>`;
   return html`<div class="card"><h2>Synthèse factuelle de la tournée <span class="badge outline">sans score global</span></h2>
       <div class="kpis as-kpis">${tiles.map(([k, v, cls, code]) => html`<div class="kpi ${cls ? 'k-' + cls : ''}"><span class="k">${code ? html`<b class="as-k-code">${code}</b>` : ''}${k}</span><span class="v">${v}</span></div>`)}</div>
-      <p class="note">Chaque point est compté une fois : un critère « commun à la tournée » n’est compté qu’une seule fois, quel que soit le nombre de stations.</p>
+      <p class="note">Chaque point est compté une fois : un critère « commun à la tournée » n’est compté qu’une seule fois, quel que soit le nombre de stations${c.st.mixed ? ' ; à une station contrôlée pour plusieurs parties (biologie et chimie), une opération commune (accès, mesures in situ, prélèvement, conservation…) n’est saisie et comptée qu’une fois' : ''}.</p>
     </div>
     ${s.stations && c.stations.length ? html`<div class="card"><h2>Par station</h2><div class="table-wrap"><table class="tbl as-sum"><thead><tr><th scope="col">Station</th><th class="n-c" scope="col">C</th><th class="n-p" scope="col">P</th><th class="n-nc" scope="col">NC</th><th class="n-na" scope="col">N/A</th><th class="n-u" scope="col">Non rens.</th><th scope="col">Avancement</th></tr></thead><tbody>
       ${s.stations.tournee.total ? html`<tr class="as-sum-tour"><th scope="row">${icon('route', { size: 16 })} Commun à la tournée</th>${countCells(s.stations.tournee)}<td>${c.st.stationProgress?.tournee ? `${c.st.stationProgress.tournee.answered} / ${c.st.stationProgress.tournee.total}` : ''}</td></tr>` : ''}
-      ${s.stations.stations.map(x => { const p = c.st.stationProgress?.stations?.[x.key]; return html`<tr><th scope="row"><b>${x.index + 1}.</b> ${x.name} <small class="muted">${x.code}</small></th>${countCells(x)}<td>${p ? `${p.answered} / ${p.total}` : ''}</td></tr>`; })}
+      ${s.stations.stations.map(x => { const p = c.st.stationProgress?.stations?.[x.key]; const perim = c.st.mixed ? c.stations.find(y => y.key === x.key)?.perimeter : null; return html`<tr><th scope="row"><b>${x.index + 1}.</b> ${x.name} <small class="muted">${x.code}</small>${perim ? html` <small class="as-perim-s">${partsText(c.baseGrid, perim)}</small>` : ''}</th>${countCells(x)}<td>${p ? `${p.answered} / ${p.total}` : ''}</td></tr>`; })}
       <tr class="as-sum-total"><th scope="row">Total de la tournée</th>${countCells(s.stations.global)}<td>${c.st.progress.answered} / ${c.st.progress.total}</td></tr>
     </tbody></table></div></div>` : ''}
     <div class="card"><h2>Par feuille</h2><div class="table-wrap"><table class="tbl as-sum">${head}<tbody>
@@ -537,10 +543,12 @@ function infosView(c) {
   const prov = store.get('provider', audit.providerId);
   const comps = (c.baseGrid.compartments || []).filter(x => (audit.compartments || []).includes(x.key));
   const canRemove = c.editable && !c.locked && c.stations.length > 1;
+  // Périmètre contrôlé modifiable avant la signature du contrôleur (comme la liste des contrôleurs).
+  const canParts = c.editable && !c.locked && !audit.signatures?.auditor && audit.status !== 'abandonne';
   const times = auditTimeTexts(audit);
   return html`
     <div class="card"><h2>Identification de la tournée</h2>${kv([
-      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
+      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.mixed ? html`${st.header?.typeLabel || st.types.map(t => t.label).join(' + ')} <span class="badge info">tournée mixte</span>` : st.type?.label || ''], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
       // Heures rapprochées de la feuille Organisation : « Début / Fin du contrôle » (F2.1.5 / 1.6) si renseignés.
       ['Date', fmtDate(c.date)], ['Heure de début', times.start], ['Heure de fin', times.end],
       [c.controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', c.controllersText], ['Tournée créée par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
@@ -549,12 +557,14 @@ function infosView(c) {
       ['Compartiments contrôlés', comps.map(x => x.label).join(' · ')]
     ])}</div>
     ${controllersCard(c)}
-    <div class="card"><h2>Stations de la tournée (${c.stations.length})</h2>
-      <div class="list">${c.stations.map(s => { const p = st.stationProgress?.stations?.[s.key]; return html`<div class="li"><span class="li-ic as-li-no">${s.index + 1}</span><div class="li-main"><div class="li-title">${s.name} <span class="badge outline">${CODE_TYPES[s.codeType] || 'Code'} ${s.code}</span></div>
-        <div class="li-sub">${s.prestation ? html`Prestation <a href="#/prestation/${s.prestation.id}">${s.prestation.ref}</a>${s.prestation.plannedDate ? ' · ' + fmtDate(s.prestation.plannedDate) : ' · à planifier'}` : 'Hors programme (aucune prestation rattachée)'}${p ? ` · ${p.answered} / ${p.total} points renseignés` : ''}</div>
-        <div class="row" style="gap:6px;margin-top:6px"><a class="btn ghost sm" href="#/audit/${audit.id}/feuille-1@${s.key}">Feuilles de la station</a><a class="btn ghost sm" href="#/station/${s.siteId}">Fiche station</a>${canRemove ? html`<button type="button" class="btn danger-ghost sm" data-act="tour-remove" data-key="${s.key}">Retirer de la tournée</button>` : ''}</div></div></div>`; })}</div>
+    <div class="card" id="tourStations"><h2>Stations de la tournée (${c.stations.length})</h2>
+      <div class="list">${c.stations.map(s => { const p = st.stationProgress?.stations?.[s.key]; const multi = c.SS && s.site && c.SS.possibleParts(s.site, c.baseGrid).length > 1; return html`<div class="li" data-station="${s.key}"><span class="li-ic as-li-no">${s.index + 1}</span><div class="li-main"><div class="li-title">${s.name} <span class="badge outline">${CODE_TYPES[s.codeType] || 'Code'} ${s.code}</span></div>
+        ${st.mixed || multi ? html`<div class="li-sub as-perim" data-parts="${s.perimeter.join(',')}"><span class="as-perim-k">Contrôlé :</span>${s.perimeter.map(k => html`<span class="type-badge t-${k}">${partLabel(c.baseGrid, k)}</span>`)}${s.perimeter.length > 1 ? html`<small class="muted">opérations communes saisies une seule fois</small>` : ''}</div>` : ''}
+        <div class="li-sub">${st.mixed ? (s.prestations.length ? s.prestations.map((x, i) => html`${i ? ' · ' : ''}${partLabel(c.baseGrid, x.type)} : prestation <a href="#/prestation/${x.prestation.id}">${x.prestation.ref}</a>${x.prestation.plannedDate ? ' · ' + fmtDate(x.prestation.plannedDate) : ' · à planifier'}`) : 'Hors programme (aucune prestation rattachée)')
+          : s.prestation ? html`Prestation <a href="#/prestation/${s.prestation.id}">${s.prestation.ref}</a>${s.prestation.plannedDate ? ' · ' + fmtDate(s.prestation.plannedDate) : ' · à planifier'}` : 'Hors programme (aucune prestation rattachée)'}${p ? ` · ${p.answered} / ${p.total} points renseignés` : ''}</div>
+        <div class="row" style="gap:6px;margin-top:6px"><a class="btn ghost sm" href="#/audit/${audit.id}/feuille-1@${s.key}">Feuilles de la station</a><a class="btn ghost sm" href="#/station/${s.siteId}">Fiche station</a>${canParts && (st.mixed || multi) ? html`<button type="button" class="btn ghost sm" data-act="tour-parts" data-key="${s.key}">${icon('edit', { size: 16 })}Périmètre contrôlé</button>` : ''}${canRemove ? html`<button type="button" class="btn danger-ghost sm" data-act="tour-remove" data-key="${s.key}">Retirer de la tournée</button>` : ''}</div></div></div>`; })}</div>
       ${c.editable && !c.locked ? html`<button type="button" class="btn ghost" style="margin-top:10px" data-act="tour-add"><span class="ic">${icon('plus')}</span>Ajouter une station</button>` : ''}
-      ${(audit.stationLog || []).length ? html`<details style="margin-top:10px"><summary>Historique des stations (${audit.stationLog.length})</summary><ul>${audit.stationLog.map(l => html`<li>${fmtDateTime(l.at)} — ${l.byName || ''} — ${l.action === 'ajout' ? 'ajout' : 'retrait'} de ${store.get('site', l.siteId)?.name || l.key}${l.reason ? html` — motif : « ${l.reason} »` : ''}</li>`)}</ul></details>` : ''}
+      ${(audit.stationLog || []).length ? html`<details style="margin-top:10px"><summary>Historique des stations (${audit.stationLog.length})</summary><ul>${audit.stationLog.map(l => html`<li>${fmtDateTime(l.at)} — ${l.byName || ''} — ${l.action === 'perimetre' ? html`périmètre contrôlé à ${store.get('site', l.siteId)?.name || l.key} : ${partsText(c.baseGrid, l.before)} → ${partsText(c.baseGrid, l.after)}` : html`${l.action === 'ajout' ? 'ajout' : 'retrait'} de ${store.get('site', l.siteId)?.name || l.key}${l.parts ? ` (contrôlé : ${partsText(c.baseGrid, l.parts)})` : ''}`}${l.reason ? html` — motif : « ${l.reason} »` : ''}</li>`)}</ul></details>` : ''}
     </div>
     ${documentsCard(audit)}
     ${st.alerts.length ? html`<div class="card"><h2>Alertes en cours (${st.alerts.length})</h2>${st.alerts.map(a => alertBox(a, c.editable))}</div>` : ''}
@@ -697,11 +707,11 @@ export async function renderSheetAudit({ audit, st, step, q = {}, editable, lock
   } else if (cur === 'ecarts') body = deviationsView(c);
   else if (cur === 'synthese') body = synthesisView(c);
   else if (cur === 'signatures') body = signaturesStep(audit, st, editable, seal, { issueHref: e => itemHref(audit, model, e.itemId), sheets: true });
-  else body = infosView(c);
+  else { c.SS = await loadStationSheet(); body = infosView(c); }
   const p = st.progress;
   const out = html`
     <div class="as-top">
-      <div class="as-id"><span class="as-num">${audit.number}</span>${auditBadge(audit)}${st.type ? html`<span class="type-badge t-${c.type}">${icon(st.type.icon || 'drop', { size: 15 })}${st.type.short || st.type.label}</span>` : ''}${!locked && !amendReason ? cancelTourButton(audit, { cls: 'btn danger-ghost sm as-cancel', id: 'tourCancelTop' }) : ''}</div>
+      <div class="as-id"><span class="as-num">${audit.number}</span>${auditBadge(audit)}${st.mixed ? st.types.map(t => html`<span class="type-badge t-${t.key}" title="Tournée mixte : ${st.header?.typeLabel || ''}">${icon(t.icon || 'drop', { size: 15 })}${t.short || t.label}</span>`) : st.type ? html`<span class="type-badge t-${c.type}">${icon(st.type.icon || 'drop', { size: 15 })}${st.type.short || st.type.label}</span>` : ''}${!locked && !amendReason ? cancelTourButton(audit, { cls: 'btn danger-ghost sm as-cancel', id: 'tourCancelTop' }) : ''}</div>
       <div class="as-meta">${c.providerLabel || providerName(audit.providerId)} · ${fmtDate(c.date)} · ${c.stations.length} station${c.stations.length > 1 ? 's' : ''}${audit.kind === 'inopine' ? ' · inopiné' : ''}</div>
       <div class="as-pct"><b>${p.percent} %</b><span class="save-state" id="saveState">${editable ? `Enregistré sur l’appareil ✓ ${fmtTime(audit.updatedAt)}` : locked ? 'Lecture seule' : ''}</span></div>
       ${progressBar(p.percent)}
@@ -761,6 +771,35 @@ export async function refreshKeep(ctx) {
   if (typing !== null && el.value !== typing) el.value = typing;
   el.focus({ preventScroll: true });
   try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* type sans sélection */ }
+}
+
+/**
+ * Fenêtre « Périmètre contrôlé » d'une station (ajout d'une station, onglet Infos) : cases « Biologie », « Chimie »…
+ * proposées selon les réseaux et les prestations programmées de la station (au moins une cochée). Retourne les parties
+ * cochées, ou undefined si la fenêtre est fermée sans valider.
+ */
+function askPerimeter(SSm, audit, site, { title, parts = null, okLabel = 'Valider' } = {}) {
+  const opts = { grid: audit.gridSnapshot, providerId: audit.providerId, type: auditTypeOf(audit) };
+  let cur = parts || SSm.defaultParts(site, opts);
+  const checks = () => SSm.perimeterChecks(SSm.partChoices(site, { ...opts, parts: cur }), { act: 'pm-toggle' });
+  const m = openModal({
+    title, wide: true,
+    body: html`<p class="as-pm-for"><b>${site.name || ''}</b> ${site.code ? html`<span class="badge outline">${site.code}</span>` : ''}</p>
+      <p class="note">Cochez ce qui est <b>réellement contrôlé</b> à cette station.</p>
+      <div id="pmBox">${checks()}</div>
+      <p class="note">Même prestataire : les opérations communes (accès et station, mesures in situ, prélèvement, conservation et transport) sont saisies une seule fois pour la station ; les feuilles propres à chaque partie s’ajoutent. Partie réalisée par un autre prestataire : tournée distincte. Les points d’une partie décochée sont masqués (rien n’est effacé).</p>`,
+    actions: [{ label: 'Annuler' }, { label: okLabel, cls: 'primary', act: 'pm-ok', id: 'pmOk' }],
+    handlers: {
+      'pm-toggle'(el) {
+        const next = [...this.root.querySelectorAll('#pmBox input')].filter(x => x.checked).map(x => x.value);
+        if (!next.length) { el.checked = true; return; }
+        cur = next;
+        this.root.querySelector('#pmBox').innerHTML = String(checks());
+      },
+      'pm-ok'() { this.close(cur); }
+    }
+  });
+  return m.result;
 }
 
 /* ---------- Actions propres aux feuilles (fusionnées dans les handlers de js/views/audit.js) ---------- */
@@ -980,11 +1019,59 @@ export const sheetHandlers = {
     });
     const v = await m.result;
     if (!v) return;
-    const updated = await addStation(audit, v, { reason: this.amendReason });
+    // Station sur plusieurs réseaux (ex. BIO + Chimie) : ce qui y est réellement contrôlé (cases « Biologie », « Chimie »).
+    const site = store.get('site', v.siteId);
+    let req = v;
+    if (SSm && site && SSm.possibleParts(site, audit.gridSnapshot).length > 1) {
+      const parts = await askPerimeter(SSm, audit, site, { title: 'Ajouter une station : périmètre contrôlé', okLabel: 'Ajouter la station' });
+      if (!parts) return;
+      const pp = SSm.partPrestationIds(site, parts, { grid: audit.gridSnapshot, providerId: audit.providerId });
+      const p = v.prestationId ? store.get('prestation', v.prestationId) : null;
+      if (p && parts.includes(SSm.prestationType(p, audit.gridSnapshot))) pp[SSm.prestationType(p, audit.gridSnapshot)] = p.id;
+      req = { siteId: v.siteId, prestationId: pp[type] || parts.map(k => pp[k]).find(Boolean) || null, parts, partPrestations: pp };
+    }
+    const updated = await addStation(audit, req, { reason: this.amendReason });
     const key = stationKeyOf(v.siteId);
     lastStation.set(audit.id, key);
     toast(`Station ${store.get('site', v.siteId)?.name || ''} ajoutée à la tournée (${updated.stations.length} stations)`, 'ok');
     navigate(`/audit/${audit.id}/feuille-1@${key}`);
+  },
+  /**
+   * « Périmètre contrôlé » d'une station (onglet Infos, avant la signature du contrôleur) : cases « Biologie »,
+   * « Chimie »… ; points d'une partie retirée masqués (saisies conservées) : motif obligatoire s'ils contiennent des
+   * saisies, écarts ouverts annulés avec le même motif après confirmation.
+   */
+  async 'tour-parts'(el) {
+    const audit = store.get('audit', this.params.id);
+    const key = el.dataset.key;
+    const stn = (audit.stations || []).find(s => s.key === key);
+    if (!stn) return;
+    const SSm = await loadStationSheet();
+    if (!SSm) { toast('Choix du périmètre indisponible sur cet appareil.', 'err', 5000); return; }
+    const site = store.get('site', stn.siteId);
+    const name = site?.name || key;
+    const before = stationPartsOf(audit, stn);
+    const parts = await askPerimeter(SSm, audit, site || { id: stn.siteId, name, code: key }, { title: `Périmètre contrôlé à ${name}`, parts: before });
+    if (!parts || parts.join() === before.join()) return;
+    // Prestations programmées du prestataire pour les parties AJOUTÉES (celles déjà rattachées restent).
+    const pp = SSm.partPrestationIds(site, parts.filter(k => !before.includes(k)), { grid: audit.gridSnapshot, providerId: audit.providerId });
+    try { await setStationParts(audit, key, parts, { partPrestations: pp }); }
+    catch (e) {
+      if (!e.needsReason && !e.needsCancel) { toast(e.message, 'err', 6000); return; }
+      const n = e.entries || {};
+      const open = e.openDeviations || [];
+      const numbers = open.map(d => d.number).join(', ');
+      let reason = null;
+      if (e.needsReason) {
+        reason = await promptDialog({ title: `Périmètre contrôlé à ${name}`, label: 'Motif de la modification (obligatoire)', hint: `Constats déjà saisis qui ne seront plus affichés : ${n.responses?.length || 0} réponse(s), ${n.sheets?.length || 0} encadré(s), ${n.media || 0} preuve(s), ${n.deviations || 0} écart(s). Ils sont conservés dans la tournée et réapparaissent si la partie est de nouveau cochée.${open.length ? ` Écart(s) ouvert(s) : ${numbers} — ils seront annulés avec ce motif.` : ''}` });
+        if (!reason) return;
+      }
+      if (open.length && !(await confirmDialog({ title: 'Écarts ouverts', message: `${open.length} écart(s) ouvert(s) portent sur des points qui ne seront plus affichés : ${numbers}. ${open.length > 1 ? 'Ils seront annulés' : 'Il sera annulé'} avec le motif « ${reason || ''} » (annulation tracée dans l’historique de l’écart). Continuer ?`, okLabel: 'Annuler les écarts et modifier', cancelLabel: 'Ne rien changer', danger: true }))) return;
+      try { await setStationParts(audit, key, parts, { reason, cancelDeviations: open.length > 0, partPrestations: pp }); }
+      catch (e2) { toast(e2.message, 'err', 6000); return; }
+    }
+    toast(`Périmètre contrôlé à ${name} : ${partsText(audit.gridSnapshot, parts)}`, 'ok');
+    this.refresh();
   },
   /**
    * Retrait d'une station : simple sans saisie, sinon motif obligatoire (saisies conservées dans l'historique) ;

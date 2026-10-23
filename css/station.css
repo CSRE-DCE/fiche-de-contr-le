@@ -439,3 +439,25 @@
 .an-ctrl-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
 .an-ctrl-txt b{color:var(--brand);font-size:15.5px}
 .an-ctrl-txt small{font-size:12.5px;color:var(--muted)}
+/* Périmètre contrôlé à une station sur plusieurs réseaux (« Biologie », « Chimie ») : création de tournée, ajout d'une
+   station, onglet Infos ; prestation programmée de chaque partie dessous ; tournée mixte (plusieurs types). */
+.pm-checks{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.pm-check{flex:1 1 170px;min-width:0;align-items:center;gap:10px;padding:6px 10px;min-height:var(--tap)}
+.pm-check input{flex:none;width:22px;height:22px}
+.pm-check.t-bio.sel{border-color:#2f8a3f;background:#e4f4e8}
+.pm-check.t-ce.sel{border-color:#0b6cb4;background:#e6f6fd}
+.pm-check.t-eso.sel{border-color:#2f6f8f;background:#e3eef5}
+.pm-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.pm-txt b{color:var(--brand);font-size:15.5px}
+.pm-pres{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:var(--info);overflow-wrap:anywhere}
+.pm-pres.is-other{color:#8a4b00}
+.pm-pres.is-none{color:var(--muted)}
+.an-sel-parts{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.an-parts-k{font-size:13px;font-weight:700;color:var(--brand)}
+.an-parts-note{display:flex;gap:6px;align-items:flex-start;margin-top:8px}
+.an-recap-mixed{font-weight:700;color:var(--brand)}
+.as-perim{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 2px}
+.as-perim-k{font-weight:700;color:var(--brand)}
+.as-perim-s{display:inline-block;margin-left:4px;font-size:12px;font-weight:700;color:var(--info)}
+.as-pm-for{margin:0 0 6px;font-size:16px}
+.ss-perim{display:flex;align-items:flex-start;gap:6px;margin:0 0 8px;padding:6px 9px;border-radius:9px;background:#eef6fd;color:var(--brand);font-size:13.5px;line-height:1.3}

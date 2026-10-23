@@ -4,9 +4,11 @@
  * rendez-vous, contrôleurs OEG de la tournée (binôme : agents connus autorisés à auditer, agent connecté coché et
  * obligatoire), stations dans l'ordre de passage (recherche, filtre par type, prestations programmées du
  * prestataire mises en avant, ordre modifiable, station la plus proche par GPS, filtre par réseau de surveillance
- * avec effectifs, réseaux de chaque station), compartiments (biologie : pré-cochés selon les stations) et
- * préleveurs du prestataire (« Ajouter un opérateur » : nom, prénom, initiales, fonction, sans doublon) → createAudit →
- * #/audit/<id>.
+ * avec effectifs, réseaux de chaque station ; PÉRIMÈTRE contrôlé d'une station sur plusieurs réseaux : cases
+ * « Biologie », « Chimie » proposées selon ses réseaux et ses prestations programmées — même prestataire ⇒ une tournée
+ * mixte aux opérations communes mutualisées, autre prestataire ⇒ tournée distincte), compartiments (biologie :
+ * pré-cochés selon les stations ; physico-chimie imposée par la chimie) et préleveurs du prestataire (« Ajouter un
+ * opérateur » : nom, prénom, initiales, fonction, sans doublon) → createAudit → #/audit/<id>.
  * Pré-sélection : ?site=<siteId>, ?prestation=<id>, ?prestations=<id1,id2>, ?type=bio|ce|eso, ?kind=inopine,
  * ?reseau=<code> (filtre des stations candidates : seulement par l'adresse, jamais par une préférence mémorisée).
  * Option avancée : audit sur une grille historique (un seul site), ?mode=general — formulaire d'origine. */
@@ -19,7 +21,7 @@ import { toast, formValues } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageTitle, options, field, operatorName, empty, networkBadges, networkDot, networkVars } from '../ui/components.js';
 import { PROVIDER_KINDS } from '../domain/model.js';
-import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid } from '../domain/grids.js';
+import { gridType, gridTypes, inferAuditType, auditCompartments, typeCompartments, providerHeaderName, isSheetGrid, tourTypes, tourCompartments, partsText } from '../domain/grids.js';
 import { agentInitials } from '../domain/permissions.js';
 import { createAudit, gridsFor, tourAgents } from '../app/audits.js';
 import { providerOperators, canAddOperator, operatorDisplay } from '../app/operators.js';
@@ -29,7 +31,7 @@ import { agentPref } from '../app/settings.js';
 import { NO_NETWORK, inNetwork, prestationNetwork, sortNetworkCodes } from '../domain/networks.js';
 import { currentNetworkIndex, currentNetworkOf, siteNetworks } from '../app/networks.js';
 import { TYPE_STYLES } from '../ui/map.js';
-import { ctGrid, CT_GRID, siteTypes, openPrestations, prestationType, plannedLabel, siteMatches, typeBadges } from './station-sheet.js';
+import { ctGrid, CT_GRID, siteTypes, openPrestations, prestationType, plannedLabel, siteMatches, typeBadges, possibleParts, partChoices, defaultParts, partPrestationIds, perimeterChecks } from './station-sheet.js';
 
 /* ---------- Brouillon de la tournée (conservé entre deux affichages) ---------- */
 let draft = null;
@@ -62,14 +64,31 @@ function initDraft(q) {
   };
 }
 
-/** Compartiments proposés : biologie → ceux des stations choisies (cases modifiables) ; autres types → ceux du type. */
+/* ---------- Périmètre contrôlé à chaque station (tournée mixte) ---------- */
+/** Parties contrôlées à une station du brouillon : choix de l'agent (`parts`), sinon parties par défaut (defaultParts). */
+const draftParts = (d, s) => s.parts || defaultParts(store.get('site', s.siteId), { providerId: d.providerId, type: d.type });
+/** Types de la tournée en préparation : réunion des parties de ses stations (type choisi seul tant qu'il n'y en a pas). */
+const draftTypes = (grid, d) => tourTypes(grid, d.stations.map(s => ({ parts: draftParts(d, s) })), d.type);
+
+/** Compartiments proposés : biologie → ceux des stations choisies (cases modifiables) ; autres types → ceux du type ;
+ * tournée mixte : type par type (la chimie impose la physico-chimie, commune aux deux). */
 function defaultCompartments(grid, d) {
   const t = gridType(grid, d.type);
   if (!t) return typeCompartments(grid, d.type);
+  const types = draftTypes(grid, d);
+  if (types.length > 1) {
+    return tourCompartments(grid, types, Object.fromEntries(types.map(k => {
+      const fromSites = [...new Set(d.stations.filter(s => draftParts(d, s).includes(k)).flatMap(s => store.get('site', s.siteId)?.compartments || []))];
+      return [k, fromSites.length ? fromSites : null];
+    })));
+  }
   const fromSites = [...new Set(d.stations.flatMap(s => store.get('site', s.siteId)?.compartments || []))].filter(k => t.compartments.includes(k));
   return auditCompartments(grid, d.type, fromSites.length ? fromSites : null);
 }
-const chosenCompartments = (grid, d) => d.compartments || defaultCompartments(grid, d);
+const chosenCompartments = (grid, d) => {
+  const types = draftTypes(grid, d);
+  return d.compartments ? (types.length > 1 ? tourCompartments(grid, types, d.compartments) : d.compartments) : defaultCompartments(grid, d);
+};
 
 /** Prestataires : les quatre prestataires des contrôles 2026 en premier, puis les autres (actifs). */
 function providerLists(grid) {
@@ -137,20 +156,27 @@ function candidatesHTML(d) {
 
 function selectedHTML(d) {
   if (!d.stations.length) return html`<div class="an-empty">${icon('route', { size: 30 })}<span>Aucune station : ajoutez la ou les stations visitées, dans l’ordre de passage.</span></div>`;
-  return html`<ol class="an-sel">${d.stations.map((s, i) => {
+  const grid = ctGrid();
+  let several = false;
+  const list = html`<ol class="an-sel">${d.stations.map((s, i) => {
     const site = store.get('site', s.siteId);
     const p = s.prestationId ? store.get('prestation', s.prestationId) : null;
-    return html`<li class="an-sel-row">
+    // Station sur plusieurs réseaux (ex. BIO + Chimie) : ce qui y est RÉELLEMENT contrôlé (cases, prestations de chaque partie).
+    const multi = site && possibleParts(site, grid).length > 1;
+    if (multi) several = true;
+    return html`<li class="an-sel-row${multi ? ' has-parts' : ''}" data-site="${s.siteId}">
       <span class="an-sel-no">${i + 1}</span>
       <span class="an-sel-main"><span class="an-sel-name">${site?.name || s.siteId}</span>
         <span class="an-sel-sub">${site?.code || ''}${site ? html` ${typeBadges(site, { short: true })}${networkBadges(siteNetworks(site))}` : ''}</span>
-        <span class="an-sel-pres">${p ? html`${icon('calendar', { size: 14 })}Prestation ${p.ref} · ${plannedLabel(p)}` : 'Hors programme (aucune prestation programmée rattachée)'}</span></span>
+        ${multi ? html`<span class="an-sel-parts"><span class="an-parts-k">Contrôlé à cette station :</span>${perimeterChecks(partChoices(site, { grid, providerId: d.providerId, type: d.type, parts: draftParts(d, s) }), { act: 'setPart', attrs: `data-i="${i}"` })}</span>`
+          : html`<span class="an-sel-pres">${p ? html`${icon('calendar', { size: 14 })}Prestation ${p.ref} · ${plannedLabel(p)}` : 'Hors programme (aucune prestation programmée rattachée)'}</span>`}</span>
       <span class="an-sel-tools">
         <button type="button" class="icon-btn" data-act="moveSt" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} title="Monter" aria-label="Monter ${site?.name || ''}">▲</button>
         <button type="button" class="icon-btn" data-act="moveSt" data-i="${i}" data-d="1" ${i === d.stations.length - 1 ? 'disabled' : ''} title="Descendre" aria-label="Descendre ${site?.name || ''}">▼</button>
         <button type="button" class="icon-btn an-del" data-act="removeSt" data-i="${i}" title="Retirer" aria-label="Retirer ${site?.name || ''} de la tournée">${icon('close', { size: 20 })}</button>
       </span></li>`;
   })}</ol>`;
+  return html`${list}${several ? html`<p class="note an-parts-note">${icon('info', { size: 16 })} Station sur plusieurs réseaux : cochez ce qui y est <b>réellement contrôlé</b>. Même prestataire : une seule tournée, les opérations communes (organisation, accès et station, mesures in situ, prélèvement, conservation et transport) sont saisies une seule fois. Partie réalisée par un autre prestataire : tournée distincte.</p>` : ''}`;
 }
 
 // Agents de cette tablette (trousseau) : relus à chaque affichage de l'écran de création.
@@ -181,6 +207,10 @@ function tourForm(q) {
   const prov = store.get('provider', d.providerId);
   const comps = chosenCompartments(grid, d);
   const typeDef = gridType(grid, d.type);
+  // Types de la tournée (mixte : biologie + chimie…) ; compartiment imposé par un type qui n'en a qu'un (chimie : physico).
+  const types = draftTypes(grid, d), mixed = types.length > 1;
+  const typeDefs = types.map(k => gridType(grid, k)).filter(Boolean);
+  const forced = key => mixed && typeDefs.some(t => t.compartments.length === 1 && t.compartments[0] === key);
   const ops = d.providerId ? providerOperators(d.providerId, { include: d.operatorIds || [] }) : [];
   const step = (n, title, sub = '') => html`<h2 class="an-step"><span class="an-step-no">${n}</span><span>${title}${sub ? html`<small>${sub}</small>` : ''}</span></h2>`;
   return html`
@@ -221,9 +251,9 @@ function tourForm(q) {
         </div></section>
 
       <section class="card">${step(6, 'Compartiments à contrôler')}
-        ${typeDef && typeDef.compartments.length > 1
-          ? html`<div class="checks an-comps">${(grid.compartments || []).filter(c => c.always || typeDef.compartments.includes(c.key)).map(c => html`<label class="check ${comps.includes(c.key) ? 'sel' : ''}"><input type="checkbox" value="${c.key}" data-change="setComp" ${comps.includes(c.key) ? 'checked' : ''} ${c.always ? 'disabled' : ''}> ${icon(c.icon || 'check', { size: 20 })} ${c.label}</label>`)}</div>
-            <p class="note">Pré-cochés selon les compartiments des stations choisies ; l’organisation, la sécurité et la traçabilité sont toujours contrôlées.</p>`
+        ${typeDefs.some(t => t.compartments.length > 1)
+          ? html`<div class="checks an-comps">${(grid.compartments || []).filter(c => c.always || typeDefs.some(t => t.compartments.includes(c.key))).map(c => html`<label class="check ${comps.includes(c.key) ? 'sel' : ''}"><input type="checkbox" value="${c.key}" data-change="setComp" ${comps.includes(c.key) ? 'checked' : ''} ${c.always || forced(c.key) ? 'disabled' : ''}> ${icon(c.icon || 'check', { size: 20 })} ${c.label}</label>`)}</div>
+            <p class="note">Pré-cochés selon les compartiments des stations choisies ; l’organisation, la sécurité et la traçabilité sont toujours contrôlées.${mixed ? ' La physico-chimie (mesures in situ, prélèvement, conservation et transport) est commune à la biologie et à la chimie : contrôlée une seule fois par station.' : ''}</p>`
           : html`<ul class="an-fixed">${(grid.compartments || []).filter(c => comps.includes(c.key)).map(c => html`<li>${icon(c.icon || 'check', { size: 20 })}${c.label}</li>`)}</ul>`}</section>
 
       <section class="card" id="anOperators">${step(7, 'Préleveurs du prestataire', 'opérateurs contrôlés')}
@@ -234,8 +264,8 @@ function tourForm(q) {
             <p class="note">Cochez les préleveurs présents. Un préleveur absent de la liste : « Ajouter un opérateur » (nom, prénom, initiales, fonction) — rattaché à ${providerHeaderName(prov)}, sans doublon. La liste reste modifiable dans la tournée (feuille Organisation).</p>`}</section>
 
       <div class="an-submit">
-        <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}
-          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}${(d.controllerIds || []).length > 1 ? ` · ${d.controllerIds.length} contrôleurs` : ''}</span></div>
+        <div class="an-recap">${typeDef ? html`<span class="type-badge t-${d.type}">${icon(TYPE_STYLES[d.type]?.icon || 'drop', { size: 15 })}${TYPE_STYLES[d.type]?.label || typeDef.label}</span>` : ''}${mixed ? types.filter(k => k !== d.type).map(k => html`<span class="type-badge t-${k}">${icon(TYPE_STYLES[k]?.icon || 'drop', { size: 15 })}+ ${TYPE_STYLES[k]?.label || k}</span>`) : ''}
+          <span><b>${prov ? providerHeaderName(prov) : 'Prestataire à choisir'}</b> · ${d.stations.length} station${d.stations.length > 1 ? 's' : ''} · ${fmtDate(d.date)} · ${d.kind === 'inopine' ? 'inopiné' : 'avec rendez-vous'}${(d.controllerIds || []).length > 1 ? ` · ${d.controllerIds.length} contrôleurs` : ''}${mixed ? html` · <span class="an-recap-mixed">tournée ${partsText(grid, types).toLocaleLowerCase('fr-FR')}</span>` : ''}</span></div>
         <button class="btn primary lg" type="submit" ${d.providerId && d.stations.length ? '' : 'disabled'}><span class="ic">${icon('route')}</span>Démarrer la tournée</button>
       </div>
     </form>`;
@@ -316,6 +346,19 @@ export default {
       draft.compartments = [...document.querySelectorAll('.an-comps input')].filter(i => i.checked || i.disabled).map(i => i.value);
       this.refresh();
     },
+    /** Case « Biologie » / « Chimie » d'une station : parties réellement contrôlées (au moins une). */
+    setPart(el) {
+      const s = draft.stations[Number(el.dataset.i)];
+      if (!s) return;
+      const grid = ctGrid();
+      const parts = [...el.closest('.pm-checks').querySelectorAll('input')].filter(x => x.checked).map(x => x.value);
+      if (!parts.length) { el.checked = true; return; }
+      const before = draftTypes(grid, draft).join();
+      s.parts = parts;
+      // Types de la tournée changés (biologie ajoutée ou retirée…) : compartiments recalculés d'après les stations.
+      if (draftTypes(grid, draft).join() !== before) draft.compartments = null;
+      this.refresh();
+    },
     setOps() { draft.operatorIds = [...document.querySelectorAll('[data-change=setOps]')].filter(i => i.checked).map(i => i.value); this.refresh(); },
     /** « Ajouter un opérateur » : rattaché au prestataire choisi, sans doublon, coché aussitôt. */
     async 'op-new'() {
@@ -367,7 +410,8 @@ export default {
       const grid = ctGrid();
       const a = await createAudit({
         auditType: d.type, gridId: grid.id || CT_GRID, providerId: d.providerId, kind: d.kind,
-        stations: d.stations.map(s => ({ siteId: s.siteId, prestationId: s.prestationId || null })),
+        // Périmètre contrôlé : parties de chaque station (tournée mixte) et prestation programmée de chaque partie.
+        stations: d.stations.map(s => stationRequest(grid, d, s)),
         compartments: chosenCompartments(grid, d), operatorIds: d.operatorIds || [],
         // Contrôleurs OEG de la tournée (binôme) : l'agent connecté et les collègues cochés.
         controllerIds: d.controllerIds || [],
@@ -411,11 +455,27 @@ export default {
   }
 };
 
-/** Changement de prestataire : prestations rattachées aux stations et opérateurs recalculés. */
+/**
+ * Station demandée à createAudit : {siteId, prestationId} ; périmètre différent du type de la tournée (station
+ * contrôlée pour plusieurs parties, ou pour une autre partie) : + parts et partPrestations (prestations programmées du
+ * prestataire pour chaque partie cochée).
+ */
+function stationRequest(grid, d, s) {
+  const parts = draftParts(d, s);
+  if (parts.length === 1 && parts[0] === d.type) return { siteId: s.siteId, prestationId: s.prestationId || null };
+  const site = store.get('site', s.siteId);
+  const pp = partPrestationIds(site, parts, { grid, providerId: d.providerId });
+  const p = s.prestationId ? store.get('prestation', s.prestationId) : null;
+  const t = p ? prestationType(p, grid) : '';
+  if (p && parts.includes(t)) pp[t] = p.id;
+  return { siteId: s.siteId, prestationId: pp[d.type] || parts.map(k => pp[k]).find(Boolean) || null, parts, partPrestations: pp };
+}
+
+/** Changement de prestataire : prestations rattachées aux stations et opérateurs recalculés (parties choisies gardées). */
 function selectProvider(id) {
   if (!id || draft.providerId === id) return;
   draft.providerId = id;
-  draft.stations = draft.stations.map(s => ({ siteId: s.siteId, prestationId: matchPrestation(s.siteId, id, draft.type)?.id || null }));
+  draft.stations = draft.stations.map(s => ({ ...s, siteId: s.siteId, prestationId: matchPrestation(s.siteId, id, draft.type)?.id || null }));
   const ops = new Set(store.filter('operator', o => o.providerId === id).map(o => o.id));
   const fromPres = draft.stations.flatMap(s => store.get('prestation', s.prestationId)?.operatorIds || []);
   draft.operatorIds = [...new Set([...(draft.operatorIds || []).filter(x => ops.has(x)), ...fromPres])];
