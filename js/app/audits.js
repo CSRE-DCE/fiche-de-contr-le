@@ -21,7 +21,17 @@
  * réception d'un fichier d'échange. Fiche d'une station modifiée (référentiel) : informations de F3 recalculées dans les
  * tournées en cours non signées (refreshStationInfo). Valeurs seulement proposées (accès, supports, marché, effectif,
  * sondes…) : données complémentaires linkExtra.
- * Reprise des réponses de la station précédente (copyPreviousStation) : à la demande, feuille par feuille. */
+ * Reprise des réponses de la station précédente (copyPreviousStation) : à la demande, feuille par feuille.
+ * PÉRIMÈTRE RÉEL de chaque station (demande de l'OEG du 18/10/2026) : une station sur plusieurs réseaux (ex. BIO +
+ * Chimie) n'est contrôlée que pour ce qui y est réellement réalisé (biologie seule, chimie seule ou les deux). Même
+ * prestataire ⇒ UNE tournée, éventuellement MIXTE (plusieurs types : chaque station porte `parts` et
+ * `partPrestations`, audit.auditType = type principal, audit.compartments = réunion ; normalizePerimeter de grids.js) :
+ * les opérations communes (F2, F3, F4, F5, critères communs à la tournée) ne sont saisies et comptées qu'une fois ;
+ * prestataires différents ⇒ tournées indépendantes, chacune avec son périmètre. Choix à la création (createAudit,
+ * stations[].parts) et à l'ajout d'une station (addStation), modifiable avant la signature du contrôleur
+ * (setStationParts : motif obligatoire si des saisies deviennent masquées — elles sont conservées —, écarts ouverts
+ * annulés avec le même motif, historique audit.stationLog « perimetre » et journal). Une tournée d'un seul type ne porte
+ * ni `parts` ni `partPrestations` : les tournées existantes, leurs sceaux et leurs PDF sont inchangés. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
@@ -31,7 +41,8 @@ import { uuid, nowISO, clone, canonicalJSON, sha256Hex, diff, compactValue, addD
 import {
   allItems, progress, validateResponses, visibleStructure, rankGrids, sheetsOf, sheetProgress, stationProgress, prefillResponses, normalizeCompartments,
   isSheetGrid, expandGrid, gridTypes, gridType, defaultAuditType, inferAuditType, auditCompartments, headerOf, makeStation, stationKeyOf, parseItemId, stationEntries,
-  isEnteredResponse, visibleItems, resolveSheet, sheetStoreKey
+  isEnteredResponse, visibleItems, resolveSheet, sheetStoreKey, normalizeParts, stationParts, tourTypes, tourCompartments, normalizePerimeter,
+  stationPrestationIds, partsText
 } from '../domain/grids.js';
 import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, SITE_SOURCE, LINKED_SHEET_KEYS } from '../domain/links.js';
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
@@ -54,6 +65,18 @@ export function auditTypeOf(audit) {
   const g = audit?.gridSnapshot;
   return audit?.auditType && gridType(g, audit.auditType) ? audit.auditType : defaultAuditType(g);
 }
+/**
+ * Types contrôlés dans la tournée (réunion des parties de ses stations, ordre de la grille) : [type] pour une tournée
+ * d'un seul type ; [] pour une grille sans types.
+ */
+export function tourTypesOf(audit) {
+  const g = audit?.gridSnapshot;
+  return gridTypes(g).length ? tourTypes(g, audit?.stations || [], auditTypeOf(audit)) : [];
+}
+/** Tournée mixte (plusieurs types contrôlés, ex. biologie + chimie du même prestataire) ? */
+export const isMixedTour = audit => tourTypesOf(audit).length > 1;
+/** Parties contrôlées à une station de la tournée (`perimeter` de stationsOf) : station.parts, sinon [type de la tournée]. */
+export const stationPartsOf = (audit, station) => (gridTypes(audit?.gridSnapshot).length ? stationParts(audit.gridSnapshot, station, auditTypeOf(audit)) : []);
 /** Sites des stations de la tournée : {[clé]: site}. */
 export function stationSites(audit) {
   const out = {};
@@ -77,12 +100,16 @@ export function effectiveGrid(audit) {
 }
 /**
  * Stations de la tournée enrichies (sélecteur de stations, PDF) :
- * [{key, index, siteId, pointId, prestationId, addedAt, site, point, prestation, name, code, codeType}].
+ * [{key, index, siteId, pointId, prestationId, addedAt, parts?, partPrestations?, site, point, prestation, name, code,
+ *   codeType, perimeter (parties contrôlées : stationPartsOf), prestations ([{type, prestation}] : une par partie)}].
  */
 export function stationsOf(audit) {
   return (audit?.stations || []).map((st, index) => {
     const site = store.get('site', st.siteId);
-    return { ...st, index, site, point: st.pointId ? store.get('point', st.pointId) : null, prestation: st.prestationId ? store.get('prestation', st.prestationId) : null, name: site?.name || st.key, code: site?.code || st.key, codeType: site?.codeType || 'SANDRE' };
+    const perimeter = stationPartsOf(audit, st);
+    const pp = st.partPrestations || (st.prestationId && perimeter.length === 1 ? { [perimeter[0]]: st.prestationId } : {});
+    const prestations = perimeter.filter(t => pp[t]).map(t => ({ type: t, prestation: store.get('prestation', pp[t]) || null })).filter(x => x.prestation);
+    return { ...st, index, site, point: st.pointId ? store.get('point', st.pointId) : null, prestation: st.prestationId ? store.get('prestation', st.prestationId) : null, name: site?.name || st.key, code: site?.code || st.key, codeType: site?.codeType || 'SANDRE', perimeter, prestations };
   });
 }
 
@@ -160,7 +187,13 @@ export function auditState(audit, { includeMissing = false } = {}) {
   // Préleveurs : fiche du référentiel, à défaut (fiche absente de la tablette) le libellé figé dans la tournée.
   const operators = [...(audit.operatorIds || []).map(id => store.get('operator', id) || (audit.operatorNames?.[id] ? { id, code: '', firstName: '', lastName: audit.operatorNames[id], frozen: true } : null)).filter(Boolean), ...(audit.adHocOperators || [])];
   const settings = orgSettings();
-  const prestations = stations.filter(st => st.prestation).map(st => ({ prestation: st.prestation, station: st }));
+  // Prestations de la tournée comparées à leur station ; prestation d'une autre partie d'une station mixte : comparée au
+  // type de prélèvement de SA partie (ex. chimie : physico-chimie) et non à celui du type principal.
+  const prestations = stations.flatMap(st => [
+    ...(st.prestation ? [{ prestation: st.prestation, station: st }] : []),
+    ...st.prestations.filter(x => x.prestation.id !== st.prestationId).map(x => ({ prestation: x.prestation, station: st, samplingTypeId: gridType(baseGrid, x.type)?.samplingTypeId || null }))
+  ]);
+  const types = tourTypesOf(audit);
   const alerts = computeAlerts({ audit, grid, ctx, point, site, prestation, prestations, operators, settings, mediaCounts: counts, includeMissing, today: localDate(), stationSites: Object.fromEntries(stations.map(st => [st.key, st.site])) })
     .filter(a => !(audit.dismissedAlerts || []).some(d => d.key === a.key));
   const deviationsByItem = {};
@@ -169,7 +202,9 @@ export function auditState(audit, { includeMissing = false } = {}) {
   const sheetGrid = isSheetGrid(grid);
   return {
     grid, baseGrid, ctx, auditType: ctx.auditType || '', type: gridType(baseGrid, ctx.auditType) || null,
-    header: sheetGrid ? headerOf(baseGrid, { provider, auditType: ctx.auditType, campaign: audit.campaignId ? store.get('campaign', audit.campaignId) : null }) : null,
+    // Types contrôlés (tournée mixte : plusieurs) et leurs définitions.
+    tourTypes: types, mixed: types.length > 1, types: types.map(k => gridType(baseGrid, k)).filter(Boolean),
+    header: sheetGrid ? headerOf(baseGrid, { provider, auditType: ctx.auditType, campaign: audit.campaignId ? store.get('campaign', audit.campaignId) : null, auditTypes: types }) : null,
     stations, counts, deviations, prestation, point, site, operators, alerts,
     structure: visibleStructure(grid, responses, ctx),
     progress: progress(grid, responses, ctx, counts),
@@ -404,6 +439,171 @@ export function entriesByAgent(audit) {
   return [...rows.values()];
 }
 
+/* ---------- Périmètre réel des stations (parties contrôlées, tournée mixte) ---------- */
+/** Type de tournée d'une prestation (prestation.auditType, sinon déduit) ; '' si inconnu. */
+const prestationPart = (grid, p, site = null) => (p ? (p.auditType && gridType(grid, p.auditType) ? p.auditType : inferAuditType(grid, { prestation: p, site })) : '');
+/**
+ * Prestations rattachées aux parties d'une station ({type: prestationId}) : celles données (`partPrestations`, prestations
+ * connues seulement), puis la prestation de la station pour la partie de son type si elle n'en a pas encore.
+ */
+function partPrestationsOf(grid, parts, { prestationId = null, partPrestations = null, siteId = null } = {}) {
+  const out = {};
+  for (const [k, id] of Object.entries(partPrestations || {})) if (id && parts.includes(k) && store.get('prestation', id)) out[k] = id;
+  const p = prestationId ? store.get('prestation', prestationId) : null;
+  const t = prestationPart(grid, p, siteId ? store.get('site', siteId) : null);
+  if (p && parts.includes(t) && !out[t] && !Object.values(out).includes(p.id)) out[t] = p.id;
+  return out;
+}
+/**
+ * Compartiments d'une tournée après un changement de périmètre : un seul type, inchangé : tels quels ; sinon, type par
+ * type, le choix existant pour un type déjà contrôlé, les compartiments des stations (site.compartments) pour un type
+ * ajouté ; ceux d'un type qui n'est plus contrôlé sont retirés (tourCompartments).
+ */
+function perimeterCompartments(grid, a, beforeTypes, sites) {
+  const types = tourTypes(grid, a.stations, a.auditType);
+  if (types.length === 1 && beforeTypes.length === 1 && types[0] === beforeTypes[0]) return a.compartments;
+  const wanted = Object.fromEntries(types.map(t => [t, beforeTypes.includes(t) ? a.compartments
+    : [...new Set(a.stations.filter(st => stationParts(grid, st, a.auditType).includes(t)).flatMap(st => sites[st.siteId]?.compartments || []))]]));
+  return tourCompartments(grid, types, wanted);
+}
+/**
+ * Applique EN PLACE un nouveau jeu de stations (parties comprises) à une tournée : périmètre normalisé
+ * (normalizePerimeter : type principal, `parts` / `partPrestations` seulement pour une tournée mixte), compartiments,
+ * prestations rattachées ; type de prélèvement et matrice suivent un changement de type principal. Grille sans types :
+ * stations seules.
+ */
+function applyStations(a, stations) {
+  const g = a.gridSnapshot;
+  if (!gridTypes(g).length) { a.stations = stations; a.prestationIds = [...new Set(stations.flatMap(stationPrestationIds))]; return; }
+  const before = auditTypeOf(a);
+  const beforeTypes = tourTypes(g, a.stations || [], before);
+  const per = normalizePerimeter(g, before, stations);
+  a.stations = per.stations;
+  if (per.auditType !== before) {
+    a.auditType = per.auditType;
+    const t = gridType(g, per.auditType);
+    const p = a.stations.map(st => st.prestationId && store.get('prestation', st.prestationId)).find(Boolean);
+    a.samplingTypeId = p?.samplingTypeId || t?.samplingTypeId || a.samplingTypeId || null;
+    a.matrixId = p?.matrixId || t?.matrixId || a.matrixId || null;
+  }
+  a.compartments = perimeterCompartments(g, a, beforeTypes, sitesById(a.stations));
+  a.prestationIds = [...new Set(a.stations.flatMap(stationPrestationIds))];
+  if (a.stations.length) a.prestationId = a.stations[0].prestationId || null;
+}
+/** Instances de feuilles et critères visibles d'une tournée (version en cours de modification comprise). */
+function visibleParts(a) {
+  if (!isSheetGrid(a?.gridSnapshot) || !(a.stations || []).length) return { items: new Set(), sheets: new Set() };
+  const grid = expandGrid(a.gridSnapshot, a.stations, sitesById(a.stations), { provider: store.get('provider', a.providerId) });
+  const ctx = auditContext(a);
+  return { items: new Set(visibleItems(grid, a.responses || {}, ctx).map(x => x.item.id)), sheets: new Set(sheetsOf(grid, a.responses || {}, ctx).map(s => s.instanceKey)) };
+}
+/** Tournée avec les parties `parts` à la station `key` (copie ; prestations des parties ajoutées : `partPrestations`). */
+function withStationParts(cur, key, parts, partPrestations = null) {
+  const next = clone(cur);
+  const g = next.gridSnapshot, type = auditTypeOf(next);
+  const stations = next.stations.map(s => {
+    if (s.key !== key) return s;
+    const own = stationParts(g, s, type);
+    const pp = { ...(s.partPrestations || (s.prestationId && own.length === 1 ? { [own[0]]: s.prestationId } : {})), ...(partPrestations || {}) };
+    return { ...s, parts, partPrestations: partPrestationsOf(g, parts, { partPrestations: pp, siteId: s.siteId }) };
+  });
+  applyStations(next, stations);
+  return next;
+}
+/**
+ * Conséquences d'un changement du périmètre contrôlé à une station (avant de l'appliquer) : {before, after (parties),
+ * hidden: {responses, sheets, media, deviations, openDeviations: [{id, number}]}} — saisies de l'agent (hors
+ * pré-remplissages), encadrés, preuves et écarts des points qui ne seraient plus affichés.
+ */
+export function perimeterChangePlan(audit, key, parts, { partPrestations = null } = {}) {
+  const cur = store.get('audit', audit.id) || audit;
+  const g = cur.gridSnapshot;
+  const st = (cur.stations || []).find(s => s.key === key);
+  const want = normalizeParts(g, parts);
+  if (!st || !want) return null;
+  const next = withStationParts(cur, key, want, partPrestations);
+  const a = visibleParts(cur), b = visibleParts(next);
+  const items = [...a.items].filter(id => !b.items.has(id));
+  const sheets = [...a.sheets].filter(k => !b.sheets.has(k));
+  const filled = v => v !== undefined && v !== null && !(typeof v === 'string' && !v.trim()) && !(typeof v === 'object' && !Object.values(v).some(filled));
+  const media = auditMedia(cur.id).filter(m => (m.link?.type === 'item' && items.includes(m.link.itemId)) || (m.link?.type === 'sheet' && sheets.includes(String(m.link.itemId)))).length;
+  const devs = auditDeviations(cur.id).filter(d => d.status !== 'annule' && d.itemId && items.includes(d.itemId));
+  return {
+    before: stationParts(g, st, auditTypeOf(cur)), after: want, next,
+    hidden: {
+      responses: items.filter(id => isEnteredResponse(cur.responses?.[id])), sheets: sheets.filter(k => filled(cur.sheets?.[k])), media, deviations: devs.length,
+      openDeviations: devs.filter(d => OPEN_DEVIATION.includes(d.status)).map(d => ({ id: d.id, number: d.number }))
+    }
+  };
+}
+/**
+ * Modifie le périmètre contrôlé à une station de la tournée (« Biologie », « Chimie »…), avant la signature du
+ * contrôleur. Points d'une partie ajoutée pré-remplis (données de la station, informations communes reprises) ; points
+ * d'une partie retirée seulement MASQUÉS (saisies conservées, de nouveau affichées si la partie est recochée) : motif
+ * OBLIGATOIRE s'ils contiennent des saisies (erreur `needsReason`, e.entries) ; écarts OUVERTS sur ces points : refus
+ * (erreur `needsCancel`, e.openDeviations) sauf `cancelDeviations: true` (annulés avec le même motif). Historique
+ * (audit.stationLog « perimetre » : avant, après, motif), journal, historique des prestations rattachées ou retirées.
+ */
+export async function setStationParts(audit, key, parts, { reason = null, cancelDeviations = false, partPrestations = null } = {}) {
+  const cur = store.get('audit', audit.id);
+  if (cur.lock?.lockedAt) throw new Error('Tournée signée et verrouillée : le périmètre contrôlé ne peut plus changer.');
+  if (cur.status === 'abandonne') throw new Error('Tournée annulée : le périmètre contrôlé ne peut plus changer.');
+  if (cur.signatures?.auditor) throw new Error('Tournée déjà signée par un contrôleur : rouvrez-la avant de modifier le périmètre contrôlé.');
+  if (!canEditAudit(cur)) throw new Error('Seul un contrôleur de la tournée peut modifier le périmètre contrôlé.');
+  const g = cur.gridSnapshot;
+  if (!isSheetGrid(g) || !gridTypes(g).length) throw new Error('Cette grille ne distingue pas les parties contrôlées.');
+  const st = (cur.stations || []).find(s => s.key === key);
+  if (!st) throw new Error('Station absente de la tournée.');
+  const want = normalizeParts(g, parts);
+  if (!want) throw new Error('Cochez au moins une partie contrôlée à cette station (biologie, chimie…).');
+  const plan = perimeterChangePlan(cur, key, want, { partPrestations });
+  const site = store.get('site', st.siteId);
+  const name = site?.name || key;
+  const same = plan.before.join() === want.join();
+  const beforePres = new Set(stationPrestationIds(st));
+  const afterPres = stationPrestationIds(plan.next.stations.find(s => s.key === key));
+  if (same && afterPres.join() === [...beforePres].join()) return cur;
+  const h = plan.hidden;
+  const hasData = h.responses.length + h.sheets.length + h.media + h.deviations > 0;
+  if (hasData && !String(reason || '').trim()) {
+    const e = new Error(`Des constats déjà saisis à ${name} ne seraient plus affichés : un motif est obligatoire pour modifier le périmètre contrôlé.`);
+    e.needsReason = true; e.entries = { responses: h.responses, sheets: h.sheets, media: h.media, deviations: h.deviations, openDeviations: h.openDeviations.length };
+    e.openDeviations = h.openDeviations;
+    throw e;
+  }
+  if (h.openDeviations.length && !cancelDeviations) {
+    const e = new Error(`${h.openDeviations.length} écart(s) ouvert(s) (${h.openDeviations.map(d => d.number).join(', ')}) portent sur des points qui ne seraient plus affichés : annulez-les (avec le motif) pour modifier le périmètre.`);
+    e.needsCancel = true; e.openDeviations = h.openDeviations;
+    throw e;
+  }
+  if (h.openDeviations.length && !(can('deviation.manage') || can('deviation.close'))) throw new Error('Votre profil ne permet pas d’annuler ces écarts ouverts.');
+  for (const dv of h.openDeviations) {
+    const d = store.get('deviation', dv.id);
+    if (d) await updateDeviation(d, { status: 'annule', closedAt: nowISO(), closedBy: session.user.name, closureNote: `Périmètre contrôlé à ${name} modifié — ${reason}` }, { reason, event: 'Annulation : partie retirée du périmètre de la station' });
+  }
+  const now = nowISO(), d = new Date(now);
+  const label = `${partsText(g, plan.before)} → ${partsText(g, want)}`;
+  const saved = await updateAudit(store.get('audit', cur.id), a => {
+    const next = withStationParts(a, key, want, partPrestations);
+    for (const k of ['stations', 'auditType', 'samplingTypeId', 'matrixId', 'compartments', 'prestationIds', 'prestationId']) if (next[k] !== undefined) a[k] = next[k];
+    a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'perimetre', key, siteId: st.siteId, before: plan.before, after: want, reason: reason || null }];
+    // Points d'une partie ajoutée : pré-remplis (données de la station) puis informations communes reprises.
+    const provider = store.get('provider', a.providerId);
+    const s = a.stations.find(x => x.key === key);
+    const pre = prefillResponses(expandGrid(a.gridSnapshot, a.stations, sitesById(a.stations), { provider }), {
+      onlyStation: key, site, prestation: s?.prestationId ? store.get('prestation', s.prestationId) : null, auditor: { name: controllersLabel(a) }, provider,
+      operators: (a.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean), date: auditDate(a) || localDate(d), time: '', kind: a.kind,
+      compartments: a.compartments, auditType: auditTypeOf(a), ...sessionStamp(now)
+    });
+    a.responses = a.responses || {};
+    for (const [k, v] of Object.entries(pre)) if (!a.responses[k]) a.responses[k] = v;
+    applyLinks(a, [...TOUR_SOURCES, siteSource(key)], now);
+  }, { action: 'perimeter', reason: reason ? `Périmètre contrôlé à ${name} : ${label} — ${reason}` : `Périmètre contrôlé à ${name} : ${label}` });
+  for (const id of afterPres.filter(x => !beforePres.has(x))) { const p = store.get('prestation', id); if (p) await addPrestationHistory(p, { event: 'audit-demarre', auditId: cur.id, label: `Audit ${cur.number} : partie ajoutée au périmètre contrôlé à ${name}` }); }
+  for (const id of [...beforePres].filter(x => !afterPres.includes(x))) { const p = store.get('prestation', id); if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : partie retirée du périmètre contrôlé à ${name}`, reason: reason || null }); }
+  return saved;
+}
+
 /**
  * Crée un audit (une tournée). Tout ce qui sert de référence est FIGÉ dans l'audit : copie de la grille, instantané
  * des documents applicables (version + empreinte), identification de l'appareil et de l'application.
@@ -419,6 +619,9 @@ export function entriesByAgent(audit) {
  * pré-remplies = date de la tournée ; heure d'arrivée pré-remplie seulement pour une tournée du jour.
  * controllerIds : contrôleurs OEG de la tournée (binôme), agent connecté toujours inclus (défaut : lui seul) ;
  * « Agent(s) OEG » et « Contrôleur OEG » pré-remplis avec leurs noms (« A. Dupont, B. Martin »).
+ * Périmètre réel : stations[].parts (parties contrôlées à la station, ex. ['bio', 'ce'] ; défaut : le type de la
+ * tournée) et stations[].partPrestations ({type: prestationId}) ; plusieurs types ⇒ tournée MIXTE (normalizePerimeter :
+ * type principal = `auditType` s'il est contrôlé quelque part ; compartiments retenus type par type — tourCompartments).
  */
 export async function createAudit({ prestationId = null, gridId = null, kind = 'planifie', providerId = null, siteId = null, pointId = null, operatorIds = [], samplingTypeId = null, matrixId = null, compartments = null, auditType = null, stations = null, campaignId = null, date = null, controllerIds = null } = {}) {
   if (!can('audit.create')) throw new Error('Votre profil ne permet pas de créer un audit.');
@@ -428,31 +631,43 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
   const req = (Array.isArray(stations) && stations.length ? stations : [{ siteId, prestationId, pointId }]).map(s => {
     const p = s?.prestationId ? store.get('prestation', s.prestationId) : null;
     if (s?.prestationId && !p) throw new Error('Prestation introuvable.');
-    return { siteId: s?.siteId || p?.siteId || null, prestationId: p?.id || null, pointId: s?.pointId || p?.pointIds?.[0] || null, prestation: p };
+    return { siteId: s?.siteId || p?.siteId || null, prestationId: p?.id || null, pointId: s?.pointId || p?.pointIds?.[0] || null, prestation: p, parts: s?.parts || null, partPrestations: s?.partPrestations || null };
   });
-  const prestation = req[0].prestation;
+  const prestation0 = req[0].prestation;
   // Grille par défaut lue d'après la version livrée avec l'application (turbidité en NTU…) même si la grille enregistrée
   // n'est pas encore mise à niveau sur la tablette (aucune session administrateur depuis la mise à jour) : l'instantané
   // d'une NOUVELLE tournée est toujours à jour ; celui des tournées existantes n'est jamais modifié.
-  const grid = upToDateGrid(store.get('grid', gridId || prestation?.gridId || (auditType ? CT_GRID_ID : null)));
+  const grid = upToDateGrid(store.get('grid', gridId || prestation0?.gridId || (auditType ? CT_GRID_ID : null)));
   if (!grid) throw new Error('Grille d’audit introuvable.');
   if (auditType && gridTypes(grid).length && !gridType(grid, auditType)) throw new Error(`Type de tournée inconnu : ${auditType}`);
   const site0 = req[0].siteId ? store.get('site', req[0].siteId) : null;
-  const type = gridTypes(grid).length ? (auditType || inferAuditType(grid, { site: site0, prestation })) : '';
-  const typeDef = gridType(grid, type);
+  const type0 = gridTypes(grid).length ? (auditType || inferAuditType(grid, { site: site0, prestation: prestation0 })) : '';
   const now = nowISO(), today = localDate(new Date(now));
   const tourDate = date || today;
-  // Stations de la tournée (ordre de passage, sans doublon).
-  const list = [];
+  // Stations de la tournée (ordre de passage, sans doublon) et parties contrôlées à chacune.
+  let list = [];
   for (const s of req) {
     if (!s.siteId) { if (isSheetGrid(grid)) throw new Error('Station non précisée.'); continue; }
     if (!store.get('site', s.siteId)) throw new Error(`Station introuvable : ${s.siteId}`);
     const st = makeStation({ siteId: s.siteId, pointId: s.pointId || defaultPointId(s.siteId), prestationId: s.prestationId }, now);
     if (list.some(x => x.key === st.key)) throw new Error(`Station en double dans la tournée : ${st.key}`);
+    const parts = gridTypes(grid).length ? normalizeParts(grid, s.parts) : null;
+    if (Array.isArray(s.parts) && s.parts.length && !parts) throw new Error(`Partie contrôlée inconnue : ${s.parts.join(', ')}`);
+    if (parts) Object.assign(st, { parts, partPrestations: partPrestationsOf(grid, parts, { prestationId: s.prestationId, partPrestations: s.partPrestations, siteId: s.siteId }) });
     list.push(st);
   }
   if (isSheetGrid(grid) && !list.length) throw new Error('Une tournée compte au moins une station.');
-  const prestations = req.map(r => r.prestation).filter(Boolean);
+  // Périmètre normalisé : tournée d'un seul type (sans `parts`, comme avant) ou mixte ; type principal.
+  const per = gridTypes(grid).length ? normalizePerimeter(grid, type0, list) : { auditType: type0, types: [type0].filter(Boolean), mixed: false, stations: list };
+  list = per.stations;
+  const type = per.auditType;
+  const typeDef = gridType(grid, type);
+  // Prestations de la tournée : celles des stations (toutes leurs parties), sinon celle demandée (grille historique).
+  const presIds = [...new Set([...list.flatMap(stationPrestationIds), ...(list.length ? [] : req.map(r => r.prestationId))].filter(Boolean))];
+  const prestations = presIds.map(id => store.get('prestation', id)).filter(Boolean);
+  // Prestation de référence (documents, type de prélèvement, matrice, campagne) : celle de la 1re station (partie
+  // principale) ; tournée d'un seul type : la prestation demandée pour la 1re station, comme avant.
+  const prestation = list.length ? (list[0].prestationId ? store.get('prestation', list[0].prestationId) || null : (per.mixed || list[0].parts ? null : prestation0)) : prestation0;
   const { number, source } = await nextNumber('AUD', new Date().getFullYear());
   const docs = applicableDocuments(prestation || { providerId, samplingTypeId: samplingTypeId || typeDef?.samplingTypeId, siteId: list[0]?.siteId }, today);
   const documentsSnapshot = await Promise.all(docs.map(snapshotDocument));
@@ -461,7 +676,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     id: uuid(), number, numberSource: source, kind,
     auditType: type || null,
     stations: list,
-    prestationIds: [...new Set(list.map(s => s.prestationId).filter(Boolean))],
+    prestationIds: [...new Set(list.flatMap(stationPrestationIds))],
     prestationId: list[0]?.prestationId || prestation?.id || null,
     providerId: providerId || prestation?.providerId || null,
     siteId: list[0]?.siteId || req[0].siteId || null,
@@ -490,7 +705,17 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
   audit.operatorNames = Object.fromEntries(audit.operatorIds.map(id => [id, operatorLabel(store.get('operator', id))]).filter(([, l]) => l));
   const sites = sitesById(list);
   if (grid.compartments?.length) {
-    if (typeDef) {
+    if (typeDef && per.mixed) {
+      // Tournée mixte : compartiments retenus type par type (choix de l'écran, sinon ceux des stations qui contrôlent ce
+      // type, sinon ceux de leurs prestations) ; un type à compartiment unique (cours d'eau : physico) a toujours le sien.
+      const wanted = Array.isArray(compartments) && compartments.length ? compartments : Object.fromEntries(per.types.map(t => {
+        const sts = list.filter(st => stationParts(grid, st, type).includes(t));
+        const fromSites = [...new Set(sts.flatMap(st => sites[st.siteId]?.compartments || []))];
+        const fromPres = [...new Set(sts.flatMap(st => stationPrestationIds(st).map(id => store.get('prestation', id)?.compartments || []).flat()))];
+        return [t, fromSites.length ? fromSites : fromPres.length ? fromPres : null];
+      }));
+      audit.compartments = tourCompartments(grid, per.types, wanted);
+    } else if (typeDef) {
       const fromStations = [...new Set(list.flatMap(st => sites[st.siteId]?.compartments || []))];
       const wanted = Array.isArray(compartments) && compartments.length ? compartments
         : fromStations.length ? fromStations : prestation?.compartments?.length ? prestation.compartments : null;
@@ -510,7 +735,7 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
     operators: audit.operatorIds.map(id => store.get('operator', id)).filter(Boolean),
     date: tourDate, time, kind, stationCount: list.length, compartments: audit.compartments, auditType: type,
     // Heure d'arrivée pré-remplie pour la 1re station seulement (les suivantes : à l'arrivée sur place).
-    stations: list.map((st, i) => ({ key: st.key, site: sites[st.siteId], prestation: req.find(r => r.siteId === st.siteId)?.prestation || null, time: i === 0 ? time : '' })),
+    stations: list.map((st, i) => ({ key: st.key, site: sites[st.siteId], prestation: (st.prestationId && store.get('prestation', st.prestationId)) || (per.mixed ? null : req.find(r => r.siteId === st.siteId)?.prestation) || null, time: i === 0 ? time : '' })),
     ...sessionStamp(now)
   });
   // Informations communes reprises dans les autres feuilles (date, contrôleurs, préleveurs, fiche de chaque station…) :
@@ -526,42 +751,65 @@ export async function createAudit({ prestationId = null, gridId = null, kind = '
  * auditDate() —, heure d'arrivée si la tournée est du jour, données de la station), met à jour le « Programme journalier (nombre de stations) » s'il est encore pré-rempli,
  * historise (audit.stationLog, journal, historique de la prestation). Refus : station déjà présente, audit
  * verrouillé ou tournée annulée, grille sans feuilles.
+ * Périmètre réel : `parts` (parties contrôlées à la station, défaut : le type de la tournée) et `partPrestations`
+ * ({type: prestationId}) ; une partie d'un autre type rend la tournée mixte (compartiments du type ajoutés).
  */
-export async function addStation(audit, { siteId = null, prestationId = null, pointId = null } = {}, { reason = null } = {}) {
+export async function addStation(audit, { siteId = null, prestationId = null, pointId = null, parts = null, partPrestations = null } = {}, { reason = null } = {}) {
   const cur = store.get('audit', audit.id);
   if (cur.lock?.lockedAt) throw new Error('Audit signé et verrouillé : impossible d’ajouter une station.');
   if (cur.status === 'abandonne') throw new Error('Tournée annulée : impossible d’ajouter une station.');
   if (!isSheetGrid(cur.gridSnapshot)) throw new Error('Cette grille ne permet pas les tournées à plusieurs stations.');
-  const prestation = prestationId ? store.get('prestation', prestationId) : null;
+  let prestation = prestationId ? store.get('prestation', prestationId) : null;
   if (prestationId && !prestation) throw new Error('Prestation introuvable.');
   siteId = siteId || prestation?.siteId;
   const site = siteId ? store.get('site', siteId) : null;
   if (!site) throw new Error('Station introuvable.');
+  const g = cur.gridSnapshot;
+  const want = gridTypes(g).length ? normalizeParts(g, parts) : null;
+  if (Array.isArray(parts) && parts.length && !want) throw new Error(`Partie contrôlée inconnue : ${parts.join(', ')}`);
   const now = nowISO(), d = new Date(now);
   const tourDate = auditDate(cur) || localDate(d);
   const st = makeStation({ siteId, pointId: pointId || prestation?.pointIds?.[0] || defaultPointId(siteId), prestationId: prestation?.id || null }, now);
   if ((cur.stations || []).some(s => s.key === st.key)) throw new Error('Cette station fait déjà partie de la tournée.');
-  const stations = [...(cur.stations || []), st];
+  // Tournée mixte (avant ou après l'ajout) : périmètre normalisé, compartiments et prestations recalculés ; sinon, comme avant.
+  const type = auditTypeOf(cur);
+  const mix = isMixedTour(cur) || (want && want.join() !== type);
+  let next = null;
+  if (mix) {
+    if (want) Object.assign(st, { parts: want, partPrestations: partPrestationsOf(g, want, { prestationId: st.prestationId, partPrestations, siteId }) });
+    next = clone(cur);
+    applyStations(next, [...(cur.stations || []), st]);
+    const added = next.stations[next.stations.length - 1];
+    prestation = added.prestationId ? store.get('prestation', added.prestationId) || null : null;
+  }
+  const stations = next ? next.stations : [...(cur.stations || []), st];
+  const added = stations[stations.length - 1];
   const provider = store.get('provider', cur.providerId);
-  const eff = expandGrid(cur.gridSnapshot, stations, sitesById(stations), { provider });
+  const eff = expandGrid(g, stations, sitesById(stations), { provider });
   const pre = prefillResponses(eff, {
     onlyStation: st.key, site, prestation, auditor: { name: controllersLabel(cur) }, provider,
     operators: (cur.operatorIds || []).map(id => store.get('operator', id)).filter(Boolean),
-    date: tourDate, time: tourDate === localDate(d) ? localTime(d) : '', kind: cur.kind, compartments: cur.compartments, auditType: auditTypeOf(cur), ...sessionStamp(now)
+    date: tourDate, time: tourDate === localDate(d) ? localTime(d) : '', kind: cur.kind, compartments: next ? next.compartments : cur.compartments, auditType: next ? auditTypeOf(next) : type, ...sessionStamp(now)
   });
   const countIds = allItems(eff).filter(i => i.prefill === 'tournee.stationCount').map(i => i.id);
   await updateAudit(cur, a => {
-    a.stations = stations;
-    a.prestationIds = [...new Set([...(a.prestationIds || []), ...(st.prestationId ? [st.prestationId] : [])])];
+    if (next) for (const k of ['stations', 'auditType', 'samplingTypeId', 'matrixId', 'compartments', 'prestationIds', 'prestationId']) { if (next[k] !== undefined) a[k] = next[k]; }
+    else {
+      a.stations = stations;
+      a.prestationIds = [...new Set([...(a.prestationIds || []), ...(st.prestationId ? [st.prestationId] : [])])];
+    }
     a.responses = a.responses || {};
     for (const [k, v] of Object.entries(pre)) if (!a.responses[k]) a.responses[k] = v;
     for (const id of countIds) { const r = a.responses[id]; if (!r || (r.prefilled && !r.status)) a.responses[id] = { ...(r || {}), value: stations.length, prefilled: true, ...sessionStamp(now) }; }
-    a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'ajout', key: st.key, siteId, prestationId: st.prestationId, reason: reason || null }];
+    a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'ajout', key: st.key, siteId, prestationId: added.prestationId || null, ...(added.parts ? { parts: added.parts } : {}), reason: reason || null }];
     // Nouvelle station : date, contrôleurs, météo, niveau d'eau et préleveurs déjà saisis pour la tournée repris,
     // informations de sa fiche station marquées « repris de la fiche station ».
     applyLinks(a, [...TOUR_SOURCES, siteSource(st.key)], now);
-  }, { reason: reason || `Ajout de la station ${site.name} (${site.code}) à la tournée` });
-  if (prestation) await addPrestationHistory(prestation, { event: 'audit-demarre', auditId: cur.id, label: `Audit ${cur.number} : station ajoutée à la tournée` });
+  }, { reason: reason || `Ajout de la station ${site.name} (${site.code}) à la tournée${added.parts ? ` (contrôlé : ${partsText(g, added.parts)})` : ''}` });
+  for (const id of stationPrestationIds(added)) {
+    const p = store.get('prestation', id);
+    if (p) await addPrestationHistory(p, { event: 'audit-demarre', auditId: cur.id, label: `Audit ${cur.number} : station ajoutée à la tournée` });
+  }
   return store.get('audit', cur.id);
 }
 
@@ -611,16 +859,22 @@ export async function removeStation(audit, key, { reason = null, cancelDeviation
     const removed = { station: st, ...sessionStamp(now), reason: reason || null, responses: {}, sheets: {} };
     for (const id of Object.keys(a.responses || {})) if (id.endsWith(suffix)) { removed.responses[id] = a.responses[id]; delete a.responses[id]; }
     for (const k of Object.keys(a.sheets || {})) if (String(k).endsWith(suffix)) { removed.sheets[k] = a.sheets[k]; delete a.sheets[k]; }
-    a.stations = a.stations.filter(s => s.key !== key);
+    const mixed = isMixedTour(a);
+    const rest = a.stations.filter(s => s.key !== key);
+    // Tournée mixte : périmètre normalisé (la tournée redevient d'un seul type si la station retirée était la seule à
+    // contrôler une partie : type principal, compartiments et prestations suivent).
+    if (mixed) applyStations(a, rest); else a.stations = rest;
     if (hasData) a.removedStations = [...(a.removedStations || []), removed];
     a.stationLog = [...(a.stationLog || []), { ...sessionStamp(now), action: 'retrait', key, siteId: st.siteId, prestationId: st.prestationId, reason: reason || null }];
     const first = a.stations[0];
     a.siteId = first.siteId; a.pointId = first.pointId; a.prestationId = first.prestationId || null;
-    a.prestationIds = [...new Set(a.stations.map(s => s.prestationId).filter(Boolean))];
+    a.prestationIds = [...new Set(a.stations.flatMap(stationPrestationIds))];
     for (const id of countIds) { const r = a.responses?.[id]; if (r?.prefilled && !r.status) a.responses[id] = { ...r, value: a.stations.length }; }
   }, { reason: reason || `Retrait de la station ${site?.name || key} de la tournée (aucune saisie)` });
-  const p = st.prestationId ? store.get('prestation', st.prestationId) : null;
-  if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : station retirée de la tournée${openDevs.length ? ` (${openDevs.length} écart(s) annulé(s))` : ''}`, reason: reason || null });
+  for (const id of stationPrestationIds(st)) {
+    const p = store.get('prestation', id);
+    if (p) await addPrestationHistory(p, { event: 'audit-station-retiree', auditId: cur.id, label: `Audit ${cur.number} : station retirée de la tournée${openDevs.length ? ` (${openDevs.length} écart(s) annulé(s))` : ''}`, reason: reason || null });
+  }
   return store.get('audit', cur.id);
 }
 
@@ -832,7 +1086,7 @@ export async function updateDeviation(dev, patch, { reason = null, event = null 
 /**
  * Projection du contenu probant de l'audit, couverte par l'empreinte de signature :
  * l'audit (hors signatures, verrou, métadonnées) — dont les réponses, le type de tournée (auditType), les stations
- * (stations, ordre de passage), les compartiments retenus (compartments), les contrôleurs OEG de la tournée
+ * (stations, ordre de passage, parties contrôlées à chaque station d'une tournée mixte), les compartiments retenus (compartments), les contrôleurs OEG de la tournée
  * (controllerIds, controllerNames) et les données des feuilles (sheets : observations, conclusions, instruments…) —,
  * les constats des écarts (hors suivi : statut, responsable, échéance, actions correctives) et les
  * médias (hors images de signature).
@@ -884,7 +1138,8 @@ export async function lockAudit(audit) {
   const saved = await store.put('audit', { ...a, lock, status: 'signe', endedAt: a.endedAt || nowISO() }, { action: 'lock', reason: 'Signature et verrouillage de l’audit' });
   // Statut de chaque prestation de la tournée : écarts de SA station + écarts communs à la tournée (hors observations).
   const devs = auditDeviations(a.id).filter(d => d.status !== 'annule' && d.criticalityCode !== 'OBS');
-  const targets = (a.stations || []).length ? a.stations.filter(s => s.prestationId).map(s => ({ id: s.prestationId, key: s.key })) : a.prestationId ? [{ id: a.prestationId, key: null }] : [];
+  // Toutes les prestations rattachées à chaque station (une par partie contrôlée d'une station mixte).
+  const targets = (a.stations || []).length ? a.stations.flatMap(s => stationPrestationIds(s).map(id => ({ id, key: s.key }))) : a.prestationId ? [{ id: a.prestationId, key: null }] : [];
   for (const t of targets) {
     const p = store.get('prestation', t.id);
     const n = devs.filter(d => !d.stationKey || !t.key || d.stationKey === t.key).length;

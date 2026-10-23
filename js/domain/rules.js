@@ -104,7 +104,8 @@ export function calibrationStatus(calibration, auditDate, maxDays = 30) {
 /**
  * Calcule les alertes d'un audit (grille EFFECTIVE pour une tournée).
  * input : {audit, grid, ctx, point, site, prestation, operators, settings, today, mediaCounts, includeMissing,
- *          stationSites?: {[clé de station]: site}, prestations?: [{prestation, station}] (toutes celles de la tournée)}
+ *          stationSites?: {[clé de station]: site}, prestations?: [{prestation, station, samplingTypeId?}] (toutes celles de la
+ *          tournée ; samplingTypeId : type de prélèvement attendu d'une prestation d'une autre partie d'une station mixte)}
  */
 export function computeAlerts(input) {
   const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {}, stationSites = {} } = input;
@@ -175,13 +176,16 @@ export function computeAlerts(input) {
 
   // 5. Prestation différente de celle programmée (tournée : chaque prestation comparée à SA station)
   const prestationList = input.prestations?.length ? input.prestations : prestation ? [{ prestation, station: { siteId: audit.siteId, pointId: audit.pointId, key: null } }] : [];
-  for (const { prestation, station } of prestationList) {
+  for (const { prestation, station, samplingTypeId } of prestationList) {
     if (!prestation) continue;
     const diffs = [];
+    // Type de prélèvement attendu : celui de la tournée ; prestation d'une autre partie d'une station mixte (ex. chimie
+    // d'une tournée biologie + chimie) : celui de sa partie (samplingTypeId).
+    const stype = samplingTypeId !== undefined ? samplingTypeId : audit.samplingTypeId;
     if (station?.siteId && prestation.siteId && station.siteId !== prestation.siteId) diffs.push('site différent');
     if (station?.pointId && (prestation.pointIds || []).length && !prestation.pointIds.includes(station.pointId)) diffs.push('point de prélèvement différent');
     if (audit.providerId && prestation.providerId && audit.providerId !== prestation.providerId) diffs.push('prestataire différent');
-    if (audit.samplingTypeId && prestation.samplingTypeId && audit.samplingTypeId !== prestation.samplingTypeId) diffs.push('type de prélèvement différent');
+    if (stype && prestation.samplingTypeId && stype !== prestation.samplingTypeId) diffs.push('type de prélèvement différent');
     const planned = (prestation.operatorIds || []);
     const present = (audit.operatorIds || []);
     if (planned.length && present.length && !present.some(id => planned.includes(id))) diffs.push('aucun des opérateurs programmés n’est présent');

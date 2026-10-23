@@ -10,6 +10,7 @@ export const FILES = [
   './links.test.js',
   './networks.test.js',
   './pdf-sheets.test.js',
+  './perimetre.test.js',
   './github.test.js',
   './attendus.test.js',
   './exchange.test.js',

@@ -20,6 +20,16 @@
  * (expandGrid) duplique chaque section des feuilles `scope: 'station'` pour chaque station (`id@clé`) ; les critères
  * `scope: 'tournee'` d'une feuille station gardent leur identifiant (`shared: true`, une seule réponse) et ne sont
  * comptés qu'UNE fois (allItems, progress, validateResponses, synthèse, comparaison).
+ *
+ * Périmètre réel d'une station (demande de l'OEG du 18/10/2026) : une station sur plusieurs réseaux (ex. BIO + Chimie)
+ * n'est contrôlée que pour ce qui y est réellement réalisé — biologie seule, chimie seule, ou les deux. Les PARTIES
+ * sont les types de tournée de la grille (bio, ce, eso) ; `station.parts` : parties contrôlées à la station ; absent ⇒
+ * [type de la tournée] (toute tournée d'un seul type, dont les tournées antérieures, reste inchangée). Tournée MIXTE
+ * (plusieurs types, même prestataire) : chaque station porte ses parties (normalizePerimeter) et chaque section d'une
+ * station est visible si elle l'est pour L'UNE de ses parties (contexte de la partie : `auditType` = la partie,
+ * compartiments de la partie — partCompartments) ; les feuilles communes (F2, F3, F4, F5…) restent UNE instance par
+ * station (ou par tournée), réunion des points de chaque partie : chaque opération mutualisée n'est saisie et comptée
+ * qu'une fois ; les feuilles propres à une partie (F6 à F9) s'ajoutent.
  */
 import { DEFAULT_RESPONSES, itemInput, isEmptyValue, fieldShown } from './model.js';
 import { coordIssues } from './coords.js';
@@ -147,15 +157,20 @@ export function conditionErrors(cond, index, path = 'condition') {
 export function visibleStructure(grid, responses = {}, ctx = {}) {
   const index = itemIndex(grid);
   ctx = withCompartments(grid, ctx);
+  // Tournée mixte : contextes de chaque partie (tournée, station) ; sinon le contexte de la tournée seul.
+  const parts = partContexts(grid, ctx);
   const out = [];
   const walk = (secs, parentVisible = true, depth = 0, parentSheet = undefined, parentStation = null) => {
     for (const s of secs || []) {
       const sheet = s.sheet !== undefined ? s.sheet : parentSheet;
       const station = s.station || parentStation;
-      const sctx = station?.matrixCode ? { ...ctx, matrixCode: station.matrixCode } : ctx;
-      const visible = parentVisible && evalCondition(s.condition, responses, index, sctx);
+      const base = parts ? (station ? parts.station(station) : parts.tour) : [ctx];
+      const ctxs = station?.matrixCode ? base.map(c => ({ ...c, matrixCode: station.matrixCode })) : base;
+      // Visible pour l'une des parties contrôlées (une seule partie : condition évaluée comme avant).
+      const test = cond => ctxs.some(c => evalCondition(cond, responses, index, c));
+      const visible = parentVisible && test(s.condition);
       const items = (s.items || []).map(it => {
-        const x = { ...it, sectionId: s.id, domain: itemDomain(it, s), visible: visible && evalCondition(it.condition, responses, index, sctx) };
+        const x = { ...it, sectionId: s.id, domain: itemDomain(it, s), visible: visible && test(it.condition) };
         if (sheet !== undefined) x.sheet = sheet;
         return x;
       });
@@ -233,6 +248,122 @@ function typeFromCompartments(grid, list) {
   return (gridTypes(grid).find(t => wanted.every(k => t.compartments.includes(k))) || gridTypes(grid)[0]).key;
 }
 
+/* ---------- Périmètre réel d'une station : parties contrôlées (tournée mixte) ---------- */
+/** Libellés des parties (cases « Biologie », « Chimie » de la création de tournée et de l'ajout d'une station). */
+export const PART_LABELS = Object.freeze({ bio: 'Biologie', ce: 'Chimie', eso: 'Eaux souterraines' });
+/** Libellé d'une partie : « Biologie », « Chimie »… (type inconnu de PART_LABELS : libellé court du type). */
+export const partLabel = (grid, key) => PART_LABELS[key] || gridType(grid, key)?.short || key || '';
+/** « Biologie + Chimie » (parties dans l'ordre donné). */
+export const partsText = (grid, parts) => (parts || []).map(k => partLabel(grid, k)).join(' + ');
+/** Parties valides (types connus de la grille, sans doublon, dans l'ordre de la grille) ou null si aucune. */
+export function normalizeParts(grid, parts) {
+  if (!Array.isArray(parts) || !parts.length) return null;
+  const list = gridTypes(grid).map(t => t.key).filter(k => parts.includes(k));
+  return list.length ? list : null;
+}
+/** Parties contrôlées à une station de la tournée : `station.parts` ; absent ⇒ [type de la tournée]. */
+export function stationParts(grid, station, auditType = '') {
+  return normalizeParts(grid, station?.parts) || [auditType || defaultAuditType(grid)].filter(Boolean);
+}
+/** Types de la tournée : réunion des parties de ses stations (ordre de la grille) ; sans station : [type de la tournée]. */
+export function tourTypes(grid, stations = [], auditType = '') {
+  const all = new Set((stations || []).flatMap(st => stationParts(grid, st, auditType)));
+  const list = gridTypes(grid).map(t => t.key).filter(k => all.has(k));
+  return list.length ? list : [auditType || defaultAuditType(grid)].filter(Boolean);
+}
+/**
+ * Compartiments d'une partie dans une tournée : ceux marqués `always` + les compartiments retenus de la tournée qui
+ * appartiennent au type de la partie (aucun retenu : ceux du type). Ex. compartiments [organisation, physico,
+ * invertebres] : chimie → organisation + physico ; biologie → organisation + physico + invertebres.
+ */
+export function partCompartments(grid, compartments, type) {
+  const t = gridType(grid, type);
+  if (!t) return normalizeCompartments(grid, compartments);
+  const chosen = new Set(Array.isArray(compartments) && compartments.length ? compartments : t.compartments);
+  return (grid?.compartments || []).filter(c => c.always || (t.compartments.includes(c.key) && chosen.has(c.key))).map(c => c.key);
+}
+/** Compartiments contrôlés à une station : réunion de ceux de ses parties (ordre de la grille). */
+export function stationCompartmentKeys(grid, compartments, parts) {
+  const set = new Set((parts || []).flatMap(p => partCompartments(grid, compartments, p)));
+  return (grid?.compartments || []).map(c => c.key).filter(k => set.has(k));
+}
+/**
+ * Compartiments retenus d'une tournée de plusieurs types : réunion, type par type, de auditCompartments(type, choix) —
+ * un type à compartiment unique (cours d'eau : physico ; eaux souterraines : eso) a toujours le sien ; un seul type :
+ * auditCompartments (inchangé). `wanted` : choix commun, ou {type: choix} (choix propre à chaque type).
+ */
+export function tourCompartments(grid, types = [], wanted = null) {
+  const pick = t => (wanted && !Array.isArray(wanted) ? wanted[t] : wanted) || null;
+  if (types.length <= 1) return auditCompartments(grid, types[0] || defaultAuditType(grid), pick(types[0]));
+  const set = new Set(types.flatMap(t => auditCompartments(grid, t, pick(t))));
+  return (grid?.compartments || []).map(c => c.key).filter(k => set.has(k));
+}
+/**
+ * Contextes de condition des parties d'une tournée mixte (grille effective dont au moins une station porte `parts`) :
+ * { tour: [ctx de chaque type de la tournée], station: (station) => [ctx de chacune de ses parties] } ; sinon null
+ * (une seule partie partout : le contexte de la tournée est utilisé tel quel, comme avant).
+ */
+function partContexts(grid, ctx) {
+  const stations = grid?.expanded ? grid.stations || [] : [];
+  if (!gridTypes(grid).length || !stations.some(st => normalizeParts(grid, st.parts))) return null;
+  const of = list => list.map(t => ({ ...ctx, auditType: t, compartments: partCompartments(grid, ctx.compartments, t) }));
+  const tour = of(tourTypes(grid, stations, ctx.auditType));
+  const cache = new Map();
+  return {
+    tour,
+    station: st => { if (!cache.has(st.key)) cache.set(st.key, of(stationParts(grid, st, ctx.auditType))); return cache.get(st.key); }
+  };
+}
+/** Parties d'une station, partie principale de la tournée en tête si elle en fait partie (variantes, encadrés). */
+export function orderedParts(grid, station, auditType = '') {
+  const parts = stationParts(grid, station, auditType);
+  return parts.includes(auditType) ? [auditType, ...parts.filter(p => p !== auditType)] : parts;
+}
+/**
+ * Périmètre normalisé d'une tournée (fonction pure) : {auditType, types, mixed, stations}.
+ * - parties de chaque station : `parts` valides, sinon [type de la tournée] ;
+ * - types = réunion (ordre de la grille) ; type principal = celui de la tournée s'il est encore contrôlé, sinon le
+ *   premier des types ; mixed = plusieurs types ;
+ * - tournée MIXTE : chaque station porte `parts` et `partPrestations` ({type: prestationId}, parties contrôlées
+ *   seulement) ; `prestationId` = prestation de la partie principale, sinon de la première partie qui en a une ;
+ * - tournée d'un seul type : ni `parts` ni `partPrestations` (même donnée qu'avant) ; `prestationId` = prestation du
+ *   type s'il est connu, sinon celle de la station.
+ * Une station sans `parts` (tournée d'un seul type jusque-là) : sa prestation est celle du type de la tournée.
+ */
+export function normalizePerimeter(grid, auditType, stations = []) {
+  const parts = (stations || []).map(st => stationParts(grid, st, auditType));
+  const keys = gridTypes(grid).map(t => t.key);
+  const types = keys.filter(k => parts.some(p => p.includes(k)));
+  const type = types.includes(auditType) ? auditType : types[0] || auditType;
+  const mixed = types.length > 1;
+  const out = (stations || []).map((st, i) => {
+    const { parts: _p, partPrestations: _pp, ...rest } = st;
+    const own = parts[i];
+    const pp = {};
+    for (const [k, v] of Object.entries(st.partPrestations || {})) if (v && own.includes(k)) pp[k] = v;
+    // Prestation de la station sans rattachement connu (station d'une tournée d'un seul type, ou parties données sans
+    // `partPrestations`) : celle de la partie principale de la tournée, sinon de la première partie sans prestation.
+    // Une prestation dont la partie vient d'être retirée (absente des `partPrestations` filtrées) n'est jamais rattachée.
+    if (rest.prestationId && !_pp && !Object.values(pp).includes(rest.prestationId)) {
+      const k = own.includes(auditType) ? auditType : own.find(x => !pp[x]);
+      if (k && !pp[k]) pp[k] = rest.prestationId;
+    }
+    if (!mixed) return { ...rest, prestationId: pp[type] || (_pp ? null : rest.prestationId) || null };
+    const ordered = own.includes(type) ? [type, ...own.filter(p => p !== type)] : own;
+    const pres = ordered.map(k => pp[k]).find(Boolean) || null;
+    return { ...rest, prestationId: pres, parts: own, ...(Object.keys(pp).length ? { partPrestations: Object.fromEntries(keys.filter(k => pp[k]).map(k => [k, pp[k]])) } : {}) };
+  });
+  return { auditType: type, types: types.length ? types : [type].filter(Boolean), mixed, stations: out };
+}
+/** Prestations rattachées à une station de la tournée (partie principale d'abord, sans doublon). */
+export function stationPrestationIds(station) {
+  return [...new Set([station?.prestationId, ...Object.values(station?.partPrestations || {})].filter(Boolean))];
+}
+/** Libellé du type d'une tournée : celui du type ; tournée mixte : « Hydrobiologie – RCS ESC BIO + Cours d’eau – … ». */
+export function tourTypeLabel(grid, types = []) {
+  return (types || []).map(k => gridType(grid, k)?.label || k).filter(Boolean).join(' + ');
+}
+
 /* ---------- Compartiments (grilles en feuilles) ---------- */
 /** Clés des compartiments d'une grille, dans l'ordre de la grille. */
 export function gridCompartments(grid) { return (grid?.compartments || []).map(c => c.key); }
@@ -274,17 +405,24 @@ export function providerHeaderName(provider) {
  * libellé de la campagne si présent, sinon `types[].program`. Les éléments vides sont omis.
  * Ex. biologie : « Contrôle terrain prestataire – HYDRECO – RCS ESC BIO 2026 ».
  */
-export function headerTitle(grid, { provider = null, auditType = '', campaign = null } = {}) {
+export function headerTitle(grid, { provider = null, auditType = '', campaign = null, auditTypes = null } = {}) {
   const tpl = grid?.header?.title || '';
   if (!tpl.includes('{')) return tpl;
   const type = gridType(grid, auditType || defaultAuditType(grid));
-  const programme = (typeof campaign === 'string' ? campaign : campaign?.label) || type?.program || '';
+  // Tournée mixte (auditTypes : types de la tournée) : programme de chaque type, celui du type principal en tête
+  // (« RCS ESC BIO 2026 + Physico-chimie des cours d’eau 2026 »).
+  const others = (auditTypes || []).filter(k => k !== type?.key).map(k => gridType(grid, k)?.program).filter(Boolean);
+  const programme = [(typeof campaign === 'string' ? campaign : campaign?.label) || type?.program || '', ...others].filter(Boolean).join(' + ');
   return tpl.split(' – ').map(part => fillTemplate(part, { prestataire: providerHeaderName(provider), programme }).trim()).filter(Boolean).join(' – ');
 }
-/** En-tête résolu pour une tournée : {org, title, subtitle, tagline, program, slogan, website, typeLabel}. */
+/**
+ * En-tête résolu pour une tournée : {org, title, subtitle, tagline, program, slogan, website, typeLabel}. Tournée
+ * mixte (`auditTypes`) : titre avec les programmes de chaque type, typeLabel des types joints par « + ».
+ */
 export function headerOf(grid, opts = {}) {
   const type = gridType(grid, opts.auditType || defaultAuditType(grid));
-  return { ...(grid?.header || {}), title: headerTitle(grid, opts), subtitle: type?.subtitle || grid?.header?.subtitle || '', program: type?.kicker || grid?.header?.program || '', typeLabel: type?.label || '' };
+  const types = (opts.auditTypes || []).length > 1 ? [type?.key, ...opts.auditTypes.filter(k => k !== type?.key)].filter(Boolean) : null;
+  return { ...(grid?.header || {}), title: headerTitle(grid, opts), subtitle: type?.subtitle || grid?.header?.subtitle || '', program: type?.kicker || grid?.header?.program || '', typeLabel: types ? tourTypeLabel(grid, types) : type?.label || '' };
 }
 
 /* ---------- Feuilles (grilles `layout: 'sheets'`) ---------- */
@@ -297,12 +435,33 @@ export function sheetOfItem(grid, itemId) { return allItems(grid).find(it => it.
 /** Compartiments d'une feuille (`compartments`, sinon `compartment`) : la feuille est affichée si l'un est retenu. */
 export function sheetCompartments(sheet) { return Array.isArray(sheet?.compartments) && sheet.compartments.length ? sheet.compartments : sheet?.compartment ? [sheet.compartment] : []; }
 export const isTourneeSheet = sheet => sheet?.scope === 'tournee';
-/** Encadrés d'une feuille pour un type de tournée (`showFor`). */
-export function sheetBlocks(sheet, auditType = '') { return (sheet?.blocks || []).filter(b => !b.showFor || !auditType || b.showFor.includes(auditType)); }
-/** Feuille résolue pour un type de tournée : variantes (titre, onglet, surtitre, appareils…) et encadrés filtrés. */
+const typeList = t => (Array.isArray(t) ? t : [t]).filter(Boolean);
+/**
+ * Encadrés d'une feuille pour un type de tournée (`showFor`) ou pour les parties d'une station d'une tournée mixte
+ * (tableau, partie principale en tête) : encadrés de l'une des parties ; deux encadrés de même clé (même stockage, ex.
+ * conclusion de F4 en biologie et bilan en cours d'eau) : celui de la partie principale seul.
+ */
+export function sheetBlocks(sheet, auditType = '') {
+  const types = typeList(auditType);
+  const list = (sheet?.blocks || []).filter(b => !b.showFor || !types.length || b.showFor.some(t => types.includes(t)));
+  if (types.length < 2) return list;
+  const fits = b => !b.showFor || b.showFor.includes(types[0]);
+  const out = [];
+  for (const b of list) {
+    const i = out.findIndex(x => x.key === b.key);
+    if (i < 0) out.push(b);
+    else if (!fits(out[i]) && fits(b)) out[i] = b;
+  }
+  return out;
+}
+/**
+ * Feuille résolue pour un type de tournée (ou les parties d'une station, partie principale en tête) : variantes (titre,
+ * onglet, surtitre, appareils…) de la partie principale et encadrés filtrés (sheetBlocks).
+ */
 export function resolveSheet(sheet, auditType = '') {
-  const out = { ...sheet, ...(sheet?.variants?.[auditType] || {}) };
-  out.blocks = sheetBlocks(sheet, auditType);
+  const types = typeList(auditType);
+  const out = { ...sheet, ...(sheet?.variants?.[types[0] || ''] || {}) };
+  out.blocks = sheetBlocks(sheet, types.length > 1 ? types : types[0] || '');
   return out;
 }
 /**
@@ -341,7 +500,9 @@ export function expandGrid(grid, stations = [], sites = null, { provider = null 
   const list = stations.map((s, index) => {
     const site = siteFrom(sites, s.siteId);
     const key = s.key || stationKeyOf(s.siteId);
-    return { key, index, siteId: s.siteId, name: site?.name || s.name || key, code: site?.code || key, matrixCode: String(site?.matrixId || '').replace(/^mat-/, '') };
+    // Parties contrôlées à la station (tournée mixte) : reprises dans chaque copie de section (visibleStructure).
+    const parts = normalizeParts(grid, s.parts);
+    return { key, index, siteId: s.siteId, name: site?.name || s.name || key, code: site?.code || key, matrixCode: String(site?.matrixId || '').replace(/^mat-/, ''), ...(parts ? { parts } : {}) };
   });
   const scopeOf = new Map(grid.sheets.map(sh => [String(sh.no), sh.scope || 'station']));
   const isStationSec = s => scopeOf.get(String(s.sheet)) === 'station';
@@ -361,7 +522,7 @@ export function expandGrid(grid, stations = [], sites = null, { provider = null 
     if (cond.item && ownCodes.has(cond.item)) return { ...cond, item: `${cond.item}·S${st.index + 1}` };
     return cond;
   };
-  const ref = st => ({ key: st.key, index: st.index, siteId: st.siteId, name: st.name, code: st.code, matrixCode: st.matrixCode });
+  const ref = st => ({ key: st.key, index: st.index, siteId: st.siteId, name: st.name, code: st.code, matrixCode: st.matrixCode, ...(st.parts ? { parts: st.parts } : {}) });
   const copy = (sec, st) => ({
     ...sec, id: `${sec.id}@${st.key}`, baseId: sec.id, station: ref(st), condition: rewrite(sec.condition, st),
     items: (sec.items || []).map(it => it.scope === 'tournee'
@@ -397,10 +558,15 @@ export function sheetsOf(grid, responses = {}, ctx = {}) {
   const c = withCompartments(grid, ctx);
   const active = new Set(c.compartments || []);
   const structure = visibleStructure(grid, responses, c);
-  const defs = grid.sheets.filter(sh => { const keys = sheetCompartments(sh); return !keys.length || !grid.compartments?.length || keys.some(k => active.has(k)); })
-    .map(sh => resolveSheet(sh, c.auditType || ''));
+  const raw = grid.sheets.filter(sh => { const keys = sheetCompartments(sh); return !keys.length || !grid.compartments?.length || keys.some(k => active.has(k)); });
+  const defs = raw.map(sh => resolveSheet(sh, c.auditType || ''));
   const stations = grid.expanded && grid.stations?.length ? grid.stations : null;
-  const make = (def, st) => {
+  // Tournée mixte : feuille d'une station résolue pour SES parties (variantes de la partie principale, encadrés de
+  // chaque partie) ; feuille de tournée : pour les types de la tournée (type principal en tête).
+  const mixed = !!stations && stations.some(st => normalizeParts(grid, st.parts));
+  const tourParts = mixed ? [c.auditType, ...tourTypes(grid, stations, c.auditType).filter(t => t !== c.auditType)].filter(Boolean) : null;
+  const make = (def0, st) => {
+    const def = mixed ? resolveSheet(raw.find(sh => sh.no === def0.no), st ? orderedParts(grid, st, c.auditType) : tourParts) : def0;
     const own = structure.filter(s => String(s.sheet) === String(def.no) && (st ? s.station?.key === st.key : !s.station));
     const sections = own.filter(s => s.visible).map(s => ({ ...s, items: s.visibleItems }));
     if (own.length && !sections.length) return null;
