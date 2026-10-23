@@ -71,8 +71,8 @@ export const TARGETS = {
       { key: 'aquifere', label: 'Aquifère (eaux souterraines)', hints: ['aquifere', 'nappe'] },
       { key: 'lat', label: 'Latitude (WGS84)', hints: ['latitude', 'lat'] },
       { key: 'lon', label: 'Longitude (WGS84)', hints: ['longitude', 'lon', 'lng'] },
-      { key: 'x', label: 'X (RGFG95 / UTM 22N)', hints: ['x', 'x l93', 'easting'] },
-      { key: 'y', label: 'Y (RGFG95 / UTM 22N)', hints: ['y', 'northing'] },
+      { key: 'x', label: 'X (RGFG95 / UTM 22N)', hints: ['x', 'x m', 'x utm', 'coord x', 'coordonnee x', 'x l93', 'easting'] },
+      { key: 'y', label: 'Y (RGFG95 / UTM 22N)', hints: ['y', 'y m', 'y utm', 'coord y', 'coordonnee y', 'northing'] },
       { key: 'srs', label: 'Fuseau UTM (22N / 21N)', hints: ['fuseau', 'zone utm', 'projection', 'systeme de coordonnees', 'epsg'] }
     ]
   },

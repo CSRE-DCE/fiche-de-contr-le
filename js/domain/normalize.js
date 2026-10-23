@@ -58,7 +58,12 @@ export function parseInputValue(spec, v) {
 }
 export function parseBool(v) { const s = normalize(v); return ['oui', 'o', 'yes', 'y', 'vrai', 'true', '1', 'x'].includes(s) ? true : ['non', 'n', 'no', 'faux', 'false', '0'].includes(s) ? false : null; }
 
-/** Proposition de correspondance colonne → champ, d'après les en-têtes. */
+/**
+ * Proposition de correspondance colonne → champ, d'après les en-têtes : égalité avec la clé, le libellé ou un indice
+ * du champ (3 points), sinon inclusion de l'un dans l'autre (2 points si le texte INCLUS compte plus de 3 caractères,
+ * 1 point sinon — un en-tête court comme « X » ou « Y » n'est jamais associé à « Réseau(x) » ou à un autre libellé qui
+ * le contient) ; seuil : 2 points.
+ */
 export function guessMapping(headers, fields) {
   const mapping = {};
   const used = new Set();
@@ -72,7 +77,7 @@ export function guessMapping(headers, fields) {
       let score = 0;
       for (const hint of hints) {
         if (nh === hint) score = Math.max(score, 3);
-        else if (nh.includes(hint) || hint.includes(nh)) score = Math.max(score, hint.length > 3 ? 2 : 1);
+        else if (nh.includes(hint) || hint.includes(nh)) score = Math.max(score, (nh.includes(hint) ? hint : nh).length > 3 ? 2 : 1);
       }
       if (score > bestScore) { bestScore = score; best = i; }
     });

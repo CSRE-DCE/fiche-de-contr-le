@@ -597,7 +597,8 @@ def test_carte_tournee_station_planning(page, app_url):
     assert page.inner_text('.hm-nets [data-v=aucun]').split()[-1] == '1' and page.inner_text('#hmCount') == '109 stations affichées'
     assert home_state(page)['sections'][-1] == ['aucun', '1 station'] and 'sans réseau' in page.inner_text('.hm-sec[data-net=aucun] h2').casefold()
     page.click('.hm-nets [data-v=aucun]')
-    page.wait_for_function("() => location.hash.includes('reseau=aucun')")
+    # L'adresse change avant la fin du réaffichage (navigate : replaceState puis rendu) : attendre le chip pressé.
+    page.wait_for_function("() => location.hash.includes('reseau=aucun') && document.querySelector('.hm-nets [data-v=aucun]')?.getAttribute('aria-pressed') === 'true'")
     assert home_state(page)['sections'] == [['aucun', '1 station']]
     goto_hash(page, '#/carte?reseau=aucun')
     page.wait_for_function("() => document.querySelectorAll('.leaflet-marker-icon .mk-st').length === 1")

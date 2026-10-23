@@ -9,6 +9,8 @@ import { SRS, srsOf, parseSrs, convertEntry, entryOf, withXYEntry, withSrs, with
 import { formatValue } from '../../js/domain/model.js';
 import { valueIssues } from '../../js/domain/grids.js';
 import { GRID_CT_2026 } from '../../js/domain/grid-ct-2026.js';
+import { guessMapping } from '../../js/domain/normalize.js';
+import { TARGETS } from '../../js/app/imports.js';
 
 const near = (a, b, tol, msg) => assert(Math.abs(a - b) <= tol, `${msg || ''} attendu ${b} ± ${tol}, obtenu ${a}`);
 
@@ -140,4 +142,12 @@ test('critère X / Y (F3.15) : affichage avec la saisie d’origine et avertisse
   // Projection inverse (UTM 22N, référentiel) inchangée.
   const [lat, lon] = utmToLatLon(163100, 402750, 22);
   near(lat, 3.638634, 0.000001); near(lon, -54.032295, 0.000001);
+});
+
+test('import de stations : colonnes « X », « Y » et « Fuseau UTM » reconnues (jamais « Réseau(x) » ni « Nature »)', () => {
+  // Un en-tête d'une lettre n'est associé que par égalité (« x » est contenu dans « réseau(x) »).
+  deepEq(guessMapping(['Code', 'Nom', 'X', 'Y', 'Fuseau UTM'], TARGETS.site.fields), { code: 0, name: 1, x: 2, y: 3, srs: 4 });
+  deepEq(guessMapping(['Code station', 'Nom', 'Réseau(x)', 'Type', 'X (m)', 'Y (m)', 'Zone UTM'], TARGETS.site.fields),
+    { code: 0, name: 1, networks: 2, kind: 3, x: 4, y: 5, srs: 6 });
+  deepEq(guessMapping(['Code', 'Nom', 'Latitude', 'Longitude', 'EPSG'], TARGETS.site.fields), { code: 0, name: 1, lat: 2, lon: 3, srs: 4 });
 });
