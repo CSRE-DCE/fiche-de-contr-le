@@ -8,7 +8,8 @@
  * (js/app/sheets-pdf.js, chargé à la demande ; repli Helvetica sans décor s'il est indisponible). Échelle
  * C / P / NC / N/A ; tournée de plusieurs stations : stations, décomptes par station et par feuille, critères
  * « communs à la tournée » listés une seule fois. Réseaux de surveillance des stations (« BIO – Biologie… ») et
- * réseau du programme de la prestation (référentiel « Réseaux »).
+ * réseau du programme de la prestation (référentiel « Réseaux »). Tournée mixte (biologie + chimie du même
+ * prestataire) : type de tournée joint et périmètre contrôlé à chaque station (identification, décomptes par station).
  */
 import { PDFDocument } from '../formats/pdf.js';
 import { store } from '../core/store.js';
@@ -16,7 +17,7 @@ import { session, appVersion } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
 import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO } from '../core/util.js';
 import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate, auditKindLabel, auditTimeTexts } from '../domain/model.js';
-import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
+import { isAnswerable, allItems, isSheetGrid, partsText } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace, tourControllers, entriesByAgent } from './audits.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
@@ -135,7 +136,8 @@ export async function buildAuditReport(auditId) {
     const cnt = c => [{ text: String(c.C), color: COLORS.C, font: c.C ? 'bold' : 'regular' }, { text: String(c.P), color: COLORS.P, font: c.P ? 'bold' : 'regular' }, { text: String(c.NC), color: COLORS.NC, font: c.NC ? 'bold' : 'regular' }, String(c.NA), String(c.unanswered), String(c.total)];
     const cols = l => [{ label: l, width: 181 }, ...['C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total'].map(x => ({ label: x, width: 55 }))];
     doc.heading('Décomptes par station (C / P / NC / N/A)', { level: 3 });
-    doc.table({ columns: cols('Station'), rows: [...ss.stations.map(x => [`${x.index + 1}. ${x.name} (${x.code})`, ...cnt(x)]), ...(ss.tournee.total ? [['Commun à la tournée', ...cnt(ss.tournee)]] : []), [{ text: 'Ensemble de la tournée', font: 'bold' }, ...cnt(ss.global)]], fontSize: 8 });
+    const perim = key => (st.mixed ? ` — ${partsText(st.baseGrid, stations.find(y => y.key === key)?.perimeter || [])}` : '');
+    doc.table({ columns: cols('Station'), rows: [...ss.stations.map(x => [`${x.index + 1}. ${x.name} (${x.code})${perim(x.key)}`, ...cnt(x)]), ...(ss.tournee.total ? [['Commun à la tournée', ...cnt(ss.tournee)]] : []), [{ text: 'Ensemble de la tournée', font: 'bold' }, ...cnt(ss.global)]], fontSize: 8 });
     doc.heading('Décomptes et conclusions par feuille', { level: 3 });
     doc.table({
       columns: [{ label: 'Feuille', width: 150 }, { label: 'Station', width: 76 }, ...['C', 'P', 'NC', 'N/A', 'Non rens.'].map(x => ({ label: x, width: 38 })), { label: 'Conclusion', width: 95 }],
@@ -154,6 +156,8 @@ export async function buildAuditReport(auditId) {
   doc.heading('1. Identification de l’audit');
   doc.keyValues([
     ['Numéro d’audit', audit.number], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
+    // Tournée mixte : types contrôlés et périmètre de chaque station (une tournée d'un seul type : rapport inchangé).
+    ...(st.mixed ? [['Type de tournée', `${st.header?.typeLabel || ''} (tournée mixte)`], ['Périmètre contrôlé', stations.map(x => `${x.name} : ${partsText(st.baseGrid, x.perimeter)}`).join(' ; ')]] : []),
     // Heures rapprochées de la feuille Organisation (« Début / Fin du contrôle », F2.1.5 / 1.6), comme l'onglet Infos.
     ['Date', fmtDate(date)], ['Heure de début', auditTimeTexts(audit, { open: 'non clôturé' }).start], ['Heure de fin', auditTimeTexts(audit, { open: 'non clôturé' }).end],
     [controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG (auditeur)', controllersText],

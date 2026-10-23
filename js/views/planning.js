@@ -173,9 +173,11 @@ export default {
       if (!list.length) return;
       const providers = new Set(list.map(p => p.providerId)), types = new Set(list.map(p => prestationType(p)));
       if (providers.size > 1) { toast('Une tournée contrôle un seul prestataire : sélectionnez des prestations du même prestataire.', 'warn', 5000); return; }
-      if (types.size > 1) { toast('Une tournée porte sur un seul type (biologie, cours d’eau ou eaux souterraines).', 'warn', 5000); return; }
+      // Biologie et chimie (cours d'eau) du même prestataire : une tournée mixte (opérations communes mutualisées) ; les
+      // eaux souterraines restent une tournée à part.
+      if (types.size > 1 && (types.has('eso') || ![...types].every(t => ['bio', 'ce'].includes(t)))) { toast('Une tournée porte sur la biologie et / ou la chimie des cours d’eau, ou sur les eaux souterraines : sélectionnez des prestations compatibles.', 'warn', 5000); return; }
       picked.clear();
-      navigate(`/nouvel-audit?prestations=${encodeURIComponent(list.map(p => p.id).join(','))}&type=${[...types][0] || ''}`);
+      navigate(`/nouvel-audit?prestations=${encodeURIComponent(list.map(p => p.id).join(','))}&type=${types.has('bio') ? 'bio' : [...types][0] || ''}`);
     },
     async newPrestation() { const { editPrestation } = await import('./prestation.js'); const p = await editPrestation(); if (p) navigate('/prestation/' + p.id); },
     async programme() {

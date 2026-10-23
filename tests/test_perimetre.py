@@ -15,6 +15,8 @@ opérations vont être mutualisées, sinon elles sont faites de manière indépe
   3. test_deux_prestataires_tournees_independantes : HYDRECO (biologie) et OEG en régie (chimie) à la même station le
      même jour : deux tournées indépendantes, chacune son périmètre et sa prestation ; la signature de l'une ne change pas
      l'autre ; une prestation chimie programmée pour le MÊME prestataire : « Chimie » cochée d'office (mutualisation).
+     test_depuis_le_planning_biologie_et_chimie : planning, prestations biologie et chimie du même prestataire à la
+     même station cochées ensemble → création d'une tournée mixte, chaque prestation rattachée à sa partie.
   4. test_modifier_le_perimetre_avant_signature : biologie retirée à la station (motif obligatoire car un constat est
      saisi, écart ouvert annulé avec le même motif après confirmation) : F6 / F7 masquées, constats conservés, historique
      des stations et journal ; biologie recochée : constat de nouveau affiché ; après la signature du contrôleur : refus
@@ -173,6 +175,9 @@ def test_tournee_hydreco_biologie_et_chimie(make_page, app_url):
             for t in ('Contrôle terrain prestataire – HYDRECO – RCS ESC BIO 2026 + Physico-chimie des cours d’eau 2026', 'Contrôlé à cette station : Biologie + Chimie',
                       'Contrôlé à cette station : Chimie', 'Hydrobiologie – RCS ESC BIO + Cours d’eau – physico-chimie (tournée mixte)', '1. ACAROUANY (09160201) — biologie + chimie'):
                 assert t in texts, t
+            # Rapport d'audit détaillé : type de tournée et périmètre de chaque station.
+            report = ' '.join(pdf_texts(page, "const { buildAuditReport } = await import('./js/app/report.js'); await buildAuditReport(arg);", aid))
+            assert 'Périmètre contrôlé' in report and 'Acarouany : Biologie + Chimie ; Twenke : Chimie' in report, report[:600]
             # Fiches vierges d'une station BIO + Chimie contrôlée pour les deux (fiche station › « Biologie + Chimie »).
             goto_hash(page, f'#/station/{ACAROUANY}?type=bio&parties=bio,ce')
             assert page.locator('.stp-variants [data-parts="bio,ce"][aria-pressed=true]').count() == 1
@@ -237,6 +242,26 @@ def test_deux_prestataires_tournees_independantes(page, app_url):
     aid = start(page)
     st = state(page, aid)['stations'][0]
     assert st['parts'] == ['bio', 'ce'] and st['partPrestations'] == {'ce': 'pres-test-HYDRECO-chimie'}, 'biologie hors programme (prestation déjà contrôlée), chimie rattachée'
+
+
+def test_depuis_le_planning_biologie_et_chimie(page, app_url):
+    """Planning : prestations biologie et chimie du même prestataire à la même station cochées ensemble → tournée mixte."""
+    setup_standalone(page, app_url)
+    ch = js(page, """const p = store.filter('prestation', x => x.siteId === 'site-09280106' && x.campaignId && /Chimie/.test(x.id))[0];
+        await store.put('prestation', { ...p, id: 'pres-test-HYDRECO-chimie-T', ref: 'Chimie-HYDRECO-09280106', providerId: 'prov-HYDRECO', statusHistory: [], source: null });
+        return 'pres-test-HYDRECO-chimie-T';""")
+    goto_hash(page, '#/planning?periode=toutes&prestataire=prov-HYDRECO&q=Twenke')
+    for pid in ('pres-BIO-2026-09280106', ch):
+        page.check(f'[data-change=pick][value="{pid}"]')
+    page.click('[data-act=startTour]')
+    page.wait_for_selector(f'.an-sel-row[data-site="{TWENKE}"]')
+    row = page.locator(f'.an-sel-row[data-site="{TWENKE}"]')
+    assert part_box(row, 'bio').is_checked() and part_box(row, 'ce').is_checked() and 'tournée biologie + chimie' in page.inner_text('.an-recap')
+    no_overflow(page, 'création depuis le planning')
+    aid = start(page)
+    st = state(page, aid)['stations'][0]
+    assert st['parts'] == ['bio', 'ce'] and st['partPrestations'] == {'bio': 'pres-BIO-2026-09280106', 'ce': ch} and st['prestationId'] == 'pres-BIO-2026-09280106', st
+    assert sorted(state(page, aid)['prestationIds']) == sorted(['pres-BIO-2026-09280106', ch])
 
 
 def test_modifier_le_perimetre_avant_signature(page, app_url):

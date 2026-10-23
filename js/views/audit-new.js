@@ -53,7 +53,17 @@ function initDraft(q) {
   let providerId = pres[0]?.providerId || '';
   if (!providerId && site) providerId = openPrestations(site.id, { type })[0]?.providerId || '';
   const stations = [];
-  for (const p of pres) if (!stations.some(s => s.siteId === p.siteId)) stations.push({ siteId: p.siteId, prestationId: p.id });
+  for (const p of pres) {
+    // Plusieurs prestations d'une même station (biologie et chimie du même prestataire, depuis le planning) : une station
+    // contrôlée pour chacune de leurs parties (tournée mixte), chaque prestation rattachée à sa partie.
+    const t = prestationType(p, grid);
+    const cur = stations.find(s => s.siteId === p.siteId);
+    if (!cur) { stations.push({ siteId: p.siteId, prestationId: !t || t === type || !typeOk(type) ? p.id : null, parts: t && t !== type ? [t] : null, partPrestations: t ? { [t]: p.id } : {} }); continue; }
+    if (!t || cur.partPrestations[t]) continue;
+    cur.partPrestations[t] = p.id;
+    cur.parts = [...new Set([...(cur.parts || [type]), t])];
+    if (t === type) cur.prestationId = p.id;
+  }
   if (site && !stations.some(s => s.siteId === site.id)) stations.unshift({ siteId: site.id, prestationId: matchPrestation(site.id, providerId, type)?.id || null });
   return {
     key: JSON.stringify(q), type, providerId, date: localDate(), kind: q.kind === 'inopine' || !pres.length ? 'inopine' : 'planifie',
@@ -464,7 +474,9 @@ function stationRequest(grid, d, s) {
   const parts = draftParts(d, s);
   if (parts.length === 1 && parts[0] === d.type) return { siteId: s.siteId, prestationId: s.prestationId || null };
   const site = store.get('site', s.siteId);
-  const pp = partPrestationIds(site, parts, { grid, providerId: d.providerId });
+  // Prestations choisies au planning (partPrestations du brouillon), sinon celles programmées pour le prestataire.
+  const chosen = Object.fromEntries(Object.entries(s.partPrestations || {}).filter(([k, id]) => parts.includes(k) && store.get('prestation', id)?.providerId === d.providerId));
+  const pp = { ...partPrestationIds(site, parts, { grid, providerId: d.providerId }), ...chosen };
   const p = s.prestationId ? store.get('prestation', s.prestationId) : null;
   const t = p ? prestationType(p, grid) : '';
   if (p && parts.includes(t)) pp[t] = p.id;
