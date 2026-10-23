@@ -124,7 +124,8 @@ const sectionTheme = (sec, sheet) => sec.theme || sheet.theme || 'ocean';
  * Modèle du document pour un type de tournée (null : tous les types) :
  * {type, typeLabel, data, echelle, avertissement, preparation: [{key, label, groups}], sheets: [{no, code, title, tab,
  *  theme, scope, icon, types, intro, documents, sections: [{id, no, title, icon, theme, items}], items, values, count}], count}.
- * Critère : {id, code, no, label, kind, shared, types, conditional, value (critère sans cotation), theme, entry}.
+ * Critère : {id, code, no, label, kind, shared, types, conditional, noScore (point de synthèse, hors note), value (critère sans
+ *  cotation), theme, entry}.
  * Les feuilles et critères sont ceux AFFICHÉS pour le type (tous les types : réunion, titres de base des feuilles).
  */
 export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = {}) {
@@ -143,7 +144,7 @@ export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = 
       const items = (s.items || []).filter(it => allowed.has(it.id)).map(it => ({
         id: it.id, code: it.code, no: it.no, label: it.label, kind: it.kind, value: it.kind !== 'conformity',
         shared: base.scope === 'tournee' || it.scope === 'tournee', sheetScope: base.scope,
-        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), help: it.help || '',
+        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), noScore: !!it.noScore, help: it.help || '',
         theme: sectionTheme(s, base), entry: data?.criteres?.[it.id] || null
       }));
       if (items.length) secs.push({ id: s.id, no: s.no || '', title: s.title, icon: s.icon || '', theme: sectionTheme(s, base), items });
@@ -424,6 +425,7 @@ function criterionCard(flow, model, it) {
   const badges = [];
   if (it.shared && it.sheetScope !== 'tournee') badges.push({ text: 'Commun à la tournée', color: '#0b4f9c', bg: '#e8f3fc' });
   if (it.conditional) badges.push({ text: 'Affiché selon une réponse', color: MUTED, bg: '#eef1f4' });
+  if (it.noScore) badges.push({ text: 'Point de synthèse, hors note', color: '#6b4e00', bg: '#fff4d6' });
   if (!model.type && it.types.length < TOUR_TYPES.length) it.types.forEach(k => badges.push({ text: gridType(GRID_CT_2026, k)?.short || k, color: th(TYPE_THEMES[k]).dark, bg: th(TYPE_THEMES[k]).light }));
   const kw = 62;
   const rows = [['Attendu', e.attendu], ['Vérification', e.verification]].filter(r => r[1]).map(([k, v]) => ({ k, lines: flow.lines(v, F.text, 8.4, inner - kw) }));

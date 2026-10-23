@@ -42,7 +42,7 @@ import {
   oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, sheetFooter, sheetFrame, STATUS_SCALE, statusHeadCells,
   statusLegend, sharedBadge, tourStations, assetURL
 } from '../ui/sheet-chrome.js';
-import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue } from '../domain/model.js';
+import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue, auditKindLabel } from '../domain/model.js';
 import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf
 } from '../domain/grids.js';
@@ -235,9 +235,12 @@ function obsField(c, it, r, pfx) {
   const dis = c.editable ? '' : raw('disabled');
   return html`<textarea ${autosave(c)} id="${pfx}-o-${it.id}" class="as-obs${empty ? ' need' : ''}" rows="${pfx === 't' ? 1 : 2}" data-change="comment" data-item="${it.id}" data-need="${need ? '1' : ''}" aria-label="Observations — ${it.label}" placeholder="${need ? 'Observation obligatoire (constat factuel)' : pfx === 't' ? '' : 'Constat, précision…'}" ${dis}>${r?.comment || ''}</textarea>`;
 }
-/** « Attendu » : ce que le prestataire doit faire ou présenter, vérification et cotation (grille CT-2026, js/views/attendus.js). */
-const attenduButton = it => /^it-F\d+-/.test(it.id) ? html`<button type="button" class="as-help as-attendu" data-act="item-attendu" data-item="${it.id}" title="Attendu du prestataire et cotation C / P / NC / N/A" aria-label="Attendu du prestataire : ${it.label}">${icon('clipboard', { size: 17 })}</button>` : '';
-const helpButton = it => (it.help || it.refs?.length) ? html`<button type="button" class="as-help" data-act="item-help" data-item="${it.id}" title="${it.help || 'Références'}" aria-label="Aide : ${it.label}">${icon('info', { size: 17 })}</button>` : '';
+/** UN seul bouton d'aide par point (demande de l'OEG : pas de description en double) : critère de la grille CT-2026 ⇒
+ * fenêtre « Aide et attendu » (attendu du prestataire, vérification, cotation C / P / NC / N/A, puis l'aide de la grille
+ * — points des fiches d'évaluation inclus, origine — : js/views/attendus.js) ; autre grille en feuilles ⇒ aide seule. */
+const hasAttendu = it => /^it-F\d+-/.test(it.id);
+const attenduButton = it => hasAttendu(it) ? html`<button type="button" class="as-help as-attendu" data-act="item-attendu" data-item="${it.id}" title="Aide et attendu du prestataire (cotation C / P / NC / N/A)" aria-label="Aide et attendu : ${it.label}">${icon('info', { size: 17 })}</button>` : '';
+const helpButton = it => !hasAttendu(it) && (it.help || it.refs?.length) ? html`<button type="button" class="as-help" data-act="item-help" data-item="${it.id}" title="${it.help || 'Références'}" aria-label="Aide : ${it.label}">${icon('info', { size: 17 })}</button>` : '';
 function rowClass(c, it, r) {
   const s = r?.status;
   const conf = it.kind === 'conformity';
@@ -368,7 +371,7 @@ function conclusionBody(c, sh, b) {
   const opts = b.options || Object.entries(SHEET_CONCLUSIONS);
   return html`<div class="bc-options" role="group" aria-label="${b.title}">${opts.map(([k, l]) => html`<button type="button" class="bc-option${concl.status === k ? ' sel' : ''}" aria-pressed="${concl.status === k}" data-act="sheet-concl" data-sheet="${key}" data-value="${k}" ${dis}>${checkSquare({ checked: concl.status === k, cls: OPT_CLS[k] || '' })}${l}</button>`)}</div>
     ${summary?.hint ? html`<p class="as-hint">${icon('info', { size: 15 })}Constat de la feuille : ${summary.hint}. <span>La conclusion reste le choix du contrôleur.</span></p>` : ''}
-    ${fields.includes('comments') ? html`<div class="bc-field"><label class="bc-k" for="concl-${key}">Commentaires</label><textarea ${autosave(c)} id="concl-${key}" class="as-lined" rows="2" data-change="sheet-concl-text" data-sheet="${key}" ${dis}>${concl.comments || ''}</textarea></div>` : ''}
+    ${fields.includes('comments') ? html`<div class="bc-field"><label class="bc-k" for="concl-${key}">Commentaires</label><textarea ${autosave(c)} id="concl-${key}" class="as-lined" rows="2" data-change="sheet-concl-text" data-sheet="${key}" placeholder="Justification de la conclusion (les constats détaillés vont dans les observations)" ${dis}>${concl.comments || ''}</textarea></div>` : ''}
     <div class="bc-fields">${fields.filter(f => f === 'controller' || f === 'date').map(f => html`<div class="bc-field"><span class="bc-k">${f === 'date' ? 'Date' : 'Nom du contrôleur OEG'}</span><span class="bc-v">${f === 'date' ? fmtDate(date) : c.controllersText}</span></div>`)}</div>
     ${fields.some(f => f === 'signature' || f === 'providerSignature') ? html`<div class="bc-fields">${fields.includes('signature') ? html`<div class="bc-field"><span class="bc-k">Signature du contrôleur</span>${signatureView(sig.auditor)}</div>` : ''}${fields.includes('providerSignature') ? html`<div class="bc-field"><span class="bc-k">Nom et signature du prestataire${sig.provider?.name ? ` : ${sig.provider.name}` : ''}</span>${signatureView(sig.provider)}</div>` : ''}</div>
       ${!sig.auditor ? html`<p class="note as-sign-note">Signature électronique unique de la tournée : onglet « Signatures ».</p>` : ''}` : ''}`;
@@ -377,7 +380,9 @@ function textBlock(c, sh, b) {
   const key = sheetStoreKey(sh, b.key);
   const dis = c.editable ? '' : raw('disabled');
   const media = b.key === 'photos' ? (c.mediaBySheet.get(key) || []) : [];
-  return html`<textarea ${autosave(c)} id="sheet-${key}-${b.key}" class="as-lined" rows="4" data-change="sheet-text" data-sheet="${key}" data-k="${b.key}" aria-label="${b.title}" ${dis}>${c.audit.sheets?.[key]?.[b.key] || ''}</textarea>
+  // Texte d'invite propre à chaque encadré (grille : `placeholder`) : deux zones libres d'une même feuille (observations,
+  // commentaires de la conclusion) ne demandent pas la même chose.
+  return html`<textarea ${autosave(c)} id="sheet-${key}-${b.key}" class="as-lined" rows="4" data-change="sheet-text" data-sheet="${key}" data-k="${b.key}" aria-label="${b.title}" placeholder="${b.placeholder || ''}" ${dis}>${c.audit.sheets?.[key]?.[b.key] || ''}</textarea>
     ${b.key === 'photos' ? html`${thumbs(media)}${c.editable && !c.locked ? html`<div class="st-rc-tools">${proofInputs(c, { type: 'sheet', id: c.audit.id, itemId: key }, { cls: 'btn ghost sm as-file' })}</div>` : ''}` : ''}`;
 }
 function blocksArea(c, sh) {
@@ -408,7 +413,7 @@ function reperesHTML(c, sh) {
   const short = items.filter(i => i.kind !== 'longtext'), long = items.filter(i => i.kind === 'longtext');
   return html`<div class="ss-rep as-rep">
     <div class="ss-rep-rows">${short.map(it => html`<div class="ss-rep-row as-rep-row ${rowClass(c, it, c.audit.responses?.[it.id])}" id="row-${it.id}"><label for="r-${it.id}">${it.label}&nbsp;:</label><div class="as-rep-v">${valueControl(c, it, 'r')}</div>${linkSuggest(c, it)}${fromBadge(c, it)}</div>`)}</div>
-    ${long.map(it => html`<div class="ss-rep-long as-rep-long" id="row-${it.id}"><div class="ss-rep-row as-rep-row"><label for="r-${it.id}">${it.label}&nbsp;:</label></div><textarea id="r-${it.id}" class="as-lined" rows="3" data-change="val" data-item="${it.id}" ${c.editable ? '' : raw('disabled')}>${c.audit.responses?.[it.id]?.value ?? ''}</textarea></div>`)}
+    ${long.map(it => html`<div class="ss-rep-long as-rep-long" id="row-${it.id}"><div class="ss-rep-row as-rep-row"><label for="r-${it.id}">${it.label}&nbsp;:</label></div><textarea id="r-${it.id}" class="as-lined" rows="3" data-change="val" data-item="${it.id}" placeholder="${it.placeholder || ''}" ${c.editable ? '' : raw('disabled')}>${c.audit.responses?.[it.id]?.value ?? ''}</textarea></div>`)}
   </div>`;
 }
 function stationSheetView(c, sh, site) {
@@ -528,7 +533,7 @@ function infosView(c) {
   const canRemove = c.editable && !c.locked && c.stations.length > 1;
   return html`
     <div class="card"><h2>Identification de la tournée</h2>${kv([
-      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit avec rendez-vous'],
+      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type de tournée', st.type?.label || ''], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
       ['Date', fmtDate(c.date)], ['Heure de début', `${fmtTime(audit.startedAt)}${audit.startedAt && localDate(new Date(audit.startedAt)) !== c.date ? ` (saisie démarrée le ${fmtDate(audit.startedAt)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
       [c.controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', c.controllersText], ['Tournée créée par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
@@ -900,9 +905,14 @@ export const sheetHandlers = {
     });
     if ((await m.result)?.length) await refreshKeep(this);
   },
-  /** Attendu du prestataire pour ce critère (fenêtre de js/views/attendus.js ; identifiant effectif accepté). */
-  async 'item-attendu'(el) { (await import('./attendus.js')).openAttendu(el.dataset.item); },
-  /** Aide d'un critère (« Inclut : … », références documentaires, critère commun). */
+  /** « Aide et attendu » de ce critère (fenêtre de js/views/attendus.js ; identifiant effectif accepté) : attendu du
+   * prestataire puis l'aide du critère de la grille de la tournée. */
+  async 'item-attendu'(el) {
+    const it = findItem(store.get('audit', this.params.id), el.dataset.item);
+    (await import('./attendus.js')).openAttendu(el.dataset.item, { item: it });
+  },
+  /** Aide d'un critère d'une autre grille en feuilles (« Inclut : … », références documentaires, critère commun) ; la
+   * légende C / P / NC / N/A est sous chaque tableau (pas répétée ici). */
   'item-help'(el) {
     const audit = store.get('audit', this.params.id);
     const it = findItem(audit, el.dataset.item);
@@ -912,8 +922,7 @@ export const sheetHandlers = {
       body: html`${it.help ? html`<p style="font-size:16px">${it.help}</p>` : ''}
         ${it.shared ? html`<div class="banner info">${icon('route', { size: 16 })} Critère commun à la tournée : une seule réponse, affichée dans chaque fiche station.</div>` : ''}
         ${it.station && !it.shared ? html`<p class="note">Station : ${it.station.name} (${it.station.code}).</p>` : ''}
-        ${(it.refs || []).length ? html`<h3>Références</h3><ul>${it.refs.map(r => html`<li>${[r.docKey || r.docType, r.article].filter(Boolean).join(' § ')}${r.requirement ? ' — ' + r.requirement : ''}</li>`)}</ul>` : ''}
-        ${it.kind === 'conformity' ? html`<p class="note">Échelle : C conforme / satisfaisant · P perfectible · NC non conforme · N/A non applicable. Observation obligatoire pour P et NC.</p>` : ''}`,
+        ${(it.refs || []).length ? html`<h3>Références</h3><ul>${it.refs.map(r => html`<li>${[r.docKey || r.docType, r.article].filter(Boolean).join(' § ')}${r.requirement ? ' — ' + r.requirement : ''}</li>`)}</ul>` : ''}`,
       actions: [{ label: 'Fermer', cls: 'primary' }]
     });
   },

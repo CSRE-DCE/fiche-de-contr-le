@@ -131,6 +131,17 @@ export const CONTROL_LEVELS = {
   inopine: 'Audit inopiné'
 };
 
+/**
+ * Type d'audit (audit.kind) : UN libellé partout (écrans, PDF, rapport, exports), celui de la création de tournée et
+ * de F2.1.11 (« Inopiné » / « Avec rendez-vous ») — plus de « planifié » pour la même notion.
+ */
+export const AUDIT_KINDS = Object.freeze({ inopine: 'Inopiné', planifie: 'Avec rendez-vous' });
+/** Libellé du type d'audit : « Inopiné » / « Avec rendez-vous » ; long : « Audit inopiné » / « Audit avec rendez-vous ». */
+export function auditKindLabel(kind, { long = false } = {}) {
+  const l = kind === 'inopine' ? AUDIT_KINDS.inopine : AUDIT_KINDS.planifie;
+  return long ? `Audit ${l.charAt(0).toLowerCase()}${l.slice(1)}` : l;
+}
+
 export const AUDIT_STATUS = {
   en_cours: { label: 'En cours', cls: 'info' },
   termine: { label: 'Terminé — à signer', cls: 'warn' },

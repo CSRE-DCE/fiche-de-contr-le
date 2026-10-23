@@ -28,6 +28,8 @@
      total distinct ; lien d'une campagne vers le planning).
 """
 import json
+import pathlib
+import re
 
 import pytest
 
@@ -37,6 +39,8 @@ from test_parcours import pdf_texts, sign_and_lock
 from test_tablette_partagee import add_agent, login, switch_agent
 
 ACAROUANY, MATARONI, SAKOURA = 'site-09160201', 'site-60007480', 'site-09281718'
+# Version de la grille CT-2026 livrée avec l'application (1.1 : turbidité en NTU ; 1.2 : doublons et redondances).
+CT_VERSION = re.search(r"^  version: '([\d.]+)',", (pathlib.Path(__file__).resolve().parent.parent / 'js' / 'domain' / 'grid-ct-2026.js').read_text(encoding='utf-8'), re.M).group(1)
 
 # Grilles par défaut repassées « avant NTU » (tablette ancienne) : turbidité en FNU, CT-2026 en version 1.0.
 OLD_GRIDS = """const fnu = v => { if (Array.isArray(v)) v.forEach(fnu); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'unit' && x === 'NTU') v[k] = 'FNU'; else fnu(x); } };
@@ -77,7 +81,7 @@ def test_installation_et_mise_a_niveau(page, app_url):
     assert nets['stored'] == nets['defaults'], 'réseaux par défaut installés tels quels'
     assert [n['id'] for n in nets['stored']] == ['net-BIO', 'net-Chimie', 'net-RCO', 'net-EL', 'net-ESO']
     assert js(page, "return store.get('unit', 'unit-NTU');")['symbol'] == 'NTU'
-    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == '1.1'
+    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == CT_VERSION
     assert grid_units(page, 'grid-ct-2026-v1', 'it-F4-9') == ['NTU', 'NTU', 'NTU']
     assert grid_units(page, 'grid-prel-eau-general-v1', 'it-V08') == ['NTU']
     assert upgrade(page)['upgraded'] is False, 'installation récente : déjà à jour'
@@ -106,7 +110,7 @@ def test_installation_et_mise_a_niveau(page, app_url):
     new = create_tour(page, 'ce', [SAKOURA], 'prov-TL1')
     snap = js(page, """const { itemIndex } = await import('./js/domain/grids.js'); const a = store.get('audit', arg);
         return { version: a.gridVersion, units: itemIndex(a.gridSnapshot).get('it-F4-9').input.fields.map(f => f.unit) };""", new['id'])
-    assert snap == {'version': '1.1', 'units': ['NTU', 'NTU', 'NTU']}, snap
+    assert snap == {'version': CT_VERSION, 'units': ['NTU', 'NTU', 'NTU']}, snap
     blank = pdf_texts(page, "const P = await import('./js/app/sheets-pdf.js'); await P.generateBlankSheetsPdf({ auditType: 'ce', siteIds: [arg] });", SAKOURA)
     assert any('NTU' in t for t in blank) and not any('FNU' in t for t in blank), 'fiches vierges en NTU'
     before_sites = sites_networks(page)
@@ -118,12 +122,12 @@ def test_installation_et_mise_a_niveau(page, app_url):
     assert res['networks'] == 5 and res['networksCreated'] == 1 and res['units'] == 1 and res['gridsUpgraded'] == 2, res
     after = js(page, "return store.all('network').map(n => [n.id, n.code, n.auditTypes]).sort();")
     assert ['net-TEST', 'TEST', []] in after and len(after) == 6, after
-    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == '1.1'
+    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == CT_VERSION
     assert grid_units(page, 'grid-ct-2026-v1', 'it-F4-9') == ['NTU', 'NTU', 'NTU']
     assert grid_units(page, 'grid-prel-eau-general-v1', 'it-V08') == ['NTU']
     assert sites_networks(page) == before_sites, 'aucune station réécrite'
     trail = js(page, "return store.all('trail').filter(t => t.entityType === 'grid' || t.entityType === 'network').map(t => [t.entityType, t.entityId || '', t.reason || '']);")
-    assert any(t[0] == 'grid' and t[1] == 'grid-ct-2026-v1' and 'version 1.0 → 1.1' in t[2] for t in trail), trail
+    assert any(t[0] == 'grid' and t[1] == 'grid-ct-2026-v1' and f'version 1.0 → {CT_VERSION}' in t[2] for t in trail), trail
     assert any(t[0] == 'grid' and t[1] == 'grid-prel-eau-general-v1' and 'Turbidité exprimée en NTU' in t[2] for t in trail), trail
     box = set(outbox(page))
     assert {'grid:grid-ct-2026-v1', 'grid:grid-prel-eau-general-v1', 'network:net-BIO', 'network:net-TEST', 'unit:unit-NTU'} <= box, sorted(box - box_before)
@@ -380,7 +384,7 @@ def test_deux_tablettes_fusion_des_reseaux(make_page, app_url, tmp_path):
     assert 'conflit' not in report, report
     assert js(t1, "return store.get('site', arg).networks;", ACAROUANY) == ['BIO', 'RCO'], 'ajout ET retrait pris en compte'
     assert js(t1, "return store.all('conflict').length;") == 0
-    assert js(t1, "return store.get('grid', 'grid-ct-2026-v1').version;") == '1.1'
+    assert js(t1, "return store.get('grid', 'grid-ct-2026-v1').version;") == CT_VERSION
     assert grid_units(t1, 'grid-ct-2026-v1', 'it-F4-9') == ['NTU', 'NTU', 'NTU'], 'pas de retour à FNU'
     assert grid_units(t1, 'grid-prel-eau-general-v1', 'it-V08') == ['NTU']
     # Retour vers la tablette 2 : même fusion

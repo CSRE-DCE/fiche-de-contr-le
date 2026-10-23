@@ -15,7 +15,7 @@ import { fmtDate, fmtDateTime, fmtTime, nowISO, localDate, bytesToBase64, base64
 import { toCSV, objectsToRows } from '../formats/csv.js';
 import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
-import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, AUDIT_TYPES, CODE_TYPES, auditDate } from '../domain/model.js';
+import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, AUDIT_TYPES, CODE_TYPES, auditDate, auditKindLabel } from '../domain/model.js';
 import { allItems, sheetOf, gridType } from '../domain/grids.js';
 import { isOverdue, sheetSummary } from '../domain/summary.js';
 import { mergeEntity } from '../domain/merge.js';
@@ -54,7 +54,7 @@ export function stationsByNetwork(sites) {
 
 export const COLUMNS = {
   audits: [
-    { label: 'Numéro', get: a => a.number }, { label: 'Type', get: a => a.kind === 'inopine' ? 'Inopiné' : 'Planifié' },
+    { label: 'Numéro', get: a => a.number }, { label: 'Type', get: a => auditKindLabel(a.kind) },
     { label: 'Type de tournée', get: typeLabel }, { label: 'Nombre de stations', get: a => (a.stations || []).length || (a.siteId ? 1 : 0) }, { label: 'Stations', get: stationsLabel },
     { label: 'Réseau(x)', get: a => networksOf(auditSiteIds(a)) },
     { label: 'Date', get: a => fmtDate(auditDate(a)) }, { label: 'Début', get: a => fmtTime(a.startedAt) }, { label: 'Fin', get: a => fmtTime(a.endedAt) },

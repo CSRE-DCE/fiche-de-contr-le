@@ -17,7 +17,8 @@ import { OPEN_DEVIATION } from '../domain/model.js';
 import { icon } from '../ui/icons.js';
 import { logoImg } from '../ui/logo.js';
 
-// ic : nom de pictogramme (js/ui/icons.js) ; bottom : présent dans la barre basse du téléphone.
+// ic : nom de pictogramme (js/ui/icons.js) ; bottom : présent dans la barre basse du téléphone. Une entrée par écran :
+// « Historique et comparaison » est une vue de l'écran Audits (puce « Historique et comparaison », #/audits?vue=historique).
 const NAV = [
   { key: 'home', href: '#/', ic: 'station', label: 'Stations', bottom: true, group: 'Terrain' },
   { key: 'planning', href: '#/planning', ic: 'calendar', label: 'Planning', bottom: true, group: 'Terrain' },
@@ -27,7 +28,6 @@ const NAV = [
   { key: 'carte', href: '#/carte', ic: 'map', label: 'Carte', group: 'Terrain' },
   { key: 'dashboard', href: '#/tableau-de-bord', ic: 'chart', label: 'Tableau de bord', group: 'Suivi' },
   { key: 'prestataires', href: '#/prestataires', ic: 'building', label: 'Prestataires', group: 'Suivi' },
-  { key: 'historique', href: '#/audits?vue=historique', ic: 'history', label: 'Historique et comparaison', group: 'Suivi' },
   { key: 'documents', href: '#/documents', ic: 'book', label: 'Documents', group: 'Gestion' },
   { key: 'attendus', href: '#/attendus', ic: 'check-circle', label: 'Attendus des prestataires', group: 'Gestion' },
   { key: 'grilles', href: '#/grilles', ic: 'puzzle', label: 'Grilles d’audit', group: 'Gestion' },

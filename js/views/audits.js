@@ -1,5 +1,6 @@
 /* Liste et historique des audits : par prestataire, site, point, statut, période ; sélection de deux
- * audits à comparer. Tournées annulées (« Annuler la tournée ») masquées par défaut, visibles sous la puce
+ * audits à comparer. « Historique et comparaison » (?vue=historique : tri par date, recherche ouverte) est une vue de
+ * cet écran, choisie par une puce (une seule entrée de menu « Audits »). Tournées annulées (« Annuler la tournée ») masquées par défaut, visibles sous la puce
  * « Annulées » avec la date, l'auteur et le motif de l'annulation. Contrôleurs OEG de chaque tournée (binôme)
  * affichés ; « Mes audits » : tournées dont l'agent connecté est contrôleur ; tournées en cours de l'agent connecté
  * en tête de liste. */
@@ -9,7 +10,7 @@ import { session } from '../core/session.js';
 import { navigate } from '../ui/router.js';
 import { toast, downloadBlob } from '../ui/dom.js';
 import { pageTitle, auditBadge, options, empty, siteName, providerName, badge, progressBar, tourStationsLabel, auditSiteIds } from '../ui/components.js';
-import { AUDIT_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
+import { AUDIT_STATUS, auditDate, byAuditDateDesc, auditKindLabel } from '../domain/model.js';
 import { auditState, controllersLabel, isAuditController } from '../app/audits.js';
 
 let selected = [];
@@ -48,6 +49,7 @@ export default {
       <div class="chips" style="margin-bottom:10px">
         ${[['', 'Tous'], ['en_cours', 'En cours'], ['termine', 'À signer'], ['verrouille', 'Signés'], ['abandonne', 'Annulées']].map(([k, l]) => html`<button class="chip ${(q.statut || '') === k ? 'sel' : ''}" data-act="q" data-k="statut" data-v="${k}" aria-pressed="${String((q.statut || '') === k)}">${l}</button>`)}
         <button class="chip ${q.mine ? 'sel' : ''}" data-act="q" data-k="mine" data-v="${q.mine ? '' : '1'}">Mes audits</button>
+        <button class="chip ${historique ? 'sel' : ''}" id="auHistory" data-act="q" data-k="vue" data-v="${historique ? '' : 'historique'}" aria-pressed="${String(historique)}" title="Toutes les tournées par date, recherche et comparaison de deux audits">Historique et comparaison</button>
       </div>
       <details class="card" ${historique || q.prestataire || q.site ? 'open' : ''}><summary>Rechercher dans l’historique</summary>
         <div class="grid2" style="margin-top:10px">
@@ -64,7 +66,7 @@ export default {
         <div class="li ${a.lock?.lockedAt ? 'stripe-ok' : a.status === 'abandonne' ? '' : 'stripe-info'}">
           <input type="checkbox" aria-label="Sélectionner pour comparaison" data-change="sel" data-id="${a.id}" ${selected.includes(a.id) ? 'checked' : ''}>
           <a class="li-main" href="#/audit/${a.id}" style="text-decoration:none;color:inherit"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div>
-            <div class="li-sub">${fmtDate(auditDate(a))} · ${providerName(a.providerId)} · <span class="au-ctrl" title="Contrôleur(s) OEG de la tournée">${controllersLabel(a) || a.auditorName}</span>${isAuditController(a, session.user?.id) ? ' (vous)' : ''} · ${a.kind === 'inopine' ? 'inopiné' : 'planifié'}</div>
+            <div class="li-sub">${fmtDate(auditDate(a))} · ${providerName(a.providerId)} · <span class="au-ctrl" title="Contrôleur(s) OEG de la tournée">${controllersLabel(a) || a.auditorName}</span>${isAuditController(a, session.user?.id) ? ' (vous)' : ''} · ${auditKindLabel(a.kind).toLowerCase()}</div>
             <div class="row" style="gap:6px;margin-top:6px">${auditBadge(a)}${badge(`${n.C} C · ${n.P || 0} P · ${n.NC} NC`, n.NC ? 'nc' : n.P ? 'perf' : 'ok')}${devs ? badge(`${devs} écart(s)`, 'warn') : ''}${(a.amendments || []).length ? badge(`${a.amendments.length} modif. après signature`, 'nv') : ''}</div>
             ${a.status === 'en_cours' ? html`<div style="margin-top:6px">${progressBar(st.progress.percent)}</div>` : ''}
             ${a.status === 'abandonne' ? html`<div class="li-sub au-cancel">Annulée${a.cancelledAt ? ` le ${fmtDate(a.cancelledAt)}` : ''}${a.cancelledByName ? ` par ${a.cancelledByName}` : ''} — motif : « ${a.abandonReason || 'non précisé'} »</div>` : ''}</a>

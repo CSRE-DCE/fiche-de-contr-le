@@ -3,10 +3,13 @@
  *   pour les critères de conformité ; « information à relever » pour les critères valeur seule), aucune clé
  *   orpheline, feuille / n° / libellé / section / portée / types recopiés à l'identique de la grille, feuilles 1 à 10,
  *   échelle, liste de préparation, références normatives connues, aucun nombre « contractuel » inventé (heuristique),
- *   turbidité en NTU ;
+ *   turbidité en NTU ; SANS DOUBLON (grille 1.2) : aucun attendu recopié d'un critère à l'autre, renvois vers des
+ *   critères existants, un constat coté à un seul endroit (recadrages des critères voisins), points de synthèse « hors
+ *   note », liste de préparation sans élément répété ;
  * - js/app/attendus-pdf.js : attenduFor (identifiants de base et effectifs), visibilité par type de tournée calculée
  *   par les conditions de la grille, modèle d'affichage, PDF (fiche complète et liste de préparation) ;
- * - js/views/attendus.js : rendu de l'écran par type et par feuille, recherche, carte d'un critère. */
+ * - js/views/attendus.js : rendu de l'écran par type et par feuille, recherche, carte d'un critère, découpage de l'aide de
+ *   la grille pour la fenêtre « Aide et attendu » (helpParts). */
 import { test, assert, eq, deepEq } from './harness.js';
 import { GRID_CT_2026 } from '../../js/domain/grid-ct-2026.js';
 import { allItems, flatSections, sheetOf } from '../../js/domain/grids.js';
@@ -194,6 +197,89 @@ test('attendus : turbidité exprimée en NTU uniquement', () => {
   assert(!new RegExp(OTHER_UNIT, 'i').test(JSON.stringify(data)), 'aucune autre unité de turbidité dans le fichier');
 });
 
+/* ---------- Sans doublon ni redondance (grille CT-2026 1.2) ---------- */
+const foldT = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+const entryOf = code => { const it = items.find(i => i.code === code); return data.criteres[it.id]; };
+
+test('attendus : aucun attendu recopié d’un critère à l’autre, aucune entrée identique, « à préciser » propres', () => {
+  const dup = (key) => {
+    const seen = new Map(), out = [];
+    for (const it of items) {
+      const k = key(data.criteres[it.id]);
+      if (!k) continue;
+      if (seen.has(k)) out.push(`${seen.get(k)} = ${it.code}`); else seen.set(k, it.code);
+    }
+    return out;
+  };
+  deepEq(dup(e => foldT(e.attendu)), [], 'attendus identiques (personnaliser par protocole ou par portée)');
+  deepEq(dup(e => e.valeur ? '' : ['attendu', 'verification', 'C', 'P', 'NC'].map(k => foldT(e[k])).join('|')), [], 'entrées identiques');
+  deepEq(dup(e => foldT(e.aPreciser)), [], 'questions « à préciser » identiques');
+  // Gabarits voulus (formulation commune d'une même règle) : vérification et C / P / NC des informations de F3.1–F3.18,
+  // des paramètres F4.4–F4.8 et des coordonnées ; la mention « Commun à la tournée » (exigée plus haut).
+  eq(entryOf('F3.1').verification, entryOf('F3.18').verification, 'gabarit F3 (expliqué dans l’introduction de la feuille 3)');
+});
+
+test('attendus : renvois vers des critères existants (attendus, introductions et documents des feuilles)', () => {
+  const codes = new Set(items.map(i => i.code));
+  const bad = [];
+  for (const [path, text] of writtenTexts()) for (const m of text.matchAll(/\bF\d+\.[0-9A-Z]+(?:\.\d+)?/g)) if (!codes.has(m[0])) bad.push(`${path} : ${m[0]}`);
+  deepEq(bad, [], 'renvoi vers un critère inexistant');
+  // Les renvois de la feuille 3 (« voir aussi 27–28 ») sont dans les attendus, plus dans l'aide de la grille
+  for (const c of ['F3.7', 'F3.8']) assert(/F3\.27/.test(entryOf(c).verification) && /F3\.28/.test(entryOf(c).verification), `${c} : renvoi vers F3.27 et F3.28`);
+});
+
+test('attendus : un constat coté à un seul endroit (critères voisins recadrés, renvois croisés)', () => {
+  const all = e => ['attendu', 'verification', 'C', 'P', 'NC', 'NA'].map(k => e[k] || '').join(' ');
+  // R1, R4 : points de synthèse hors note
+  for (const c of ['F2.2.8', 'F4.27']) assert(/synthèse/i.test(entryOf(c).attendu) && /hors note/.test(entryOf(c).attendu), `${c} : synthèse hors note`);
+  // R2 : effectif (F2.2.2) / gestion du sous-effectif (F2.2.7)
+  assert(/F2\.2\.7/.test(entryOf('F2.2.2').attendu) && /F2\.2\.2/.test(entryOf('F2.2.7').attendu), 'R2');
+  // R3 : EPI de sécurité (F2.4.4) / gants d'hygiène (F5.2) / sécurité de l'opération (F5.22)
+  assert(!/EPI adaptés au site/.test(entryOf('F5.2').attendu) && !/EPI portés/.test(entryOf('F5.22').attendu), 'R3 : EPI jugés en F2.4.4 seulement');
+  assert(/F5\.2\b/.test(entryOf('F2.4.4').attendu) && /F5\.22/.test(entryOf('F2.4.4').attendu) && /F2\.4\.4/.test(entryOf('F5.2').attendu), 'R3 : renvois');
+  // R4 : stabilisation (F4.3), complétude (F4.28), regard critique (F4.26) jamais recomptés par paramètre
+  for (const c of ['F4.4', 'F4.5', 'F4.6', 'F4.7', 'F4.8', 'F4.9', 'F4.29']) {
+    const e = entryOf(c);
+    assert(!/stabilisation/i.test(e.NC) && !/non réalisée/i.test(e.NC), `${c} : NC sans stabilisation ni mesure manquante`);
+    assert(/F4\.28/.test(e.NA || ''), `${c} : mesure manquante jugée en F4.28`);
+  }
+  assert(/F4\.4 à F4\.9/.test(entryOf('F4.28').attendu), 'R4 : F4.28 seul juge une mesure manquante');
+  // R5 : flacons avec réactif jugés en F4.13 seulement
+  assert(/rincé/.test(entryOf('F4.13').NC), 'F4.13 : flacon avec réactif rincé');
+  for (const c of ['F4.17', 'F5.25']) assert(!/contient un réactif|avec réactif/.test(entryOf(c).NC) && !/rinçage ou non/.test(entryOf(c).attendu), `${c} : pas de recomptage du réactif`);
+  assert(/F4\.13/.test(entryOf('F4.17').attendu) && /F4\.13/.test(entryOf('F5.25').attendu), 'R5 : renvois vers F4.13');
+  // R6 : véhicule (F2.3.5) / flacons vides (F4.16, commun à la tournée)
+  assert(!/carburant/.test(entryOf('F4.16').NC) && /F2\.3\.5/.test(entryOf('F4.16').attendu) && /F4\.16/.test(entryOf('F2.3.5').attendu), 'R6');
+  for (const c of ['F4.14', 'F4.16']) assert(entryOf(c).tournee, `${c} : commun à la tournée`);
+  // R7 : planning (F2.5.5) / départ de la tournée (F2.5.2) / rendez-vous d'un point d'eau (F3.31)
+  assert(/F2\.5\.2/.test(entryOf('F2.5.5').attendu) && /F3\.31/.test(entryOf('F2.5.2').attendu) && /F2\.5\.2/.test(entryOf('F3.31').attendu), 'R7');
+  // R8 : accompagnants du contrôleur (F2.1.2) / du préleveur (F3.29)
+  assert(/F3\.29/.test(entryOf('F2.1.2').attendu) && /F2\.1\.2/.test(entryOf('F3.29').attendu), 'R8');
+  // R9 : lien avec la fiche (F6.10) / étiquette (F6.12)
+  assert(/F6\.12/.test(entryOf('F6.10').attendu) && /F6\.10/.test(entryOf('F6.12').attendu), 'R9');
+  // R10 : glacières de la tournée (F5.11) ; stockage (F9.11) / acheminement (F9.13) ; conservation (F8.B5) / glacière (F8.B6)
+  assert(/F5\.11/.test(entryOf('F9.11').attendu) && /F5\.11/.test(entryOf('F8.B6').attendu) && !/lumière/.test(all(entryOf('F9.13'))), 'R10');
+  assert(!/chaud/.test(entryOf('F8.B5').NC), 'R10 : le froid est jugé en F8.B6');
+  // R11 : contexte hydrologique jugé en F3.24 seulement
+  assert(!/hydrolog/.test(entryOf('F3.23').attendu.split('F3.24')[0].replace('contexte du jour (hydrologie', '')) && !/hydrolog/.test(entryOf('F3.25').attendu), 'R11');
+  // Information relevée deux fois : journée (F2) / station (F1)
+  assert(/F1\.R5/.test(entryOf('F2.1.9').attendu) && /F1\.R6/.test(entryOf('F2.1.8').attendu), 'météo et niveau d’eau : journée / station');
+  assert(/F2\.5\.2/.test(entryOf('F2.1.5').attendu) && /F2\.1\.5/.test(entryOf('F2.5.2').verification), 'heures : contrôle OEG / tournée du prestataire');
+});
+
+test('attendus : liste de préparation sans élément répété (liste commune et listes par type)', () => {
+  const seen = new Map(), dup = [];
+  for (const [k, groups] of Object.entries(data.preparation)) for (const g of groups) for (const e of g.elements) {
+    const key = foldT(e);
+    if (seen.has(key)) dup.push(`${seen.get(key)} = ${k} › ${g.titre} : ${e}`); else seen.set(key, `${k} › ${g.titre}`);
+  }
+  deepEq(dup, [], 'élément répété');
+  const where = e => Object.entries(data.preparation).flatMap(([k, gs]) => gs.filter(g => g.elements.includes(e)).map(g => `${k} › ${g.titre}`));
+  deepEq(where('Appareil de positionnement et appareil photo'), ['commun › Matériel et EPI']);
+  assert(!data.preparation.eso.some(g => g.elements.some(e => /gants nitrile/i.test(e))), 'gants nitrile : liste commune seulement');
+  assert(!data.preparation.ce.some(g => g.titre === 'Sécurité sur site'), 'gilets et signalisation : liste commune seulement');
+});
+
 /* ---------- Module js/app/attendus-pdf.js ---------- */
 test('attenduFor : identifiant de base ou effectif de tournée', () => {
   eq(attenduFor('it-F4-12', data).id, 'it-F4-12');
@@ -278,6 +364,7 @@ test('écran : rendu par type et par feuille, recherche, carte d’un critère',
     assert(box.querySelector('#att-F10') && !box.querySelector('#att-F6'), 'F10 affichée, F6 absente');
     assert(box.querySelector('[data-act=att-pdf][data-type=eso]') && box.querySelector('[data-act=att-prep-pdf]'), 'boutons PDF');
     assert(box.querySelector('#att-it-F4-2 .shared-badge'), 'badge « Commun à la tournée »');
+    assert(box.querySelector('[data-id="it-F4-27"] .att-noscore') && !box.querySelector('[data-id="it-F4-26"] .att-noscore'), 'badge « Point de synthèse, hors note »');
     assert(box.querySelector('#att-it-F6-5') === null, 'critère de biologie absent');
 
     let r = mod.applyFilter(box, 'glacière');
@@ -306,6 +393,11 @@ test('écran : rendu par type et par feuille, recherche, carte d’un critère',
     assert(String(mod.attenduCard('it-F1-R1')).includes('att-val'), 'carte d’une information relevée');
     eq(String(mod.attenduCard('it-F99-9')), '', 'critère inconnu');
     assert(mod.matches(mod.searchText({ code: 'F5.13', label: 'Température', entry: { attendu: 'Échantillons conservés' } }), 'echantillons temperature'), 'recherche sans accents');
+    // Fenêtre « Aide et attendu » : aide de la grille découpée (points inclus, origine à part)
+    deepEq(mod.helpParts(GRID_CT_2026.sections.flatMap(x => x.items).find(i => i.id === 'it-F4-17').help),
+      { inclut: true, text: 'rinçage des flacons sans réactif (trois fois) et des bouchons.', origins: ['fiches cours d’eau et eaux souterraines'] });
+    deepEq(mod.helpParts('Volume = π × r². Sans objet ⇒ N/A.'), { inclut: false, text: 'Volume = π × r². Sans objet ⇒ N/A.', origins: [] });
+    deepEq(mod.helpParts(''), { inclut: false, text: '', origins: [] });
   } finally {
     box.remove();
   }

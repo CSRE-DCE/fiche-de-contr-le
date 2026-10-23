@@ -18,7 +18,25 @@
  * - `prefill` : valeur pré-remplie une seule fois (création de l'audit ou ajout de la station) — voir prefillResponses.
  * - `labelTemplate` : libellé complété avec le prestataire de la tournée ({prestataire}) dans la grille effective.
  * - `suggest` : valeur calculée proposée à l'auditeur (ex. amplitude horaire), jamais appliquée seule.
+ * - `noScore: true` : critère de SYNTHÈSE d'autres critères (F2.2.8, F4.27) : coté C / P / NC / N/A et compté dans les
+ *   décomptes, mais exclu de toute note calculée, pour ne pas compter deux fois un même constat.
  * Les numéros en double des maquettes (F3 « 16 », F4 « 16 », F9 « 12 ») sont corrigés en 17 / 17 / 13.
+ *
+ * SANS DOUBLON NI REDONDANCE (demande de l'OEG du 16/10/2026, version 1.2). Chaque constat n'est coté qu'à UN endroit :
+ * l'attendu de chaque critère (data/attendus-ct-2026.json) dit ce qu'il juge et renvoie aux critères voisins
+ * (« le rinçage du matériel est jugé en F5.9 ») ; l'aide (`help`) ne répète pas l'attendu (les deux s'affichent dans la
+ * même fenêtre « Aide et attendu ») : elle se limite aux points des fiches d'évaluation inclus (« Inclut : … ») et à
+ * leur origine ; deux critères ne portent le même libellé que s'ils relèvent de protocoles ou de portées différents
+ * (liste blanche commentée de tests/unit/grid-ct-2026.test.js, qui détecte automatiquement les doublons).
+ * Un numéro n'est JAMAIS réutilisé ni renuméroté (les réponses des tournées y sont rattachées) : un critère retiré est
+ * listé ci-dessous (« F<feuille>.<no> → critère qui le reprend (version) ») et aucun critère ne peut reprendre son numéro.
+ * NUMÉROS RETIRÉS : aucun.
+ * RÉVISIONS (grille par défaut diffusée aux tablettes par upgradeStoredGrid ; tournées existantes jamais modifiées) :
+ *   1.1 : turbidité (F4.9) en NTU.
+ *   1.2 : doublons et redondances : libellés F2.1.5, F2.1.6 (contrôle OEG) et F2.5.2, F2.5.3 (tournée du prestataire)
+ *         distingués ; F4.14 et F4.16 communs à la tournée ; F2.2.8 et F4.27 hors note (noScore) ; aides qui
+ *         répétaient l'attendu retirées (renvois dans les attendus) ; F4.17 limité aux flacons sans réactif (F4.13) ;
+ *         zones de texte libres des feuilles distinguées (placeholder).
  *
  * TRAÇABILITÉ DES FICHES D'ÉVALUATION (fiches Agences de l'eau / Aquascop 2026, non reproduites dans le dépôt).
  * Une ligne par point de la fiche source → critère(s) CT-2026 qui le couvre(nt). « (Inclut) » : point fusionné dans
@@ -211,9 +229,10 @@ const BILAN = (title, extra = {}) => ({ key: 'conclusion', title, icon: 'check',
 export const GRID_CT_2026 = {
   id: 'grid-ct-2026-v1',
   code: 'CT-2026',
-  // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 (même identifiant : grilles enregistrées mises à niveau par
-  // upgradeStoredGrid ; tournées existantes inchangées). Toute évolution diffusée aux tablettes incrémente ce numéro.
-  version: '1.1',
+  // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 ; 1.2 : doublons et redondances (voir RÉVISIONS en tête du
+  // fichier). Même identifiant : grilles enregistrées mises à niveau par upgradeStoredGrid ; tournées existantes
+  // inchangées. Toute évolution diffusée aux tablettes incrémente ce numéro.
+  version: '1.2',
   status: 'publiee',
   publishedAt: '2026-10-10T00:00:00.000Z',
   name: 'Contrôle terrain des prestations de prélèvement – 2026',
@@ -257,20 +276,20 @@ export const GRID_CT_2026 = {
       variants: { ce: { title: 'Fiche de contrôle terrain', kicker: 'Suivi physico-chimique des eaux de surface de Guyane' }, eso: { title: 'Fiche de contrôle terrain', kicker: 'Suivi qualitatif des eaux souterraines de Guyane' } } },
     { no: 2, key: 'organisation', tab: 'Organisation', title: 'Organisation, sécurité et déroulé de mission', kicker: '', theme: 'navy', compartment: 'organisation', scope: 'tournee', layout: 'table', modules: [],
       variants: { ce: { title: 'Organisation, logistique et sécurité de la tournée' }, eso: { title: 'Organisation, logistique et sécurité de la tournée' } },
-      blocks: [{ key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat' }] },
+      blocks: [{ key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat', placeholder: 'Constats sur l’organisation, la logistique et la sécurité de la tournée ; actions demandées au prestataire' }] },
     { no: 3, key: 'caracterisation', tab: 'Caractérisation', title: 'Prise d’informations de terrain – caractérisation de la station', kicker: 'Prise d’informations de terrain – caractérisation de la station', theme: 'green', compartment: 'organisation', scope: 'station', layout: 'table', modules: [],
       variants: {
         ce: { tab: 'Station et site', title: 'Prise d’informations de terrain – station et site', kicker: 'Prise d’informations de terrain – station et site' },
         eso: { tab: 'Station et site', title: 'Prise d’informations de terrain – station et site', kicker: 'Prise d’informations de terrain – station et site' }
       },
       blocks: [
-        { key: 'observations', title: 'Observations générales et non-conformités', icon: 'chat' },
-        { key: 'photos', title: 'Prise de photos / références / commentaires', icon: 'camera' },
+        { key: 'observations', title: 'Observations générales et non-conformités', icon: 'chat', placeholder: 'Constats sur les informations relevées par le préleveur, la localisation et l’approche de la station' },
+        { key: 'photos', title: 'Prise de photos / références / commentaires', icon: 'camera', placeholder: 'Références des photos (n°, sujet) et commentaires' },
         BILAN('Bilan – Localisation et accès au site')
       ] },
     { no: 10, key: 'eso-ouvrage', tab: 'Ouvrage et purge', title: 'Eau souterraine – ouvrage, pompage et purge', kicker: 'Suivi qualitatif des eaux souterraines de Guyane', theme: 'slate', compartment: 'eso', scope: 'station', layout: 'table', modules: [],
       blocks: [
-        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat' }
+        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'chat', placeholder: 'Constats sur l’ouvrage, le pompage et la purge ; actions demandées' }
       ] },
     { no: 4, key: 'pc-insitu', tab: 'PC in situ', title: 'Physico-chimie, mesures in situ et flaconnage', kicker: '', theme: 'peach', compartment: 'physico', compartments: ['physico', 'eso'], scope: 'station', layout: 'table',
       modules: ['instruments'], tourneeData: ['instruments'], instruments: INSTRUMENTS, instrumentFields: INSTRUMENT_FIELDS, calibrationFields: CALIBRATION_FIELDS,
@@ -279,7 +298,7 @@ export const GRID_CT_2026 = {
         eso: { tab: 'Mesures in situ', title: 'Physico-chimie, mesures in situ, étalonnage et flaconnage', instruments: INSTRUMENTS_ESO }
       },
       blocks: [
-        { key: 'observations', title: 'Observations / non-conformités / actions demandées :', icon: 'chat' },
+        { key: 'observations', title: 'Observations / non-conformités / actions demandées :', icon: 'chat', placeholder: 'Constats sur les mesures in situ, l’étalonnage et le flaconnage ; actions demandées' },
         { key: 'conclusion', title: 'Conclusion générale', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['AC', 'À compléter']], fields: SIGN, showFor: ['bio'] },
         BILAN('Bilan – Mesures in situ, étalonnage et flaconnage', { showFor: ['ce'] }),
         BILAN('Bilan – Purge et mesure des paramètres in situ', { showFor: ['eso'] })
@@ -290,25 +309,25 @@ export const GRID_CT_2026 = {
         eso: { tab: 'Prélèvement', title: 'Prélèvement, conditionnement et chaîne du froid' }
       },
       blocks: [
-        { key: 'notes', title: 'Remarques générales / Notes', icon: 'edit' },
+        { key: 'notes', title: 'Remarques générales / Notes', icon: 'edit', placeholder: 'Constats sur le prélèvement, le conditionnement et la chaîne du froid' },
         { key: 'conclusion', title: 'Conclusion du contrôle', icon: 'check', options: [['C', 'Conforme (C)'], ['NC', 'Non conforme (NC)'], ['NA', 'Non applicable (N/A)'], ['RES', 'À compléter / Réserve']], fields: SIGN, showFor: ['bio'] },
         BILAN('Bilan – Échantillonnage et identification des échantillons')
       ] },
     { no: 6, key: 'pezada', tab: 'Invertébrés', title: 'Invertébrés aquatiques – protocole PEZADA', kicker: 'Suivi biologique des eaux douces de surface de Guyane', theme: 'violet', compartment: 'invertebres', scope: 'station', layout: 'table', modules: [],
       blocks: [
-        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'edit' },
+        { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'edit', placeholder: 'Constats sur le prélèvement des invertébrés ; actions demandées' },
         { key: 'conclusion', title: 'Conclusion du contrôle', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['NA', 'Non applicable']], fields: ['comments', 'date', 'controller', 'signature', 'providerSignature'] }
       ] },
     { no: 7, key: 'idgf', tab: 'Diatomées', title: 'Diatomées – IDGF', kicker: 'Fiche de contrôle terrain – Diatomées – IDGF', theme: 'sky', compartment: 'diatomees', scope: 'station', layout: 'table', modules: [],
       blocks: [
-        { key: 'observations', title: 'Observations générales', icon: 'chat' },
+        { key: 'observations', title: 'Observations générales', icon: 'chat', placeholder: 'Constats sur le prélèvement des diatomées ; actions demandées' },
         { key: 'conclusion', title: 'Conclusion du contrôle terrain', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['NA', 'Non applicable']], fields: ['comments', 'controller', 'date', 'signature'] }
       ] },
     { no: 8, key: 'ichtyo-mercure', tab: 'Poissons', title: 'Ichtyologie et mercure dans le biote', kicker: 'Suivi biologique des eaux douces de Guyane', theme: 'ocean', compartment: 'poissons', scope: 'station', layout: 'split', modules: [],
-      blocks: [{ key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'clipboard' }] },
+      blocks: [{ key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'clipboard', placeholder: 'Constats sur la pêche et les échantillons de biote ; actions demandées' }] },
     { no: 9, key: 'phyto', tab: 'Phytoplancton', title: 'Phytoplancton d’eau douce', kicker: 'Phytoplancton d’eau douce', theme: 'teal', compartment: 'phytoplancton', scope: 'station', layout: 'table', modules: [],
       blocks: [
-        { key: 'notes', title: 'Notes et observations générales', icon: 'doc' },
+        { key: 'notes', title: 'Notes et observations générales', icon: 'doc', placeholder: 'Constats sur le prélèvement du phytoplancton ; actions demandées' },
         { key: 'conclusion', title: 'Conclusion et signature', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['RES', 'Sous réserve']], fields: ['comments', 'controller', 'date', 'signature'] }
       ] }
   ],
@@ -324,7 +343,7 @@ export const GRID_CT_2026 = {
         V(1, 'R4', 'Opérateurs du prestataire', '', 'text', { prefill: 'prestation.operators', labelTemplate: 'Opérateurs {prestataire}' }),
         V(1, 'R5', 'Météo', '', 'select', { options: [...METEO] }),
         V(1, 'R6', 'Niveau d’eau', '', 'select', { options: [...NIVEAU_EAU], condition: NOT_FOR('eso') }),
-        V(1, 'R7', 'Observations', '', 'longtext')
+        V(1, 'R7', 'Observations', '', 'longtext', { placeholder: 'Remarques sur la station le jour du contrôle (accès, particularités, événements)' })
       ]
     },
 
@@ -332,12 +351,12 @@ export const GRID_CT_2026 = {
     {
       id: 's-F2-1', sheet: 2, no: '1', title: 'Identification mission', columns: 'value', domain: 'prelevement', condition: ONLY('organisation'),
       items: [
-        V(2, '1.1', 'Agent(s) OEG', 'OEG', 'text', { prefill: 'auditor.name', required: true, help: 'Auditeur de la tournée.' }),
+        V(2, '1.1', 'Agent(s) OEG', 'OEG', 'text', { prefill: 'auditor.name', required: true }),
         V(2, '1.2', 'Structure accompagnatrice', 'Structure', 'text'),
         V(2, '1.3', 'Agent(s) accompagnateur(s)', 'Accompagnateurs', 'text'),
         V(2, '1.4', 'Date mission', 'Date', 'date', { prefill: 'audit.date', required: true }),
-        V(2, '1.5', 'Heure début', 'Hdébut', 'time', { prefill: 'audit.time' }),
-        V(2, '1.6', 'Heure fin', 'Hfin', 'time'),
+        V(2, '1.5', 'Heure début du contrôle (OEG)', 'Hdébut', 'time', { prefill: 'audit.time' }),
+        V(2, '1.6', 'Heure fin du contrôle (OEG)', 'Hfin', 'time'),
         V(2, '1.7', 'Moyens OEG', 'Moyens', 'text'),
         V(2, '1.8', 'Niveau d’eau', 'Niveau', 'select', { options: [...NIVEAU_EAU], condition: NOT_FOR('eso') }),
         V(2, '1.9', 'Conditions météo', 'Météo', 'select', { options: [...METEO] }),
@@ -357,7 +376,7 @@ export const GRID_CT_2026 = {
         C(2, '2.5', 'Agents non spécialisés mais formés', 'Non spé. formés', { input: num({ min: 0, step: 1 }) }),
         C(2, '2.6', 'Agents non spécialisés non formés', 'Non spé. non formés', { input: num({ min: 0, step: 1 }) }),
         C(2, '2.7', 'Sous-effectif', 'Sous-effectif', { input: select(OUI_NON) }),
-        C(2, '2.8', 'Conformité équipe/CCTP', 'Conformité')
+        C(2, '2.8', 'Conformité équipe/CCTP', 'Conformité', { noScore: true })
       ]
     },
     {
@@ -385,12 +404,12 @@ export const GRID_CT_2026 = {
       id: 's-F2-5', sheet: 2, no: '5', title: 'Planning et déroulé de mission', columns: 'full', domain: 'prelevement', condition: ONLY('organisation'),
       items: [
         C(2, '5.1', 'Jour', 'Jour', { input: { type: 'date' } }),
-        C(2, '5.2', 'Heure début', 'Hdébut', { input: { type: 'time' } }),
-        C(2, '5.3', 'Heure fin', 'Hfin', { input: { type: 'time' } }),
+        C(2, '5.2', 'Heure début de la tournée (prestataire)', 'Hdébut', { input: { type: 'time' } }),
+        C(2, '5.3', 'Heure fin de la tournée (prestataire)', 'Hfin', { input: { type: 'time' } }),
         C(2, '5.4', 'Description des étapes de la mission', 'Déroulé', { input: { type: 'longtext' } }),
         C(2, '5.5', 'Planification de l’audit, respect du RDV / horaire si inopiné', 'Planif.'),
         C(2, '5.6', 'Programme journalier (nombre de stations)', 'Prog. jour', { input: num({ min: 0, step: 1 }), prefill: 'tournee.stationCount' }),
-        C(2, '5.7', 'Amplitude horaire', 'Amplitude', { suggest: { type: 'duration', from: 'it-F2-5.2', to: 'it-F2-5.3' }, help: 'Durée proposée à partir des heures de début et de fin (5.2 → 5.3).' }),
+        C(2, '5.7', 'Amplitude horaire', 'Amplitude', { suggest: { type: 'duration', from: 'it-F2-5.2', to: 'it-F2-5.3' } }),
         C(2, '5.8', 'Logique d’enchaînement de la tournée (ordre des stations)', 'Enchaînement')
       ]
     },
@@ -419,12 +438,12 @@ export const GRID_CT_2026 = {
       items: [
         C(3, 1, 'Nom du bassin versant', 'BV', { prefill: 'site.bassin', condition: NOT_FOR('eso') }),
         C(3, 2, 'Nom du cours d’eau', 'CE', { prefill: 'site.riverName', condition: NOT_FOR('eso') }),
-        C(3, 3, 'Nom de la station', 'STA', { prefill: 'site.name', help: 'Eaux souterraines : libellé du point d’eau.' }),
+        C(3, 3, 'Nom de la station', 'STA', { prefill: 'site.name' }),
         C(3, 4, 'Code SANDRE station', 'SANDRE', { prefill: 'site.code', condition: NOT_FOR('eso') }),
         C(3, 5, 'Rang de Strahler', 'STR', { prefill: 'site.strahler', condition: FOR('bio') }),
         C(3, 6, 'Pression (RCO)', 'RCO', { prefill: 'site.pressions' }),
-        C(3, 7, 'Conditions météo', 'METEO', { help: 'Voir aussi 27–28 (observations environnementales).' }),
-        C(3, 8, 'Physico-chimie générale', 'PHYC', { help: 'Voir aussi 27–28 (observations environnementales).' }),
+        C(3, 7, 'Conditions météo', 'METEO'),
+        C(3, 8, 'Physico-chimie générale', 'PHYC'),
         C(3, 9, 'Commune', 'COM', { prefill: 'site.commune' }),
         C(3, 10, 'Hydro-écorégion', 'HER', { prefill: 'site.her', condition: FOR('bio') }),
         C(3, 11, 'Schéma général des habitats', 'HAB', { condition: FOR('bio') }),
@@ -432,7 +451,7 @@ export const GRID_CT_2026 = {
         C(3, 13, 'Protocoles utilisés', 'PROTO'),
         C(3, 14, 'Date des prélèvements', 'DATE', { input: { type: 'date' } }),
         C(3, 15, 'Coordonnées GPS des points de prélèvement', 'GPS', { input: xy() }),
-        C(3, 16, 'Prise de photos', 'PHOTO', { help: 'Le préleveur photographie la station et ses opérations selon le protocole. Les photos du contrôleur se joignent en preuve aux critères ou dans l’encadré « Prise de photos / références / commentaires ».' }),
+        C(3, 16, 'Prise de photos', 'PHOTO'),
         C(3, 17, 'Station représentative de la ME', 'REP_ME', { input: select(['Oui', 'Non', 'Partiellement']), condition: FOR('bio') }),
         C(3, 18, 'Code BSS du point', 'BSS', { prefill: 'site.code', condition: FOR('eso') })
       ]
@@ -472,7 +491,7 @@ export const GRID_CT_2026 = {
     {
       id: 's-F10-1', sheet: 10, no: '1', title: 'Caractéristiques du point de prélèvement', columns: 'full', domain: 'prelevement', condition: ONLY('eso'),
       items: [
-        V(10, 1, 'Configuration de l’ouvrage', 'Ouvrage', 'select', { options: ['Robinet', 'Puits réservoir', 'Émergence de la source', 'Piézomètre', 'Autre'], help: 'Accès à l’eau souterraine.' }),
+        V(10, 1, 'Configuration de l’ouvrage', 'Ouvrage', 'select', { options: ['Robinet', 'Puits réservoir', 'Émergence de la source', 'Piézomètre', 'Autre'], }),
         V(10, 2, 'Pompe à demeure', 'Pompe', 'fields', {
           fields: [
             yn('pompe', 'Ouvrage équipé d’une pompe à demeure'),
@@ -490,8 +509,7 @@ export const GRID_CT_2026 = {
           ])
         }),
         C(10, 4, 'Vigilance vis-à-vis des gaz d’échappement (contamination)', 'Gaz', {
-          input: null, condition: { item: 'it-F10-3', field: 'alimentation', op: 'in', value: ['Véhicule', 'Groupe électrogène'] },
-          help: 'Pompe alimentée par le véhicule ou un groupe électrogène : le préleveur est-il attentif aux risques de contamination de l’eau par les gaz d’échappement ?'
+          input: null, condition: { item: 'it-F10-3', field: 'alimentation', op: 'in', value: ['Véhicule', 'Groupe électrogène'] }
         })
       ]
     },
@@ -541,7 +559,7 @@ export const GRID_CT_2026 = {
       headers: { short: 'Réf.' },
       items: [
         C(4, 1, 'Préleveur(s) / fonction', 'PV'),
-        C(4, 2, 'Calibration des sondes', 'CAL', { ...TOURNEE, help: inc('procédures de calibration et d’étalonnage des sondes (fiche cours d’eau). Détail par appareil (étalonnage hebdomadaire, vérifications du matin et du soir) : module « Appareils de mesure ».') }),
+        C(4, 2, 'Calibration des sondes', 'CAL', { ...TOURNEE, help: inc('procédures de calibration et d’étalonnage des sondes (fiche cours d’eau).') }),
         C(4, 3, 'Respect des normes de mesure', 'NORME', { help: inc('modalités de réalisation des mesures (fiche cours d’eau).') }),
         C(4, 4, 'pH (in situ)', 'pH', { input: num({ unit: 'unité pH', min: 0, max: 14, step: 0.01 }) }),
         C(4, 5, 'Oxygène dissous (in situ)', 'O2', { input: num({ unit: 'mg/L', min: 0, step: 0.01 }) }),
@@ -553,12 +571,12 @@ export const GRID_CT_2026 = {
         C(4, 11, 'Position de mesure', 'Pos', { help: inc('site choisi pour les mesures (fiche cours d’eau).'), condition: NOT_FOR('eso') }),
         C(4, 12, 'Flaconnage conforme', 'Flac', { help: inc('flaconnage conforme au programme analytique du laboratoire (nombre, type de flacons) (fiche eaux souterraines).') }),
         C(4, 13, 'Présence ou ajout de réactif', 'Réactif', { help: inc('remplissage des flacons avec réactifs (fiche cours d’eau).') }),
-        C(4, 14, 'Flaconnage supplémentaire', 'Sup'),
+        C(4, 14, 'Flaconnage supplémentaire', 'Sup', TOURNEE),
         C(4, 15, 'Casse de flaconnage', 'Casse'),
-        C(4, 16, 'Transport adapté du flaconnage', 'Transp'),
+        C(4, 16, 'Transport adapté du flaconnage', 'Transp', TOURNEE),
         C(4, 17, 'Rinçage des flacons', 'Rinçage', {
           input: fields([yn('troisFois', 'Rinçage trois fois'), yn('bouchons', 'Rinçage des bouchons')]),
-          help: inc('rinçage des flacons (trois fois) et des bouchons (fiches cours d’eau et eaux souterraines) ; rinçage du matériel : F5.9.')
+          help: inc('rinçage des flacons sans réactif (trois fois) et des bouchons (fiches cours d’eau et eaux souterraines).')
         })
       ]
     },
@@ -573,21 +591,20 @@ export const GRID_CT_2026 = {
         C(4, 22, 'Organisme fournisseur du flaconnage', 'Fournisseur', { ...TOURNEE, input: { type: 'text', placeholder: 'Laboratoire / organisme fournisseur' } }),
         C(4, 23, 'Propreté des flacons', 'Propreté', TOURNEE),
         C(4, 24, 'Étiquetage des flacons / descriptif disponible', 'Étiquetage', TOURNEE),
-        C(4, 25, 'Traçabilité vers le laboratoire (scan, fiche…)', 'Trac. labo', { ...TOURNEE, help: 'Flacons fournis identifiés et rattachés au laboratoire (code-barres scanné, fiche). La transmission des données de terrain avec les échantillons est contrôlée en F5.28.' })
+        C(4, 25, 'Traçabilité vers le laboratoire (scan, fiche…)', 'Trac. labo', TOURNEE)
       ]
     },
     {
       id: 's-F4-mesures', sheet: 4, no: '', title: 'Appréciation des mesures in situ', icon: 'search', columns: 'full', domain: 'prelevement', condition: PHYSICO_OR_ESO,
       headers: { short: 'Réf.' },
       items: [
-        C(4, 26, 'Regard critique sur les résultats des mesures', 'Regard crit.', { input: null, help: 'Le préleveur vérifie la cohérence de ses mesures (aucune contre-mesure du contrôleur).' }),
-        C(4, 27, 'Fiabilité apparente des mesures', 'Fiabilité', { input: null }),
+        C(4, 26, 'Regard critique sur les résultats des mesures', 'Regard crit.', { input: null }),
+        C(4, 27, 'Fiabilité apparente des mesures', 'Fiabilité', { input: null, noScore: true }),
         C(4, 28, 'Complétude des mesures in situ', 'Complétude', {
           input: fields([
             { key: 'instrument', label: 'Instrument', type: 'choice', options: ['Sondes monoparamètres', 'Sonde multiparamètres'] },
             { key: 'manquantes', label: 'Mesures manquantes et cause', type: 'text' }
-          ]),
-          help: 'Température, pH, conductivité, oxygène dissous et turbidité ; potentiel redox en plus pour les eaux souterraines (29).'
+          ])
         }),
         C(4, 29, 'Potentiel redox (in situ)', 'Redox', { input: num({ unit: 'mV', step: 1 }), condition: FOR('eso') }),
         C(4, 30, 'Technique de prise des mesures adaptée au point d’eau', 'Technique', {
@@ -624,9 +641,9 @@ export const GRID_CT_2026 = {
         C(5, 4, 'Prélèvement face au courant', 'Face courant', { condition: NOT_FOR('eso') }),
         C(5, 5, 'Prélèvement en sub-surface', 'Sub-surface', { condition: NOT_FOR('eso'), help: inc('respect de la profondeur de prélèvement (fiche cours d’eau).') }),
         C(5, 6, 'Distance à la berge', 'Distance', { input: num({ unit: 'm', min: 0, step: 0.1 }), condition: NOT_FOR('eso') }),
-        C(5, 7, 'Sources de contamination', 'Contamination', { help: 'Sources de contamination identifiées par le préleveur ; préservation de l’intégrité de l’échantillon : F5.8.' }),
+        C(5, 7, 'Sources de contamination', 'Contamination'),
         C(5, 8, 'Moyens d’évitement', 'Évitement', { help: inc('préservation de l’intégrité de l’échantillon vis-à-vis des contaminations (fiche cours d’eau).') }),
-        C(5, 9, 'Rinçage du matériel', 'Rinçage', { help: inc('rinçage du matériel de prélèvement (fiche cours d’eau) ; rinçage des flacons et des bouchons : F4.17.') }),
+        C(5, 9, 'Rinçage du matériel', 'Rinçage', { help: inc('rinçage du matériel de prélèvement (fiche cours d’eau).') }),
         C(5, 10, 'Nombre de flacons', 'Nb flacons', { input: num({ min: 0, step: 1 }) })
       ]
     },
@@ -637,7 +654,6 @@ export const GRID_CT_2026 = {
         C(5, 12, 'Pré-réfrigération', 'Pré-réfrig.', TOURNEE),
         C(5, 13, 'Température de conservation', 'T° conservation', {
           input: num({ unit: '°C', step: 0.1 }),
-          help: 'Température relevée pour les échantillons de la station ; mode de conservation / réfrigération : F5.14 (commun à la tournée).',
           alerts: [{ op: 'outside', value: [2, 8], level: 'attention', code: 'TEMP_CONSERVATION', title: 'Température de conservation {value} °C', message: 'Température hors de la plage 5 ± 3 °C (NF EN ISO 5667-3)', requirement: 'Conservation des échantillons à 5 ± 3 °C (NF EN ISO 5667-3)', typeCode: 'TRANSPORT' }]
         }),
         C(5, 14, 'Réfrigérant / glace', 'Réfrigérant', { ...TOURNEE, help: inc('mode de conservation / réfrigération des échantillons (fiche cours d’eau).') }),
@@ -658,8 +674,7 @@ export const GRID_CT_2026 = {
         C(5, 24, 'Prélèvement après purge ou renouvellement de l’eau', 'Renouvellement', { condition: FOR('eso'), input: fields([{ key: 'renouvellement', label: 'Renouvellement avant prélèvement', type: 'number', unit: 'min', min: 0, step: 1 }]) }),
         C(5, 25, 'Respect des consignes du laboratoire lors du remplissage des flacons', 'Consignes labo'),
         C(5, 26, 'Filtration pour les analyses de métaux', 'Filtration', {
-          input: fields([yn('rincageKit', 'Rinçage du kit de filtration (seringue et filtre)'), yn('seringue', 'Seringue remplie sans intermédiaire')]),
-          help: 'N/A si aucune analyse de métaux dissous n’est prévue.'
+          input: fields([yn('rincageKit', 'Rinçage du kit de filtration (seringue et filtre)'), yn('seringue', 'Seringue remplie sans intermédiaire')])
         })
       ]
     },
@@ -669,7 +684,6 @@ export const GRID_CT_2026 = {
         C(5, 27, 'Étiquetage suffisant des échantillons (à minima code station / BSS, date, heure)', 'Étiquetage'),
         C(5, 28, 'Données transmises au laboratoire avec les échantillons', 'Transmission', {
           domain: 'transport',
-          help: 'Bordereau ou application accompagnant les échantillons de la station ; la traçabilité des flacons fournis est contrôlée en F4.25.',
           input: fields([{ key: 'support', label: 'Support', type: 'choice', options: ['Bordereau papier', 'Application mobile', 'Autre'] }, { key: 'autre', label: 'Autre', type: 'text', showIf: { key: 'support', value: 'Autre' } }])
         })
       ]

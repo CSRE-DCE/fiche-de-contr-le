@@ -250,13 +250,7 @@ export default {
       try { await refuseHeld(el.dataset.id); toast('Changement refusé', 'ok'); } catch (e) { toast(e.message, 'err'); }
       this.refresh();
     },
-    async 'device-rename'() {
-      const n = await promptDialog({ title: 'Nom de la tablette', label: 'Nom (ex. « Tablette 2 »)', value: session.device.name, multiline: false, voice: false });
-      if (!n) return;
-      await updateDevice({ name: n.trim() });
-      await store.log('device-rename', { entityLabel: n.trim() });
-      toast('Tablette renommée', 'ok'); this.refresh();
-    },
+    async 'device-rename'() { if (await renameTablet()) this.refresh(); },
     async 'device-number'() {
       const others = (await knownDevices()).filter(d => !d.self && d.number);
       const v = await promptDialog({ title: 'N° de la tablette', label: 'N° (1 à 99)', value: String(session.device.number), multiline: false, voice: false, hint: others.length ? `Déjà utilisés : ${others.map(d => `${d.number} (${d.name})`).join(', ')}.` : 'Différent sur chaque tablette.' });
@@ -408,12 +402,24 @@ export default {
   }
 };
 
+/** Renommer la tablette (une seule implémentation : Administration › Cette tablette ; Mon compte en mode équipe), tracé
+ * au journal. Retourne true si le nom a changé. */
+async function renameTablet() {
+  if (!can('devices.manage')) return false;
+  const n = await promptDialog({ title: 'Nom de la tablette', label: 'Nom (ex. « Tablette 2 »)', value: session.device.name, multiline: false, voice: false });
+  if (!n || !n.trim()) return false;
+  await updateDevice({ name: n.trim() });
+  await store.log('device-rename', { entityLabel: n.trim() });
+  toast('Tablette renommée', 'ok');
+  return true;
+}
+
 export const accountView = {
   nav: 'compte', title: 'Mon compte',
   async render() {
     return html`${pageTitle('Mon compte', `${session.user.name} — ${ROLES[session.user.role]}`)}
       <div class="card"><h2>Session</h2>${kv([['Nom', session.user.name], ['Identifiant', session.user.username], ['Profil', ROLES[session.user.role]], ['Session ouverte le', fmtDateTime(session.unlockedAt)], ['Tablette', `${session.device.name} (n° ${session.device.number})`], ['Mode', isTeamMode() ? `Équipe — dépôt GitHub ${teamLabel()}${session.githubLogin ? ' (@' + session.githubLogin + ')' : ''}` : 'Autonome'], ['Version de l’application', `${self.AUDIT_VERSION} (${self.AUDIT_BUILD_DATE})`]])}
-        <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="password">Changer mon mot de passe sur cette tablette</button>${can('devices.manage') ? html`<button class="btn ghost" data-act="rename">Renommer la tablette</button>` : ''}<button class="btn ghost" data-act="update">Rechercher une mise à jour</button><button class="btn ghost" data-act="switch-agent">Changer d’agent</button></div>
+        <div class="btn-row" style="margin-top:10px"><button class="btn ghost" data-act="password">Changer mon mot de passe sur cette tablette</button>${can('devices.manage') ? isTeamMode() && session.team ? html`<button class="btn ghost" data-act="rename">Renommer la tablette</button>` : html`<a class="btn ghost" href="#/administration" title="Nom et n° de la tablette : Administration › Cette tablette">Renommer la tablette (Administration)</a>` : ''}<button class="btn ghost" data-act="update">Rechercher une mise à jour</button><button class="btn ghost" data-act="switch-agent">Changer d’agent</button></div>
         <p class="note">Votre mot de passe est propre à chaque tablette : s’il est le même sur l’autre tablette, changez-le aussi là-bas. Ne le communiquez pas à vos collègues : avant de passer la tablette, « Changer d’agent ».</p></div>
       <div class="card"><h2>Affichage terrain</h2>
         <label class="check ${pref('sun') ? 'sel' : ''}"><input type="checkbox" data-change="sun" ${pref('sun') ? 'checked' : ''}> Mode « plein soleil » (contraste renforcé, texte agrandi)</label>
@@ -428,7 +434,7 @@ export const accountView = {
       try { await changePassword(v.old, v.n1); toast('Mot de passe changé', 'ok'); }
       catch (e) { toast(e.message, 'err'); }
     },
-    async rename() { if (!can('devices.manage')) return; const n = await promptDialog({ title: 'Nom de la tablette', label: 'Nom', value: session.device.name, multiline: false, voice: false }); if (n) { await updateDevice({ name: n }); toast('Tablette renommée', 'ok'); this.refresh(); } },
+    async rename() { if (await renameTablet()) this.refresh(); },
     /** « Changer d'agent » : comme le bouton de l'en-tête (saisie enregistrée, écran « Qui utilise la tablette ? »). */
     'switch-agent'() { window.AuditApp?.lockApp('changement d’agent'); },
     async update() {

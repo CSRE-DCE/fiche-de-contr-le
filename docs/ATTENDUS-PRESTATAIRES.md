@@ -2,7 +2,7 @@
 
 <!-- Document généré par tools/attendus_md.py depuis data/attendus-ct-2026.json : ne pas le modifier à la main. -->
 
-Version **1.0** du 12/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
+Version **1.1** du 23/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
 
 > Document de référence de l’Office de l’Eau de Guyane pour les contrôles terrain 2026, partagé entre les contrôleurs et les prestataires. Il indique, pour chaque point de contrôle des fiches, ce que le prestataire doit faire ou présenter, comment le contrôleur le vérifie et comment il choisit C, P, NC ou N/A. Il ne remplace ni le CCTP, ni les protocoles, ni les consignes du laboratoire, qui prévalent en cas de différence. Les mentions « à préciser » signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.
 
@@ -64,10 +64,11 @@ Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute 
 **Matériel et EPI**
 
 - [ ] Tenues adaptées et gants nitrile à usage unique en quantité suffisante
-- [ ] Gilet de sauvetage en bon état pour chaque personne embarquée ou exposée (contrôleur compris)
-- [ ] Équipements de sécurité routière : triangle, gilets haute visibilité, cônes
+- [ ] Gilet de sauvetage en bon état pour chaque personne embarquée ou exposée : berge à risque, pont, gué (contrôleur compris)
+- [ ] Équipements de sécurité routière (triangle, gilets haute visibilité, cônes) pour les arrêts en bord de route et les prélèvements depuis un pont
 - [ ] Trousse de premiers secours et moyen d’alerte adapté à la zone (téléphone satellite en zone non couverte)
 - [ ] Véhicule ou embarcation en bon état ; rangement qui sépare matériel propre, matériel sale, carburant et produits
+- [ ] Appareil de positionnement et appareil photo
 
 **Sondes et consommables**
 
@@ -94,7 +95,6 @@ Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute 
 
 - [ ] Bordereaux d’envoi ou fiches de transmission (papier ou application)
 - [ ] Dépôt au laboratoire ou transporteur réservé, avec une heure limite compatible avec le programme
-- [ ] Appareil de positionnement et appareil photo
 
 ### Hydrobiologie – RCS ESC BIO
 
@@ -133,19 +133,14 @@ Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute 
 - [ ] Canne, seau inox ou plastique, chaîne et corde, bouteille, selon les configurations (pont, berge, gué)
 - [ ] Matériel en matériau compatible avec les paramètres analysés (pas de métal pour les métaux)
 - [ ] Turbidimètre et cuves propres
-- [ ] Fiches stations indiquant le site précis (amont ou aval du pont…)
-
-**Sécurité sur site**
-
-- [ ] Gilets de sauvetage pour les prélèvements depuis un pont, une berge à risque ou un gué
-- [ ] Signalisation pour les arrêts en bord de route et les prélèvements depuis un pont
+- [ ] Site précis de prélèvement (amont ou aval du pont…) indiqué sur les fiches stations
 
 ### Eaux souterraines
 
 **Accès et rendez-vous**
 
 - [ ] Autorisations d’accès et rendez-vous confirmés avec les gestionnaires ou exploitants
-- [ ] Fiches de localisation à jour et codes BSS des points d’eau
+- [ ] Codes BSS des points d’eau sur les fiches de localisation
 
 **Ouvrage et purge**
 
@@ -162,7 +157,6 @@ Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute 
 **Échantillonnage**
 
 - [ ] Kit de filtration (seringues, filtres neufs) si des métaux dissous sont analysés
-- [ ] Gants nitrile à usage unique
 
 <a id="f1"></a>
 
@@ -190,8 +184,8 @@ Fiche station : repères du contrôle (date, heures d’arrivée et de départ, 
 | F1.R8 | Heure de départ du site | heure de départ du site. |
 | F1.R3 | Contrôleur OEG | nom du contrôleur OEG (pré-rempli). |
 | F1.R4 | Opérateurs du prestataire | noms des opérateurs du prestataire présents sur la station. Le prestataire présente son équipe (noms et fonctions) à l’arrivée du contrôleur. |
-| F1.R5 | Météo | conditions météorologiques au moment du contrôle. |
-| F1.R6 | Niveau d’eau | niveau d’eau apparent (étiage, basses eaux, moyennes eaux, hautes eaux, crue). Sans objet pour les eaux souterraines. |
+| F1.R5 | Météo | conditions météorologiques sur la station au moment du contrôle. |
+| F1.R6 | Niveau d’eau | niveau d’eau apparent sur la station au moment du contrôle (étiage, basses eaux, moyennes eaux, hautes eaux, crue). Sans objet pour les eaux souterraines. |
 | F1.R7 | Observations | remarques générales sur la station le jour du contrôle (accès, particularités, événements). |
 
 <a id="f2"></a>
@@ -221,14 +215,14 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 | N° | Information | Ce qui est relevé |
 |---|---|---|
 | F2.1.1 | Agent(s) OEG | nom du ou des agents OEG qui réalisent le contrôle (pré-rempli). |
-| F2.1.2 | Structure accompagnatrice | organisme qui accompagne le contrôle, le cas échéant (gestionnaire du site, partenaire…). |
-| F2.1.3 | Agent(s) accompagnateur(s) | nom des personnes accompagnatrices, le cas échéant. |
+| F2.1.2 | Structure accompagnatrice | organisme qui accompagne le contrôleur OEG pendant la tournée, le cas échéant (partenaire, gestionnaire du site…). L’accompagnant du préleveur sur un point d’eau est relevé en F3.29. |
+| F2.1.3 | Agent(s) accompagnateur(s) | nom des personnes qui accompagnent le contrôleur OEG, le cas échéant. |
 | F2.1.4 | Date mission | date de la tournée (obligatoire). |
-| F2.1.5 | Heure début | heure de début du contrôle. |
-| F2.1.6 | Heure fin | heure de fin du contrôle. |
+| F2.1.5 | Heure début du contrôle (OEG) | heure de début du contrôle par l’OEG (le départ de la tournée du prestataire est jugé en F2.5.2). |
+| F2.1.6 | Heure fin du contrôle (OEG) | heure de fin du contrôle par l’OEG (la fin de la tournée du prestataire est jugée en F2.5.3). |
 | F2.1.7 | Moyens OEG | moyens mobilisés par l’OEG (véhicule, embarcation, matériel). |
-| F2.1.8 | Niveau d’eau | situation hydrologique générale de la journée. Sans objet pour les eaux souterraines. |
-| F2.1.9 | Conditions météo | conditions météorologiques de la journée. |
+| F2.1.8 | Niveau d’eau | situation hydrologique générale de la journée ; le niveau d’eau de chaque station est relevé en F1.R6. Sans objet pour les eaux souterraines. |
+| F2.1.9 | Conditions météo | conditions météorologiques de la journée ; la météo de chaque station est relevée en F1.R5. |
 | F2.1.10 | Difficulté d’accès | difficultés d’accès rencontrées (piste, niveau d’eau, végétation, autorisation…). |
 | F2.1.11 | Type d’audit | contrôle inopiné ou avec rendez-vous. |
 | F2.1.12 | Lot / marché de prélèvement | lot ou marché de prélèvement contrôlé (intitulé ou référence). |
@@ -247,7 +241,7 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.2.2 – Effectif total
 
-- **Attendu :** L’effectif présent est suffisant pour réaliser toutes les opérations prévues avec qualité et en sécurité. Il correspond à ce que prévoient le CCTP et l’offre du prestataire.
+- **Attendu :** L’effectif présent est celui que prévoient le CCTP et l’offre du prestataire, et il suffit pour réaliser toutes les opérations prévues avec qualité et en sécurité. La gestion d’un sous-effectif (OEG prévenu, opérations reportées) est jugée en F2.2.7.
 - **Vérification :** Le contrôleur compte les personnes présentes (« Valeur / réponse ») et compare avec l’effectif prévu.
 - **C** (conforme / satisfaisant) : Effectif conforme à l’effectif prévu et adapté aux opérations.
 - **P** (perfectible) : Effectif conforme mais organisation tendue : une même personne enchaîne mesures, prélèvements et notation, avec des retards.
@@ -295,16 +289,16 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.2.7 – Sous-effectif
 
-- **Attendu :** L’équipe n’est pas en sous-effectif. En cas d’absence imprévue, l’OEG est prévenu et les opérations qui ne peuvent pas être bien réalisées ou qui deviennent dangereuses sont reportées.
-- **Vérification :** Le contrôleur indique « Oui » ou « Non » et rapproche l’effectif des opérations à réaliser.
-- **C** (conforme / satisfaisant) : Pas de sous-effectif.
-- **P** (perfectible) : Sous-effectif ponctuel signalé à l’OEG et compensé par une réorganisation, sans incidence sur la qualité ni sur la sécurité.
+- **Attendu :** En cas de sous-effectif, l’OEG est prévenu et les opérations qui ne peuvent pas être bien réalisées ou qui deviennent dangereuses sont reportées. Le nombre de personnes présentes est jugé en F2.2.2.
+- **Vérification :** Le contrôleur indique « Oui » ou « Non » (sous-effectif constaté) et juge la façon dont il est géré.
+- **C** (conforme / satisfaisant) : Pas de sous-effectif, ou sous-effectif signalé à l’OEG et géré sans incidence (opérations reportées).
+- **P** (perfectible) : Sous-effectif signalé tardivement, compensé par une réorganisation sans incidence sur la qualité ni sur la sécurité.
 - **NC** (non conforme) : Sous-effectif non signalé, ou qui conduit à supprimer ou bâcler une opération, ou à réaliser seul une opération à risque.
 - **Références :** CCTP du marché
 
 #### F2.2.8 – Conformité équipe/CCTP
 
-- **Attendu :** La composition de l’équipe (nombre, qualifications, rôles) correspond à celle prévue par le CCTP et l’offre du prestataire.
+- **Attendu :** Point de synthèse des points F2.2.1 à F2.2.7 : la composition de l’équipe (nombre, qualifications, rôles) correspond dans son ensemble à celle prévue par le CCTP et l’offre du prestataire. Point hors note : un écart déjà coté en F2.2.1 à F2.2.7 n’est pas compté une seconde fois.
 - **Vérification :** Le contrôleur fait la synthèse des points F2.2.1 à F2.2.7 et la compare au CCTP.
 - **C** (conforme / satisfaisant) : Équipe conforme au CCTP.
 - **P** (perfectible) : Écart mineur sans incidence (remplaçant de qualification équivalente non annoncé).
@@ -349,7 +343,7 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.3.5 – Aménagement du véhicule (étagères, rangement…)
 
-- **Attendu :** Le matériel est rangé et arrimé (étagères, caisses). Le matériel propre, le flaconnage et les échantillons sont séparés du matériel sale, du carburant et des produits (conservateurs, solutions).
+- **Attendu :** Le matériel est rangé et arrimé (étagères, caisses) ; le matériel propre et le flaconnage sont séparés du matériel sale, du carburant et des produits (conservateurs, solutions). Le conditionnement des flacons vides est jugé en F4.16, celui des échantillons en F5.23.
 - **Vérification :** Observation du rangement du véhicule ou de l’embarcation.
 - **C** (conforme / satisfaisant) : Rangement organisé, séparation entre propre et sale, matériel arrimé.
 - **P** (perfectible) : Rangement perfectible, sans contact entre les échantillons et une source de contamination.
@@ -386,11 +380,11 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.4.4 – Port des EPI prélèvements
 
-- **Attendu :** Pendant les prélèvements, l’équipe porte les EPI adaptés au contexte : gilet de sauvetage sur une berge à risque, depuis un pont, dans un gué ou en eau profonde ; gants, waders et équipements prévus pour manipuler les produits de conservation.
+- **Attendu :** Pendant les prélèvements, l’équipe porte les EPI de sécurité adaptés au contexte : gilet de sauvetage sur une berge à risque, depuis un pont, dans un gué ou en eau profonde ; waders et chaussures adaptés. Les gants d’hygiène sont jugés en F5.2, la sécurité de chaque opération en F5.22 et la manipulation des réactifs et des produits de conservation avec ces produits (F4.13, F6.9, F7.10).
 - **Vérification :** Observation pendant les opérations sur chaque station ; le jugement porte sur toute la tournée.
 - **C** (conforme / satisfaisant) : EPI adaptés portés à chaque opération.
 - **P** (perfectible) : Oubli ponctuel corrigé spontanément ou après rappel, sans exposition à un risque sérieux.
-- **NC** (non conforme) : Opération à risque (berge instable, pont, courant) sans gilet de sauvetage, ou produit de conservation manipulé sans gants.
+- **NC** (non conforme) : Opération à risque (berge instable, pont, courant) sans gilet de sauvetage, ou sans les équipements prévus pour entrer dans l’eau.
 - **Références :** Consignes de sécurité du prestataire
 
 #### F2.4.5 – Rappels EPI
@@ -423,18 +417,18 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 - **Références :** CCTP du marché
 - **À préciser (OEG) :** Délai de transmission du planning et des modifications à l’OEG : à préciser par l’OEG d’après le CCTP.
 
-#### F2.5.2 – Heure début
+#### F2.5.2 – Heure début de la tournée (prestataire)
 
-- **Attendu :** La tournée commence à l’heure annoncée, ou à une heure qui permet de tenir le programme et les délais de dépôt des échantillons.
-- **Vérification :** Le contrôleur saisit l’heure de début (« Valeur / réponse ») et la compare à l’horaire annoncé.
+- **Attendu :** La tournée du prestataire commence à l’heure annoncée, ou à une heure qui permet de tenir le programme et les délais de dépôt des échantillons. Pour les eaux souterraines, chaque rendez-vous de point d’eau est jugé en F3.31.
+- **Vérification :** Le contrôleur saisit l’heure de départ de la tournée du prestataire (« Valeur / réponse ») et la compare à l’horaire annoncé ; l’heure du contrôle OEG est relevée en F2.1.5.
 - **C** (conforme / satisfaisant) : Horaire respecté.
 - **P** (perfectible) : Retard limité, sans conséquence sur le programme.
 - **NC** (non conforme) : Retard important ou début non annoncé qui compromet le programme ou le contrôle.
 
-#### F2.5.3 – Heure fin
+#### F2.5.3 – Heure fin de la tournée (prestataire)
 
-- **Attendu :** La tournée se termine à une heure cohérente avec le programme et qui permet le dépôt ou l’expédition des échantillons dans les délais.
-- **Vérification :** Le contrôleur saisit l’heure de fin (« Valeur / réponse »).
+- **Attendu :** La tournée du prestataire se termine à une heure cohérente avec le programme et qui permet le dépôt ou l’expédition des échantillons dans les délais.
+- **Vérification :** Le contrôleur saisit l’heure de fin de la tournée du prestataire (« Valeur / réponse ») ; l’heure de fin du contrôle OEG est relevée en F2.1.6.
 - **C** (conforme / satisfaisant) : Fin cohérente avec le programme et les délais de dépôt.
 - **P** (perfectible) : Fin tardive sans conséquence sur les échantillons.
 - **NC** (non conforme) : Fin tardive qui empêche le dépôt ou l’expédition des échantillons dans les délais.
@@ -449,7 +443,7 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.5.5 – Planification de l’audit, respect du RDV / horaire si inopiné
 
-- **Attendu :** Le prestataire a transmis à l’OEG un planning fiable qui permet un contrôle avec rendez-vous ou inopiné. Avec rendez-vous : l’équipe est présente au lieu et à l’heure convenus. Contrôle inopiné : l’équipe se trouve là où le planning l’indique.
+- **Attendu :** Le prestataire a transmis à l’OEG un planning fiable qui permet un contrôle avec rendez-vous ou inopiné : l’équipe se trouve au lieu et au jour convenus ou indiqués par le planning. L’heure de départ de la tournée est jugée en F2.5.2 et, pour les eaux souterraines, chaque rendez-vous de point d’eau en F3.31.
 - **Vérification :** Le contrôleur compare la situation à son arrivée avec le planning ou le rendez-vous.
 - **C** (conforme / satisfaisant) : Rendez-vous ou planning respecté.
 - **P** (perfectible) : Léger décalage expliqué, contrôleur prévenu.
@@ -570,7 +564,7 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 | N° | Information | Ce qui est relevé |
 |---|---|---|
-| F3.29 | Préleveur accompagné | le préleveur est-il accompagné (gestionnaire, exploitant, propriétaire) ? Oui / Non. |
+| F3.29 | Préleveur accompagné | le préleveur est-il accompagné sur ce point d’eau (gestionnaire, exploitant, propriétaire) ? Oui / Non. Les accompagnants du contrôleur OEG sont relevés en F2.1.2 et F2.1.3. |
 | F3.33 | Échanges entre l’accompagnant et le préleveur | commentaires sur les échanges entre l’accompagnant et le préleveur (« Rien à signaler » ou commentaire ; sans objet si le préleveur n’est pas accompagné). |
 
 ### Prise d’informations de terrain
@@ -635,18 +629,18 @@ Station et site : informations de terrain relevées par le préleveur (identific
 #### F3.7 – Conditions météo
 
 - **Attendu :** La fiche terrain mentionne les conditions météorologiques du jour et, si le protocole le demande, celles des jours précédents (pluies qui peuvent modifier la qualité de l’eau).
-- **Vérification :** Le contrôleur compare la fiche terrain avec les conditions observées (voir aussi F3.27 et F3.28).
+- **Vérification :** Le contrôleur compare la fiche terrain avec la météo relevée sur la station (F1.R5 ; météo de la journée : F2.1.9) ; voir aussi F3.27 et F3.28.
 - **C** (conforme / satisfaisant) : Conditions notées et exactes.
 - **P** (perfectible) : Conditions notées de façon sommaire.
 - **NC** (non conforme) : Conditions non notées ou erronées.
 
 #### F3.8 – Physico-chimie générale
 
-- **Attendu :** Les paramètres physico-chimiques généraux prévus par le protocole sont mesurés et reportés sur la fiche terrain de la station. La façon de mesurer est contrôlée en feuille 4.
+- **Attendu :** Les paramètres physico-chimiques généraux prévus par le protocole sont reportés sur la fiche terrain de la station. Quand la feuille 4 est contrôlée, leur mesure et leur complétude y sont jugées (F4.3, F4.28) ; sinon, ce point couvre aussi leur réalisation.
 - **Vérification :** Le contrôleur vérifie que les valeurs figurent sur la fiche terrain (voir aussi F3.27 et F3.28).
 - **C** (conforme / satisfaisant) : Paramètres mesurés et reportés.
 - **P** (perfectible) : Paramètres mesurés mais reportés de façon incomplète (unité manquante).
-- **NC** (non conforme) : Paramètres prévus non mesurés ou non reportés.
+- **NC** (non conforme) : Paramètres prévus absents de la fiche terrain.
 
 #### F3.9 – Commune
 
@@ -706,7 +700,7 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 #### F3.15 – Coordonnées GPS des points de prélèvement
 
-- **Attendu :** Le préleveur relève les coordonnées des points de prélèvement avec un appareil de positionnement, en précisant le système de coordonnées, et les reporte sur la fiche terrain.
+- **Attendu :** Le préleveur relève les coordonnées du point de prélèvement d’eau avec un appareil de positionnement, en précisant le système de coordonnées, et les reporte sur la fiche terrain. Les points des protocoles biologiques sont relevés en F6.3, F6.4, F7.3, F8.A7 et F9.3.
 - **Vérification :** Le contrôleur saisit les coordonnées X / Y relevées ; l’application signale un point à plus de 300 m des coordonnées théoriques de la station (seuil de la grille).
 - **C** (conforme / satisfaisant) : Coordonnées relevées et cohérentes avec la station.
 - **P** (perfectible) : Coordonnées relevées mais système non précisé, ou précision médiocre.
@@ -785,7 +779,7 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 #### F3.23 – Observation de la station et du site
 
-- **Attendu :** Avant d’intervenir, le préleveur observe la station et le site : état du cours d’eau ou de l’ouvrage, conditions hydrologiques, accès, sécurité, éléments inhabituels.
+- **Attendu :** Avant d’intervenir, le préleveur observe la station et le site : état du cours d’eau ou de l’ouvrage, accès, sécurité, éléments inhabituels. La prise en compte du contexte du jour (hydrologie, marée, pluie) est jugée en F3.24 et la gestion d’une situation particulière en F3.25.
 - **Vérification :** Le contrôleur observe le comportement de l’équipe à son arrivée sur la station.
 - **C** (conforme / satisfaisant) : Observation préalable faite.
 - **P** (perfectible) : Observation rapide ou incomplète.
@@ -801,7 +795,7 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 #### F3.25 – Gestion des particularités
 
-- **Attendu :** Face à une situation particulière (accès difficile, matériel défaillant, présence de tiers, conditions hydrologiques inhabituelles), le préleveur trouve une solution conforme au protocole ou reporte l’opération, et il en garde la trace.
+- **Attendu :** Face à une situation particulière (accès difficile, matériel défaillant, présence de tiers), le préleveur trouve une solution conforme au protocole ou reporte l’opération, et il en garde la trace.
 - **Vérification :** Le contrôleur observe la gestion de la situation et sa traçabilité.
 - **C** (conforme / satisfaisant) : Particularité bien gérée et documentée.
 - **P** (perfectible) : Solution acceptable mais non documentée.
@@ -853,7 +847,7 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 *Tournées : Eaux souterraines*
 
-- **Attendu :** Le préleveur est présent à l’heure convenue avec le gestionnaire ou le contrôleur ; en cas de retard, il prévient.
+- **Attendu :** Le préleveur est présent à l’heure convenue avec le gestionnaire ou le contrôleur sur ce point d’eau ; en cas de retard, il prévient. Un retard au départ de la tournée déjà coté en F2.5.2 n’est pas coté une seconde fois au premier point d’eau.
 - **Vérification :** Le contrôleur indique « Oui », « Non » ou « Sans objet » et, si « Non », le retard en minutes.
 - **C** (conforme / satisfaisant) : À l’heure.
 - **P** (perfectible) : Retard limité et annoncé.
@@ -1004,7 +998,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.3 – Respect des normes de mesure
 
-- **Attendu :** Les mesures sont réalisées selon les méthodes normalisées citées par le CCTP et les notices des appareils : sonde plongée dans l’eau à mesurer, temps de stabilisation respecté, compensation de température active, lecture d’une valeur stable.
+- **Attendu :** Les règles communes à toutes les mesures in situ sont respectées, selon les méthodes normalisées citées par le CCTP et les notices des appareils : sonde plongée dans l’eau à mesurer (ou dans un prélèvement qui vient d’être fait), temps de stabilisation respecté, lecture d’une valeur stable. Les exigences propres à un paramètre sont jugées en F4.4 à F4.10 et F4.29.
 - **Vérification :** Le contrôleur observe la réalisation des mesures sur la station.
 - **C** (conforme / satisfaisant) : Modalités conformes.
 - **P** (perfectible) : Modalités globalement conformes, avec une hésitation (lecture un peu rapide).
@@ -1013,22 +1007,22 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.4 – pH (in situ)
 
-- **Attendu :** Le pH est mesuré sur place avec une sonde étalonnée, plongée dans l’eau de la station (ou dans un prélèvement qui vient d’être fait), après stabilisation et avec compensation de température. La valeur est notée sur la fiche terrain (unité pH).
+- **Attendu :** Le pH est mesuré sur place avec une sonde étalonnée et la compensation de température. La valeur est notée sur la fiche terrain (unité pH). Immersion et stabilisation : F4.3 ; mesure manquante : F4.28.
 - **Vérification :** Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.
 - **C** (conforme / satisfaisant) : Mesure conforme, valeur stable notée avec son unité.
 - **P** (perfectible) : Mesure correcte mais valeur notée en différé, arrondie ou sans unité.
-- **NC** (non conforme) : Mesure non réalisée, lue avant stabilisation, ou valeur incohérente non vérifiée par le préleveur.
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **NC** (non conforme) : Valeur non notée ou erronée (erreur de report), ou mesure sans compensation de température.
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** NF EN ISO 10523
 
 #### F4.5 – Oxygène dissous (in situ)
 
-- **Attendu :** L’oxygène dissous est mesuré sur place de préférence directement dans l’eau, en respectant les conditions d’utilisation de la sonde (écoulement ou agitation si elle l’exige), après stabilisation. La valeur est notée sur la fiche terrain en mg/L.
+- **Attendu :** L’oxygène dissous est mesuré sur place de préférence directement dans l’eau, en respectant les conditions d’utilisation de la sonde (écoulement ou agitation si elle l’exige). La valeur est notée sur la fiche terrain en mg/L. Stabilisation : F4.3 ; mesure manquante : F4.28.
 - **Vérification :** Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.
 - **C** (conforme / satisfaisant) : Mesure conforme, valeur stable notée avec son unité.
 - **P** (perfectible) : Mesure correcte mais valeur notée en différé, arrondie ou sans unité.
-- **NC** (non conforme) : Mesure non réalisée, lue avant stabilisation, ou mesure faussée (seau laissé au soleil, eau qui a barboté).
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **NC** (non conforme) : Valeur non notée ou erronée, ou mesure faussée (seau laissé au soleil, eau qui a barboté, sonde sans écoulement alors qu’elle l’exige).
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** NF EN ISO 5814
 
 #### F4.6 – Saturation en O₂ (in situ)
@@ -1037,28 +1031,28 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 - **Vérification :** Le contrôleur saisit la valeur lue (« Valeur / réponse ») et vérifie sa cohérence avec la concentration.
 - **C** (conforme / satisfaisant) : Saturation relevée et cohérente.
 - **P** (perfectible) : Saturation relevée mais réglages de l’appareil non vérifiés (pression, salinité).
-- **NC** (non conforme) : Saturation non relevée, ou incohérente avec la concentration sans réaction du préleveur.
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **NC** (non conforme) : Saturation incohérente avec la concentration (réglage de pression ou de salinité erroné) ; une incohérence non vérifiée par le préleveur est jugée en F4.26.
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** NF EN ISO 5814
 
 #### F4.7 – Température eau (in situ)
 
-- **Attendu :** La température de l’eau est mesurée sur place directement dans l’eau, ou dans un récipient rempli à l’instant et non exposé au soleil. La valeur est notée sur la fiche terrain en °C.
+- **Attendu :** La température de l’eau est mesurée sur place directement dans l’eau, ou dans un récipient rempli à l’instant et non exposé au soleil. La valeur est notée sur la fiche terrain en °C. Mesure manquante : F4.28.
 - **Vérification :** Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.
 - **C** (conforme / satisfaisant) : Mesure conforme, valeur stable notée avec son unité.
 - **P** (perfectible) : Mesure correcte mais valeur notée en différé, arrondie ou sans unité.
-- **NC** (non conforme) : Mesure non réalisée, lue avant stabilisation, ou température prise dans un récipient réchauffé.
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **NC** (non conforme) : Valeur non notée ou erronée, ou température prise dans un récipient réchauffé.
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** FD T90-523-1 · NF EN ISO 5667-6
 
 #### F4.8 – Conductivité (in situ)
 
-- **Attendu :** La conductivité est mesurée sur place avec une sonde étalonnée, après stabilisation, avec compensation à la température de référence de la norme. La valeur est notée sur la fiche terrain en µS/cm.
+- **Attendu :** La conductivité est mesurée sur place avec une sonde étalonnée et exprimée à la température de référence de la norme. La valeur est notée sur la fiche terrain en µS/cm. Stabilisation : F4.3 ; mesure manquante : F4.28.
 - **Vérification :** Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse ») ; il ne fait pas de contre-mesure.
 - **C** (conforme / satisfaisant) : Mesure conforme, valeur stable notée avec son unité.
 - **P** (perfectible) : Mesure correcte mais valeur notée en différé, arrondie ou sans unité.
-- **NC** (non conforme) : Mesure non réalisée, lue avant stabilisation, ou compensation de température désactivée sans le noter.
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **NC** (non conforme) : Valeur non notée ou erronée, ou compensation de température désactivée sans le noter.
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** NF EN 27888
 
 #### F4.9 – Turbidité (in situ, triplicat)
@@ -1068,7 +1062,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 - **C** (conforme / satisfaisant) : Trois mesures conformes et notées.
 - **P** (perfectible) : Trois mesures, mais cuve essuyée sommairement ou homogénéisation irrégulière.
 - **NC** (non conforme) : Une seule mesure, cuve sale ou rayée, ou échantillon non homogénéisé.
-- **N/A** (non applicable) : Paramètre non prévu au programme de la station : préciser en observation.
+- **N/A** (non applicable) : Paramètre non prévu au programme de la station, ou non mesuré (mesure manquante jugée en F4.28) : préciser en observation.
 - **Références :** NF EN ISO 7027-1
 - **À préciser (OEG) :** Unité NTU demandée par l’OEG et par les CCTP, alors que la norme NF EN ISO 7027-1 citée en référence exprime ses résultats dans une autre unité : méthode de mesure et type de turbidimètre à préciser au CCTP.
 
@@ -1103,7 +1097,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.13 – Présence ou ajout de réactif
 
-- **Attendu :** Les flacons qui doivent contenir un réactif ou un conservateur le contiennent (fourni par le laboratoire ou ajouté sur place selon ses consignes). Ces flacons ne sont pas rincés et sont remplis sans débordement, jusqu’au niveau indiqué, pour ne pas perdre le réactif.
+- **Attendu :** Les flacons qui doivent contenir un réactif ou un conservateur le contiennent (fourni par le laboratoire ou ajouté sur place selon ses consignes). Ces flacons ne sont pas rincés et sont remplis sans débordement, jusqu’au niveau indiqué, pour ne pas perdre le réactif. Seul ce point juge les flacons avec réactif (rinçage des autres flacons : F4.17).
 - **Vérification :** Le contrôleur observe le remplissage des flacons avec réactif et l’éventuel ajout sur place (gants, dosage).
 - **C** (conforme / satisfaisant) : Réactif présent ; flacons remplis sans rinçage ni débordement.
 - **P** (perfectible) : Remplissage correct mais niveau approximatif.
@@ -1113,8 +1107,10 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.14 – Flaconnage supplémentaire
 
-- **Attendu :** Le préleveur dispose de flacons de réserve de chaque type pour remplacer un flacon cassé, souillé ou mal rempli.
-- **Vérification :** Le contrôleur demande à voir les flacons de réserve.
+*Commun à la tournée*
+
+- **Attendu :** Le préleveur dispose, dans le véhicule ou l’embarcation, de flacons de réserve de chaque type pour remplacer un flacon cassé, souillé ou mal rempli.
+- **Vérification :** Le contrôleur demande à voir les flacons de réserve. Commun à la tournée : jugé une seule fois pour toute la tournée.
 - **C** (conforme / satisfaisant) : Réserve disponible pour chaque type de flacon.
 - **P** (perfectible) : Réserve partielle.
 - **NC** (non conforme) : Aucune réserve : un flacon perdu ne peut pas être remplacé.
@@ -1129,20 +1125,22 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.16 – Transport adapté du flaconnage
 
-- **Attendu :** Les flacons vides sont transportés fermés, propres, protégés des chocs et de la poussière, à l’écart du carburant, des produits et du matériel sale.
-- **Vérification :** Observation du rangement des flacons dans le véhicule ou l’embarcation.
+*Commun à la tournée*
+
+- **Attendu :** Les flacons vides sont transportés fermés, propres, rangés en caisse et protégés des chocs et de la poussière. Leur séparation du carburant, des produits et du matériel sale est jugée avec l’aménagement du véhicule (F2.3.5).
+- **Vérification :** Observation du rangement des flacons dans le véhicule ou l’embarcation. Commun à la tournée : jugé une seule fois pour toute la tournée.
 - **C** (conforme / satisfaisant) : Transport adapté.
 - **P** (perfectible) : Transport perfectible (caisse non fermée) sans souillure constatée.
-- **NC** (non conforme) : Flacons ouverts, souillés ou au contact de carburant ou de produits.
+- **NC** (non conforme) : Flacons vides ouverts, souillés ou en vrac, exposés aux chocs.
 - **Références :** NF EN ISO 5667-3
 
 #### F4.17 – Rinçage des flacons
 
-- **Attendu :** Sauf consigne contraire du laboratoire, chaque flacon et son bouchon sont rincés trois fois avec l’eau à prélever avant le remplissage. Les flacons qui contiennent un réactif ou un conservateur, et ceux que le laboratoire demande de ne pas rincer, ne sont pas rincés. Le rinçage du matériel de prélèvement est jugé en F5.9.
+- **Attendu :** Sauf consigne contraire du laboratoire, chaque flacon sans réactif et son bouchon sont rincés trois fois avec l’eau à prélever avant le remplissage. Les flacons qui contiennent un réactif ou un conservateur ne sont jamais rincés : ils sont jugés en F4.13. Le rinçage du matériel de prélèvement est jugé en F5.9.
 - **Vérification :** Le contrôleur observe le rinçage et coche « Rinçage trois fois » et « Rinçage des bouchons ».
-- **C** (conforme / satisfaisant) : Rinçage conforme pour tous les flacons concernés.
+- **C** (conforme / satisfaisant) : Rinçage conforme pour tous les flacons sans réactif.
 - **P** (perfectible) : Rinçage fait mais moins de trois fois, ou bouchon oublié pour un flacon.
-- **NC** (non conforme) : Aucun rinçage, ou rinçage d’un flacon qui contient un réactif.
+- **NC** (non conforme) : Aucun rinçage des flacons sans réactif.
 - **Références :** FD T90-523-1 · FD T90-523-3 · Consignes du laboratoire
 
 ### Sondes, étalonnage et flaconnage – commun à la tournée
@@ -1243,11 +1241,11 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 - **Vérification :** Le contrôleur observe la réaction du préleveur et lui demande son avis sur les valeurs ; il ne fait pas de contre-mesure.
 - **C** (conforme / satisfaisant) : Regard critique exercé.
 - **P** (perfectible) : Valeurs relues mais sans comparaison avec les valeurs attendues.
-- **NC** (non conforme) : Valeur manifestement aberrante acceptée sans vérification.
+- **NC** (non conforme) : Valeur manifestement aberrante acceptée sans vérification ni nouvelle mesure.
 
 #### F4.27 – Fiabilité apparente des mesures
 
-- **Attendu :** Les mesures paraissent fiables : valeurs stables, plausibles pour la station et le contexte, appareils en bon état et étalonnés.
+- **Attendu :** Point de synthèse : les mesures de la station paraissent fiables dans leur ensemble (valeurs stables, plausibles pour la station et le contexte, appareils en bon état et étalonnés). Point hors note : chaque écart est déjà compté en F4.3 à F4.10, F4.26 ou F4.28 (appareils : F4.2, F4.18).
 - **Vérification :** Appréciation du contrôleur à partir de ses observations (stabilité, plausibilité, état des appareils), sans contre-mesure.
 - **C** (conforme / satisfaisant) : Mesures fiables en apparence.
 - **P** (perfectible) : Doute ponctuel levé par le préleveur (nouvelle mesure).
@@ -1255,7 +1253,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.28 – Complétude des mesures in situ
 
-- **Attendu :** Toutes les mesures in situ prévues sont réalisées : température, pH, conductivité, oxygène dissous et turbidité, plus le potentiel redox pour les eaux souterraines (F4.29). Une mesure manquante est notée avec sa cause.
+- **Attendu :** Toutes les mesures in situ prévues sont réalisées : température, pH, conductivité, oxygène dissous et turbidité, plus le potentiel redox pour les eaux souterraines (F4.29). Une mesure manquante est notée avec sa cause ; elle n’est jugée qu’ici (le paramètre est coté N/A en F4.4 à F4.9 et F4.29). La salinité, si elle s’applique, est jugée en F4.10.
 - **Vérification :** Le contrôleur relève l’instrument utilisé (sondes monoparamètres ou multiparamètres) et les mesures manquantes avec leur cause.
 - **C** (conforme / satisfaisant) : Mesures complètes.
 - **P** (perfectible) : Mesure manquante pour une cause justifiée et notée (panne signalée).
@@ -1265,11 +1263,12 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 *Tournées : Eaux souterraines*
 
-- **Attendu :** Le potentiel redox est mesuré sur place, de préférence sans contact avec l’air (cellule de mesure en circulation ou sonde plongée dans l’écoulement), après stabilisation, et noté en mV.
+- **Attendu :** Le potentiel redox est mesuré sur place, de préférence sans contact avec l’air (cellule de mesure en circulation ou sonde plongée dans l’écoulement), et noté en mV. Stabilisation : F4.3 ; mesure manquante : F4.28.
 - **Vérification :** Le contrôleur observe la mesure et saisit la valeur lue (« Valeur / réponse »).
 - **C** (conforme / satisfaisant) : Mesure conforme et notée.
-- **P** (perfectible) : Mesure réalisée mais stabilisation incertaine.
-- **NC** (non conforme) : Mesure non réalisée, ou réalisée dans une eau aérée par barbotage.
+- **P** (perfectible) : Mesure réalisée mais valeur notée en différé ou sans unité.
+- **NC** (non conforme) : Mesure réalisée dans une eau aérée par barbotage, ou valeur non notée.
+- **N/A** (non applicable) : Potentiel redox non mesuré : mesure manquante jugée en F4.28 (préciser en observation).
 - **Références :** NF EN ISO 5667-11 · FD T90-523-3
 
 #### F4.30 – Technique de prise des mesures adaptée au point d’eau
@@ -1329,7 +1328,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.2 – EPI pendant le prélèvement
 
-- **Attendu :** Le préleveur porte des gants nitrile à usage unique, de longueur adaptée (manchettes longues si les mains vont sous l’eau), changés entre les stations ou après contact avec une source de contamination. Il porte les EPI adaptés au site.
+- **Attendu :** Le préleveur porte des gants nitrile à usage unique, de longueur adaptée (manchettes longues si les mains vont sous l’eau), changés entre les stations ou après contact avec une source de contamination. Les EPI de sécurité (gilet, waders) sont jugés en F2.4.4.
 - **Vérification :** Le contrôleur observe le port des gants ; s’ils sont absents ou d’un autre type, il le précise en observation.
 - **C** (conforme / satisfaisant) : Gants nitrile à usage unique portés et changés.
 - **P** (perfectible) : Gants portés mais non changés entre les stations, ou longueur insuffisante.
@@ -1445,7 +1444,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 #### F5.13 – Température de conservation
 
 - **Attendu :** Les échantillons sont conservés au froid, à 5 ± 3 °C, du prélèvement jusqu’au laboratoire (NF EN ISO 5667-3).
-- **Vérification :** Le contrôleur relève la température des échantillons de la station (thermomètre, enregistreur ou flacon témoin) et la saisit ; l’application signale une température hors de la plage 2–8 °C. Le mode de réfrigération est jugé en F5.14 (commun à la tournée).
+- **Vérification :** Le contrôleur relève la température des échantillons de la station (thermomètre, enregistreur ou flacon témoin) et la saisit ; l’application signale une température hors de la plage 2–8 °C. Le mode de réfrigération et les glacières sont jugés en F5.14 et F5.11 (communs à la tournée).
 - **C** (conforme / satisfaisant) : Température dans la plage.
 - **P** (perfectible) : Température légèrement hors plage, expliquée par un prélèvement très récent, avec une glacière correctement préparée.
 - **NC** (non conforme) : Température hors plage sans mesure corrective, ou échantillons laissés hors de la glacière.
@@ -1533,7 +1532,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.21 – Remplissage des flacons (barbotage…)
 
-- **Attendu :** Les flacons sont remplis doucement, sans barbotage ni bulles, jusqu’au niveau demandé par le laboratoire (à ras bord et sans bulle d’air pour les flacons qui l’exigent), puis bouchés aussitôt.
+- **Attendu :** Les flacons sont remplis doucement, sans barbotage ni bulles, jusqu’au niveau demandé par le laboratoire (à ras bord et sans bulle d’air pour les flacons qui l’exigent), puis bouchés aussitôt. Les flacons avec réactif sont jugés en F4.13.
 - **Vérification :** Le contrôleur observe le remplissage ; une photo du remplissage peut servir de preuve.
 - **C** (conforme / satisfaisant) : Remplissage conforme.
 - **P** (perfectible) : Léger barbotage ou niveau approximatif.
@@ -1542,7 +1541,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.22 – Conditions de sécurité pendant l’opération
 
-- **Attendu :** L’opération se déroule en sécurité : position stable, EPI portés, pas de prise de risque (courant, berge instable, circulation), équipier présent en situation à risque.
+- **Attendu :** L’opération se déroule en sécurité : position stable, pas de prise de risque (courant, berge instable, circulation), équipier présent en situation à risque. Le port des EPI est jugé en F2.4.4.
 - **Vérification :** Observation pendant le prélèvement.
 - **C** (conforme / satisfaisant) : Opération en sécurité.
 - **P** (perfectible) : Prise de risque limitée, corrigée.
@@ -1572,7 +1571,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.25 – Respect des consignes du laboratoire lors du remplissage des flacons
 
-- **Attendu :** Le préleveur applique les consignes du laboratoire pour chaque flacon : flacon prévu, rinçage ou non, niveau de remplissage, ajout de conservateur, ordre de remplissage, protection contre la lumière.
+- **Attendu :** Le préleveur applique les consignes du laboratoire pour chaque flacon : flacon prévu pour chaque analyse, ordre de remplissage, protection contre la lumière. Les flacons avec réactif sont jugés en F4.13, le rinçage en F4.17 et le remplissage (barbotage, niveau) en F5.21.
 - **Vérification :** Le contrôleur compare les gestes observés avec les consignes du laboratoire.
 - **C** (conforme / satisfaisant) : Consignes respectées.
 - **P** (perfectible) : Écart mineur sans incidence probable sur l’analyse.
@@ -1603,7 +1602,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.28 – Données transmises au laboratoire avec les échantillons
 
-- **Attendu :** Les échantillons sont accompagnés d’un bordereau (papier ou application) avec les informations demandées par le laboratoire : station, date et heure de prélèvement, préleveur, liste des flacons, observations utiles et, si demandé, mesures in situ.
+- **Attendu :** Les échantillons sont accompagnés d’un bordereau (papier ou application) avec les informations demandées par le laboratoire : station, date et heure de prélèvement, préleveur, liste des flacons, observations utiles et, si demandé, mesures in situ. La traçabilité des flacons fournis est jugée en F4.25 (commun à la tournée).
 - **Vérification :** Le contrôleur relève le support (bordereau papier, application mobile, autre) et vérifie son contenu.
 - **C** (conforme / satisfaisant) : Bordereau complet.
 - **P** (perfectible) : Bordereau incomplet sur une information secondaire.
@@ -1661,13 +1660,13 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 - **P** (perfectible) : Formation déclarée mais non justifiable sur place.
 - **NC** (non conforme) : Prélèvement réalisé par une personne non formée au protocole PEZADA.
 - **Références :** CCTP du marché
-- **À préciser (OEG) :** Qualification exigée des agents (formation au protocole, expérience) : à préciser par l’OEG d’après le CCTP.
+- **À préciser (OEG) :** Qualification exigée des agents (formation au protocole PEZADA, expérience) : à préciser par l’OEG d’après le CCTP.
 
 #### F6.2 – Fiche terrain complétée
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).
+- **Attendu :** La fiche terrain du protocole PEZADA est remplie sur place, complètement et lisiblement : station, date, équipe, conditions du jour, emplacement et substrat de chaque prélèvement, opérations réalisées.
 - **Vérification :** Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.
 - **C** (conforme / satisfaisant) : Fiche complète et lisible.
 - **P** (perfectible) : Fiche partielle (rubriques secondaires vides) ou remplie en différé.
@@ -1734,7 +1733,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont placés dans des récipients étanches, propres, résistants au produit de conservation et de volume adapté.
+- **Attendu :** Les échantillons d’invertébrés sont placés dans des récipients étanches, propres, résistants au produit de conservation et de volume adapté à la quantité de substrat prélevée.
 - **Vérification :** Observation des récipients.
 - **C** (conforme / satisfaisant) : Récipients adaptés.
 - **P** (perfectible) : Récipients adaptés mais trop remplis ou mal fermés.
@@ -1744,7 +1743,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Le produit de conservation et sa concentration sont ceux prescrits par le protocole. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
+- **Attendu :** Le produit de conservation des invertébrés et sa concentration sont ceux prescrits par le protocole PEZADA. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
 - **Vérification :** Le contrôleur demande le produit utilisé et observe sa manipulation.
 - **C** (conforme / satisfaisant) : Produit conforme, manipulé en sécurité.
 - **P** (perfectible) : Produit conforme mais dosage approximatif ou fiche de données de sécurité absente.
@@ -1756,11 +1755,11 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.
-- **Vérification :** Le contrôleur vérifie la numérotation et la fiche de suivi.
+- **Attendu :** Les récipients d’invertébrés sont reliés sans ambiguïté à la fiche terrain PEZADA et au bordereau (numérotation reportée, nombre de récipients par prélèvement) jusqu’au laboratoire de détermination. L’étiquette elle-même est jugée en F6.12.
+- **Vérification :** Le contrôleur rapproche la numérotation des récipients de la fiche terrain et du bordereau.
 - **C** (conforme / satisfaisant) : Traçabilité complète.
 - **P** (perfectible) : Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).
-- **NC** (non conforme) : Récipients non rattachés à la station ou au prélèvement.
+- **NC** (non conforme) : Récipients absents de la fiche ou du bordereau : rattachement au prélèvement impossible.
 
 #### F6.11 – Respect des normes de prélèvement
 
@@ -1777,7 +1776,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Chaque récipient porte une identification lisible et durable (station, date, n° de prélèvement), résistante au produit de conservation, par exemple une étiquette intérieure et une étiquette extérieure.
+- **Attendu :** Chaque récipient porte une identification lisible et durable (station, date, n° de prélèvement), résistante au produit de conservation, par exemple une étiquette intérieure et une étiquette extérieure. La correspondance avec la fiche terrain est jugée en F6.10.
 - **Vérification :** Le contrôleur vérifie l’étiquetage des récipients.
 - **C** (conforme / satisfaisant) : Identification complète et durable.
 - **P** (perfectible) : Identification complète mais fragile (étiquette extérieure seule).
@@ -1787,7 +1786,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont transportés fermés, calés, à l’abri de la chaleur, et remis au laboratoire dans les conditions et délais prévus.
+- **Attendu :** Les échantillons d’invertébrés sont transportés fermés, calés, à l’abri de la chaleur, et remis au laboratoire de détermination dans les conditions et délais prévus.
 - **Vérification :** Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.
 - **C** (conforme / satisfaisant) : Transport conforme.
 - **P** (perfectible) : Transport correct mais calage ou protection perfectible.
@@ -1822,13 +1821,13 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 - **P** (perfectible) : Formation déclarée mais non justifiable sur place.
 - **NC** (non conforme) : Prélèvement réalisé par une personne non formée au protocole IDGF.
 - **Références :** CCTP du marché
-- **À préciser (OEG) :** Qualification exigée des agents (formation au protocole, expérience) : à préciser par l’OEG d’après le CCTP.
+- **À préciser (OEG) :** Qualification exigée des agents (formation au protocole IDGF, expérience) : à préciser par l’OEG d’après le CCTP.
 
 #### F7.2 – Fiche terrain complétée
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).
+- **Attendu :** La fiche terrain du protocole IDGF est remplie sur place, complètement et lisiblement : station, date, équipe, conditions du jour, substrats échantillonnés, nombre de blocs, opérations réalisées.
 - **Vérification :** Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.
 - **C** (conforme / satisfaisant) : Fiche complète et lisible.
 - **P** (perfectible) : Fiche partielle (rubriques secondaires vides) ou remplie en différé.
@@ -1908,17 +1907,17 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont placés dans des récipients étanches, propres, résistants au produit de conservation et de volume adapté.
-- **Vérification :** Observation des récipients.
-- **C** (conforme / satisfaisant) : Récipients adaptés.
-- **P** (perfectible) : Récipients adaptés mais trop remplis ou mal fermés.
-- **NC** (non conforme) : Récipients non étanches ou inadaptés (fuite, risque de perte de l’échantillon).
+- **Attendu :** Les échantillons de diatomées sont placés dans des flacons étanches, propres, résistants au produit de conservation et de volume adapté.
+- **Vérification :** Observation des flacons.
+- **C** (conforme / satisfaisant) : Flacons adaptés.
+- **P** (perfectible) : Flacons adaptés mais trop remplis ou mal fermés.
+- **NC** (non conforme) : Flacons non étanches ou inadaptés (fuite, risque de perte de l’échantillon).
 
 #### F7.10 – Nature du produit de conservation
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Le produit de conservation et sa concentration sont ceux prescrits par le protocole. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
+- **Attendu :** Le produit de conservation des diatomées et sa concentration sont ceux prescrits par le protocole IDGF. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
 - **Vérification :** Le contrôleur demande le produit utilisé et observe sa manipulation.
 - **C** (conforme / satisfaisant) : Produit conforme, manipulé en sécurité.
 - **P** (perfectible) : Produit conforme mais dosage approximatif ou fiche de données de sécurité absente.
@@ -1930,8 +1929,8 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.
-- **Vérification :** Le contrôleur vérifie la numérotation et la fiche de suivi.
+- **Attendu :** Chaque flacon de diatomées est relié sans ambiguïté à la station, à la date et à la fiche terrain IDGF (étiquette, numérotation ou bordereau) jusqu’au laboratoire.
+- **Vérification :** Le contrôleur vérifie l’étiquetage, la numérotation et la fiche de suivi.
 - **C** (conforme / satisfaisant) : Traçabilité complète.
 - **P** (perfectible) : Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).
 - **NC** (non conforme) : Récipients non rattachés à la station ou au prélèvement.
@@ -1951,7 +1950,7 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont transportés fermés, calés, à l’abri de la chaleur et de la lumière, et remis au laboratoire dans les conditions et délais prévus.
+- **Attendu :** Les flacons de diatomées sont transportés fermés, calés, à l’abri de la chaleur et de la lumière, et remis au laboratoire dans les conditions et délais prévus.
 - **Vérification :** Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.
 - **C** (conforme / satisfaisant) : Transport conforme.
 - **P** (perfectible) : Transport correct mais calage ou protection perfectible.
@@ -2083,8 +2082,8 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).
-- **Vérification :** Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.
+- **Attendu :** La fiche terrain de pêche est remplie sur place, complètement et lisiblement : station, date, équipe, engins (filets, batteries), heures de pose et de relève, captures et biométrie.
+- **Vérification :** Le contrôleur vérifie les rubriques de la fiche et note celles qui manquent (« Valeur / réponse »).
 - **C** (conforme / satisfaisant) : Fiche complète et lisible.
 - **P** (perfectible) : Fiche partielle (rubriques secondaires vides) ou remplie en différé.
 - **NC** (non conforme) : Fiche absente ou inexploitable.
@@ -2155,11 +2154,11 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont conservés selon le protocole (réfrigération ou congélation), dans des emballages propres et fermés, sans risque de contamination ni de dégradation.
+- **Attendu :** Les échantillons sont conservés selon le mode prévu par le protocole (réfrigération ou congélation), dans des emballages propres et fermés, sans risque de contamination ni de dégradation. Le froid de la glacière est jugé en F8.B6.
 - **Vérification :** Le contrôleur observe le mode de conservation.
 - **C** (conforme / satisfaisant) : Conservation conforme.
 - **P** (perfectible) : Conservation correcte mais emballage perfectible.
-- **NC** (non conforme) : Conservation non conforme (échantillons au chaud, emballage ouvert).
+- **NC** (non conforme) : Mode de conservation non conforme au protocole, ou emballage ouvert ou souillé.
 - **Références :** Protocole mercure (biote) du marché
 - **À préciser (OEG) :** Mode de conservation attendu (réfrigération, congélation) et délais : à préciser par l’OEG d’après le protocole mercure.
 
@@ -2167,7 +2166,7 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** La glacière est adaptée et refroidie ; la température est suivie jusqu’à la remise au laboratoire.
+- **Attendu :** La glacière des échantillons de biote est adaptée et refroidie ; la température est suivie jusqu’à la remise au laboratoire. Les glacières de la tournée sont jugées en F5.11 quand la physico-chimie est contrôlée.
 - **Vérification :** Le contrôleur vérifie la glacière et le suivi de température.
 - **C** (conforme / satisfaisant) : Glacière adaptée, température suivie.
 - **P** (perfectible) : Glacière adaptée sans suivi de température.
@@ -2219,7 +2218,7 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** La fiche terrain du protocole est remplie sur place, complètement et lisiblement (station, date, équipe, conditions, opérations réalisées).
+- **Attendu :** La fiche terrain phytoplancton est remplie sur place, complètement et lisiblement : station, date, équipe, point et type de prélèvement, volume prélevé, conservation.
 - **Vérification :** Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie les rubriques.
 - **C** (conforme / satisfaisant) : Fiche complète et lisible.
 - **P** (perfectible) : Fiche partielle (rubriques secondaires vides) ou remplie en différé.
@@ -2311,8 +2310,8 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Chaque récipient est relié sans ambiguïté à la station, à la date et au prélèvement (numérotation, fiche ou bordereau) jusqu’au laboratoire.
-- **Vérification :** Le contrôleur vérifie la numérotation et la fiche de suivi.
+- **Attendu :** Chaque flacon de phytoplancton est relié sans ambiguïté à la station, à la date, au type de prélèvement et à la fiche terrain (étiquette, numérotation ou bordereau) jusqu’au laboratoire.
+- **Vérification :** Le contrôleur indique « Oui », « Non » ou « Partielle » et vérifie l’étiquetage et la fiche de suivi.
 - **C** (conforme / satisfaisant) : Traçabilité complète.
 - **P** (perfectible) : Traçabilité assurée mais fragile (numérotation manuscrite peu lisible).
 - **NC** (non conforme) : Récipients non rattachés à la station ou au prélèvement.
@@ -2321,7 +2320,7 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont stockés au frais et à l’obscurité (glacière) jusqu’au laboratoire ; la température est relevée si possible.
+- **Attendu :** Sur le terrain, jusqu’au départ vers le laboratoire, les échantillons de phytoplancton sont stockés au frais et à l’obscurité (glacière) ; la température est relevée si possible. Les glacières de la tournée sont jugées en F5.11 quand la physico-chimie est contrôlée ; l’acheminement en F9.13.
 - **Vérification :** Le contrôleur indique « Oui » ou « Non » et saisit la température si elle est disponible.
 - **C** (conforme / satisfaisant) : Stockage au frais et à l’obscurité.
 - **P** (perfectible) : Stockage au frais mais exposé à la lumière, ou température non relevée.
@@ -2343,11 +2342,11 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les échantillons sont transportés fermés, calés, à l’abri de la chaleur et de la lumière, et remis au laboratoire dans les conditions et délais prévus.
-- **Vérification :** Le contrôleur observe le conditionnement pour le transport et demande l’organisation de la remise.
-- **C** (conforme / satisfaisant) : Transport conforme.
-- **P** (perfectible) : Transport correct mais calage ou protection perfectible.
-- **NC** (non conforme) : Échantillons exposés à la chaleur, mal fermés, ou remise hors délai.
+- **Attendu :** Les échantillons de phytoplancton sont acheminés au laboratoire fermés et calés, dans les conditions et délais prévus. Leur stockage au frais et à l’obscurité est jugé en F9.11.
+- **Vérification :** Le contrôleur relève le mode d’acheminement (« Glacière » ou autre) et demande l’organisation de la remise.
+- **C** (conforme / satisfaisant) : Acheminement conforme.
+- **P** (perfectible) : Acheminement correct mais calage perfectible.
+- **NC** (non conforme) : Flacons mal fermés ou non calés, ou remise hors délai.
 - **Références :** CCTP du marché
 - **À préciser (OEG) :** Délai et conditions d’acheminement au laboratoire : à préciser par l’OEG d’après le CCTP.
 

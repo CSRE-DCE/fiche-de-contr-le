@@ -9,8 +9,8 @@
  *   (?q=…, filtrage immédiat sans réaffichage de l'écran).
  * - Boutons « Fiche des attendus (PDF) » et « Liste de préparation (PDF) » (js/app/attendus-pdf.js).
  * - Pour les feuilles d'audit : attenduFor(itemId) (synchrone, après loadAttendus()), attenduCard(itemId) (HTML) et
- *   openAttendu(itemId) (fenêtre « Attendu du prestataire ») ; itemId de base « it-F4-12 » ou effectif
- *   « it-F4-12@09271503 ».
+ *   openAttendu(itemId, { item }) (fenêtre « Aide et attendu » : attendu du prestataire puis précisions du critère de la
+ *   tournée, une seule fenêtre par point) ; itemId de base « it-F4-12 » ou effectif « it-F4-12@09271503 ».
  * Mise en forme : css/sheet.css (feuilles, cartes de section, thèmes) et css/attendus.css (chargée par l'écran si
  * index.html ne la déclare pas). Aucune donnée de la base locale n'est lue : l'écran fonctionne pour tout profil. */
 import { html, raw, normalize, fmtDate } from '../core/util.js';
@@ -96,6 +96,7 @@ function critCard(item, model = { type: null }, { id = true } = {}) {
   const badges = [
     item.shared && item.sheetScope !== 'tournee' ? sharedBadge() : '',
     item.conditional ? html`<span class="att-tb att-cond">${icon('filter', { size: 14 })}Affiché selon une réponse</span>` : '',
+    item.noScore ? html`<span class="att-tb att-noscore" title="Point de synthèse : coté, mais exclu de la note (chaque écart y est déjà compté)">${icon('info', { size: 14 })}Point de synthèse, hors note</span>` : '',
     typeBadges(item, model)
   ].filter(Boolean);
   const scale = SCALE.filter(s => e[s.code]);
@@ -327,19 +328,56 @@ export function attenduCard(itemId) {
   return html`<div class="att-modal th-${t}" style="${themeVars(t)}">${inner}</div>`;
 }
 
-/** Fenêtre « Attendu du prestataire » d'un critère (charge les attendus si besoin). Retourne la promesse de fermeture. */
-export async function openAttendu(itemId) {
+/** Origine d'un point des fiches d'évaluation, citée entre parenthèses dans l'aide (« (fiche cours d’eau) »). */
+const ORIGIN_RE = /\s*\((fiches? (?:cours d’eau|eaux souterraines)(?: et (?:cours d’eau|eaux souterraines))?)\)/g;
+/**
+ * Aide d'un critère de la grille découpée pour la fenêtre « Aide et attendu » (pure) : {inclut, text, origins}.
+ * « Inclut : … » (points des fiches d'évaluation regroupés dans le critère) et origine (« fiche cours d’eau ») affichée
+ * à part, discrètement ; le reste de l'aide tel quel. L'aide ne répète pas l'attendu (tests/unit/attendus.test.js).
+ */
+export function helpParts(help) {
+  const raw = String(help || '').trim();
+  if (!raw) return { inclut: false, text: '', origins: [] };
+  const origins = [];
+  const text = raw.replace(ORIGIN_RE, (m, o) => { if (!origins.includes(o)) origins.push(o); return ''; }).replace(/\s+([.;,])/g, '$1');
+  const inclut = /^Inclut\s*:/.test(text);
+  return { inclut, text: inclut ? text.replace(/^Inclut\s*:\s*/, '') : text, origins };
+}
+/** Précisions propres au critère de la tournée : aide de la grille (sans répéter l'attendu), station, références. */
+function gridNotes(it) {
+  if (!it) return '';
+  const h = helpParts(it.help);
+  const refs = (it.refs || []).map(r => [r.docKey || r.docType, r.article].filter(Boolean).join(' § ') + (r.requirement ? ' — ' + r.requirement : ''));
+  const parts = [
+    h.text ? html`<p class="att-gn-help"><b>${h.inclut ? 'Inclut (points des fiches d’évaluation)' : 'Précision de la grille'}&nbsp;:</b> ${h.text}</p>` : '',
+    h.origins.length ? html`<p class="att-gn-origin">Origine : ${h.origins.join(' ; ')}</p>` : '',
+    it.station && !it.shared ? html`<p class="att-gn-station">Station : ${it.station.name} (${it.station.code}).</p>` : '',
+    refs.length ? html`<p class="att-gn-refs">Références de la grille : ${refs.join(' · ')}</p>` : ''
+  ].filter(Boolean);
+  return parts.length ? html`<div class="att-grid-notes">${parts}</div>` : '';
+}
+
+/**
+ * Fenêtre « Aide et attendu » d'un critère (une seule fenêtre par point des feuilles d'audit) : attendu du prestataire
+ * (attendu, vérification, C / P / NC / N/A, références, « à préciser »), puis les précisions du critère de la tournée
+ * (`item` : critère effectif de la grille de la tournée — aide « Inclut : … », origine, station). Charge les attendus si
+ * besoin ; sans attendu (grille d'une autre origine), l'aide seule. Retourne la promesse de fermeture.
+ */
+export async function openAttendu(itemId, { item: gridItem = null } = {}) {
   const [data] = await Promise.all([loadAttendus(), ensureStyles()]);
   const baseId = parseItemId(itemId).baseId;
   const found = modelItem(baseId, data);
-  if (!found) { toast('Aucun attendu n’est défini pour ce point de contrôle.', 'warn'); return null; }
-  const { item, sheet } = found;
+  const notes = gridNotes(gridItem);
+  if (!found && !notes) { toast('Aucun attendu n’est défini pour ce point de contrôle.', 'warn'); return null; }
+  const code = found?.item.code || gridItem.baseCode || gridItem.code || '';
+  const label = found?.item.label || gridItem.label || '';
   const m = openModal({
-    title: `Attendu du prestataire – ${item.code} ${item.label}`, wide: true,
-    body: html`${attenduCard(baseId)}<p class="note att-modal-note">${sheet.code} · ${sheet.title}. Le CCTP, les protocoles et les consignes du laboratoire prévalent en cas de différence.</p>`,
-    actions: [{ label: 'Tous les attendus', act: 'all' }, { label: 'Fermer', cls: 'primary' }],
+    title: `${gridItem ? 'Aide et attendu' : 'Attendu du prestataire'} – ${code} ${label}`, wide: true,
+    body: html`${found ? attenduCard(baseId) : ''}${notes}
+      ${found ? html`<p class="note att-modal-note">${found.sheet.code} · ${found.sheet.title}. Le CCTP, les protocoles et les consignes du laboratoire prévalent en cas de différence.</p>` : ''}`,
+    actions: [...(found ? [{ label: 'Tous les attendus', act: 'all' }] : []), { label: 'Fermer', cls: 'primary' }],
     handlers: {
-      all() { this.close(); navigate(`/attendus?feuille=${sheet.no}&item=${encodeURIComponent(baseId)}`); }
+      all() { this.close(); navigate(`/attendus?feuille=${found.sheet.no}&item=${encodeURIComponent(baseId)}`); }
     }
   });
   return m.result;

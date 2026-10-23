@@ -15,7 +15,7 @@ import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
 import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO, localDate } from '../core/util.js';
-import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate } from '../domain/model.js';
+import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate, auditKindLabel } from '../domain/model.js';
 import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace, tourControllers, entriesByAgent } from './audits.js';
@@ -154,7 +154,7 @@ export async function buildAuditReport(auditId) {
   // 1. Identification
   doc.heading('1. Identification de l’audit');
   doc.keyValues([
-    ['Numéro d’audit', audit.number], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné (non planifié)' : 'Audit planifié'],
+    ['Numéro d’audit', audit.number], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
     ['Date', fmtDate(date)], ['Heure de début', `${fmtTime(audit.startedAt)}${entryDay && entryDay !== date ? ` (saisie démarrée le ${fmtDate(entryDay)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
     [controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG (auditeur)', controllersText],
     ['Tournée créée par', `${audit.auditorName} (${audit.auditorRole || ''})`],

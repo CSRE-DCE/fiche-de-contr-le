@@ -43,7 +43,7 @@ import {
   expandGrid, sheetsOf, groupSheets, headerOf, sectionHeaders, sheetStoreKey, prefillResponses, auditCompartments, normalizeCompartments,
   typeCompartments, gridType, gridTypes, inferAuditType, makeStation, isSheetGrid, providerHeaderName, allItems
 } from '../domain/grids.js';
-import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditDate as dateOfAudit } from '../domain/model.js';
+import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditDate as dateOfAudit, auditKindLabel } from '../domain/model.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { ROLES } from '../domain/permissions.js';
@@ -1678,7 +1678,7 @@ class SheetsRenderer {
     const ident = [
       ['N° d’audit', m.number], ['Type de tournée', m.typeDef?.label || AUDIT_TYPES[m.auditType] || ''],
       ['Prestataire', provider ? `${providerHeaderName(provider)}${provider.kind && PROVIDER_KINDS[provider.kind] ? ' — ' + PROVIDER_KINDS[provider.kind] : ''}` : '—'],
-      ['Date', fmtDate(m.auditDate)], [(m.controllerCount || 1) > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', m.auditorName], ['Type d’audit', a.kind === 'inopine' ? 'Inopiné' : 'Avec rendez-vous / planifié'],
+      ['Date', fmtDate(m.auditDate)], [(m.controllerCount || 1) > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG', m.auditorName], ['Type d’audit', auditKindLabel(a.kind)],
       ['Stations', this.stationList.map(s => `${s.index + 1}. ${upper(s.name)} (${s.code})`).join(' · ')],
       ['Statut', a.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(a.lock.lockedAt)} par ${a.lock.lockedByName || ''}${amended ? ` — MODIFIÉ APRÈS SIGNATURE : ${amendedText}` : ''}` : 'PROVISOIRE — tournée non signée ou non verrouillée'],
       // Empreinte du contenu IMPRIMÉ (celle du pied de page) ; tournée modifiée après signature : empreinte scellée à

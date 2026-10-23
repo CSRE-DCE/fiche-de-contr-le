@@ -17,7 +17,7 @@
  * identifiants pour les mêmes objets, ce qui évite les doublons à la synchronisation.
  */
 import { utmToLatLon } from '../lib/geo.js';
-import { addDays, localDate } from '../core/util.js';
+import { addDays, localDate, normalize } from '../core/util.js';
 import { defaultNetworks, networkIndex, auditTypesOf } from './networks.js';
 
 export function baseReferential() {
@@ -189,6 +189,8 @@ export const STATION_DETAILS = {
 };
 
 /** Référentiel repris des fiches terrain OEG. */
+/** Nombre de lettres accentuées d'un texte (choix de la bonne orthographe entre deux listes). */
+const accents = t => (String(t || '').normalize('NFD').match(/[\u0300-\u036f]/g) || []).length;
 export function oegReferential(DATA) {
   const sites = new Map();
   const add = (s, network, extra = {}) => {
@@ -205,6 +207,10 @@ export function oegReferential(DATA) {
       });
     }
     const site = sites.get(code);
+    // Même pression écrite dans deux listes au seul accent près (« Orpaillage illegal » / « illégal ») : une seule
+    // valeur, la variante accentuée (sinon la première liste gagne, comme pour les autres attributs).
+    const pr = s.pressions || s.pression || '';
+    if (pr && site.pressions && pr !== site.pressions && normalize(pr) === normalize(site.pressions) && accents(pr) > accents(site.pressions)) site.pressions = pr;
     if (!site.networks.includes(network)) site.networks.push(network);
     if (site.her === '' && s.her !== undefined && s.her !== null) site.her = s.her;
     if (!site.typo && s.typo) site.typo = s.typo;
