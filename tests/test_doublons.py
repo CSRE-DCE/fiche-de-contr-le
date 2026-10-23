@@ -134,9 +134,12 @@ def test_fenetre_aide_et_attendu(page, app_url):
         assert 'Origine : fiches cours d’eau et eaux souterraines' in modal and 'jugés en F4.13' in modal, modal[:900]
         page.click('.modal .modal-actions button:has-text("Fermer")')
         page.wait_for_selector('.modal', state='detached')
-        phs = [page.get_attribute(f'[id={attr(f"sheet-4@{S1}-observations")}]', 'placeholder'),
-               page.get_attribute(f'[id={attr(f"concl-4@{S1}")}]', 'placeholder')]
-        assert 'mesures in situ' in phs[0] and 'Justification de la conclusion' in phs[1] and phs[0] != phs[1], phs
+        assert 'mesures in situ' in page.get_attribute(f'[id={attr(f"sheet-4@{S1}-observations")}]', 'placeholder')
+        # Feuille 6 : deux zones libres (observations, commentaires de la conclusion) qui ne demandent pas la même chose
+        goto_hash(page, f'#/audit/{aid}/feuille-6@{S1}')
+        phs = [page.get_attribute(f'[id={attr(f"sheet-6@{S1}-observations")}]', 'placeholder'),
+               page.get_attribute(f'[id={attr(f"concl-6@{S1}")}]', 'placeholder')]
+        assert 'invertébrés' in phs[0] and 'Justification de la conclusion' in phs[1], phs
         # ----- Feuille 1 : observations de la station (texte d'invite distinct de l'encadré de F3)
         goto_hash(page, f'#/audit/{aid}/feuille-1@{S1}')
         r7 = page.get_attribute(f'[id={attr(f"r-it-F1-R7@{S1}")}]', 'placeholder')

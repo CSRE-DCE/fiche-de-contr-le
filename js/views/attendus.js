@@ -336,10 +336,10 @@ const ORIGIN_RE = /\s*\((fiches? (?:cours d’eau|eaux souterraines)(?: et (?:co
  * à part, discrètement ; le reste de l'aide tel quel. L'aide ne répète pas l'attendu (tests/unit/attendus.test.js).
  */
 export function helpParts(help) {
-  const raw = String(help || '').trim();
-  if (!raw) return { inclut: false, text: '', origins: [] };
+  const src = String(help || '').trim();
+  if (!src) return { inclut: false, text: '', origins: [] };
   const origins = [];
-  const text = raw.replace(ORIGIN_RE, (m, o) => { if (!origins.includes(o)) origins.push(o); return ''; }).replace(/\s+([.;,])/g, '$1');
+  const text = src.replace(ORIGIN_RE, (m, o) => { if (!origins.includes(o)) origins.push(o); return ''; }).replace(/\s+([.;,])/g, '$1');
   const inclut = /^Inclut\s*:/.test(text);
   return { inclut, text: inclut ? text.replace(/^Inclut\s*:\s*/, '') : text, origins };
 }
