@@ -104,9 +104,11 @@ function readValues(schema, v) {
 
 /**
  * Site : champs « station » des fiches de contrôle 2026 complétés sans écraser l'existant (nouvelle station :
- * champs vides, types de tournée et compartiments déduits des réseaux ; coordonnées RGFG95 déduites du WGS84).
+ * champs vides, types de tournée et compartiments déduits des réseaux ; coordonnées RGFG95 / UTM 22N déduites du
+ * WGS84, aussi quand la latitude / longitude change : la saisie d'origine en UTM 21N éventuelle — srs, x21, y21 — ne
+ * correspond plus à la position et est retirée).
  */
-function stationDefaults(site, isNew) {
+function stationDefaults(site, isNew, prev = null) {
   const next = isNew ? { ...emptyStationFields(), ...site } : { ...site };
   const idx = currentNetworkIndex();
   if (!next.codeType) next.codeType = stationTypes({ networks: next.networks }, idx).includes('eso') ? 'BSS' : 'SANDRE';
@@ -114,9 +116,11 @@ function stationDefaults(site, isNew) {
   if (!Array.isArray(next.types) || !next.types.length) next.types = stationTypes(next, idx);
   if (!Array.isArray(next.compartments) || !next.compartments.length) next.compartments = stationCompartments(next);
   const hasLL = isFinite(next.lat) && isFinite(next.lon) && next.lat !== null && next.lon !== null;
-  if (hasLL && (isNew || next.x === null || next.x === undefined || next.x === '')) {
+  const moved = !!prev && (next.lat !== prev.lat || next.lon !== prev.lon);
+  if (hasLL && (isNew || moved || next.x === null || next.x === undefined || next.x === '')) {
     const [x, y] = latLonToUtm(next.lat, next.lon, 22);
     next.x = Math.round(x); next.y = Math.round(y);
+    delete next.srs; delete next.x21; delete next.y21;
   }
   return next;
 }
@@ -146,7 +150,7 @@ export function editEntity(type, e = null) {
           next.color = networkColors(vals.color).main;
         }
         if (type === 'equipment') next.statusLabel = EQUIPMENT_STATUS[next.status];
-        if (type === 'site') next = stationDefaults(next, isNew);
+        if (type === 'site') next = stationDefaults(next, isNew, isNew ? null : e);
         await store.put(type, next, { reason: isNew ? 'Création' : 'Modification du référentiel' });
         this.close(next);
       }

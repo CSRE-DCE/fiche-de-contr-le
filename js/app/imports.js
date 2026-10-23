@@ -7,7 +7,8 @@
  * (casse, accents, libellé : « rco », « Eaux littorales » → RCO, EL) ; une station présente sur plusieurs lignes (une par
  * réseau) cumule ses réseaux sur sa première ligne ; un code inconnu est signalé puis ajouté au référentiel à
  * l'application de l'import. Coordonnées X / Y : RGFG95 / UTM 22N, ou UTM 21N (colonne « Fuseau UTM » ou fuseau
- * reconnu d'après X) converties en UTM 22N avec la saisie d'origine (srs, x21, y21) ; point hors de la Guyane signalé. */
+ * reconnu d'après X) converties en UTM 22N avec la saisie d'origine (srs, x21, y21) ; latitude / longitude seules :
+ * X / Y recalculés en UTM 22N ; point hors de la Guyane signalé. */
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { uuid, nowISO, normalize, sha256Hex, deepEqual } from '../core/util.js';
@@ -18,6 +19,7 @@ import { readXLSX, sheetToTable } from '../formats/xlsx.js';
 import { parseDate, parseTime, parseNumber, parseList, parseBool, guessMapping, resolveRef } from '../domain/normalize.js';
 import { PRESTATION_STATUS, CONTROL_LEVELS, PROVIDER_KINDS, DOC_TYPES, DOC_STATUS, EQUIPMENT_STATUS } from '../domain/model.js';
 import { parseSrs, siteXY } from '../domain/coords.js';
+import { latLonToUtm, inGuyane } from '../lib/geo.js';
 import { stationTypes, stationCompartments } from '../domain/seed.js';
 import { normalizeNetworkCodes, sameNetworks, sortNetworkCodes, AUDIT_TYPE_KEYS } from '../domain/networks.js';
 import { currentNetworkIndex, ensureNetworks } from './networks.js';
@@ -255,6 +257,11 @@ function buildSite(row, mapping, ctx = {}) {
     for (const i of c.issues) warnings.push(i.message);
     if (lat === null || lon === null) { lat = c.lat; lon = c.lon; }
     x = c.x; y = c.y;
+  } else if (lat !== null && lon !== null) {
+    // Latitude / longitude seules : X / Y recalculés en RGFG95 / UTM 22N (une ancienne saisie en UTM 21N est retirée).
+    const [ex, ny] = latLonToUtm(lat, lon, 22);
+    x = Math.round(ex); y = Math.round(ny);
+    if (!inGuyane(lat, lon)) warnings.push(`latitude ${lat} / longitude ${lon} : point hors de la Guyane — vérifiez la saisie (longitude négative à l’ouest de Greenwich)`);
   }
   const idx = ctx.networkIndex || currentNetworkIndex();
   // Valeur du fichier ; colonne non associée ou cellule vide : valeur enregistrée conservée (jamais effacée).

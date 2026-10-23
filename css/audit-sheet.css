@@ -148,6 +148,8 @@
 .st-fields.is-xy>.st-field.is-srs{flex-basis:100%}
 .st-fields.is-xy>.st-field.is-srs>select{flex:0 1 auto;max-width:100%;min-height:36px}
 .as-xy-conv{flex-basis:100%;font-size:.86em;font-weight:600;color:var(--th-dark,var(--oeg-navy))}
+.as-xy-conv>span{white-space:nowrap}
+.as-xy-conv.is-pending{font-weight:500;font-style:italic;color:var(--oeg-muted,#5b6b80)}
 .as-xy-warn{flex-basis:100%;display:flex;align-items:flex-start;gap:5px;font-size:.86em;line-height:1.35;color:#8a4b00;background:#fff4e0;border-radius:6px;padding:4px 7px}
 .as-xy-warn .ico{flex:none;margin-top:1px;color:#b86e00}
 .as-body :is(input,select,textarea).is-prefilled{color:#2b5a8a!important;font-style:italic!important}

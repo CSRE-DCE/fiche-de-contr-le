@@ -12,6 +12,10 @@
  *  - les réseaux et les types de tournée d'une station (site.networks, site.types : listes de codes) sont des
  *    ENSEMBLES : un ajout d'un côté et un retrait de l'autre sont tous deux pris en compte, sans conflit (échange par
  *    fichier entre tablettes comme synchronisation) ;
+ *  - une position est fusionnée d'UN BLOC (jamais le X d'un côté et le Y ou le fuseau d'origine de l'autre) :
+ *    coordonnées d'une station (COORD_FIELDS : x, y, lat, lon et saisie d'origine en UTM 21N srs, x21, y21) et valeur
+ *    d'un groupe X / Y d'une feuille ({x, y, srs?, x21?, y21?, lat?, lon?…}) ; modifiée des deux côtés : un conflit,
+ *    la plus récente est retenue entière ;
  *  - un même champ modifié des deux côtés avec des valeurs différentes est un CONFLIT : la version la
  *    plus récente (horodatage) est retenue et l'autre valeur est conservée dans le rapport de conflit,
  *    consultable et restaurable par l'utilisateur ;
@@ -30,6 +34,25 @@ const stamp = v => (isObj(v) && (v.updatedAt || v.at)) || '';
 /** Champs fusionnés comme des ensembles de valeurs simples, par type d'entité. */
 export const SET_FIELDS = { site: new Set(['networks', 'types']) };
 const isSimpleList = v => v === undefined || v === null || (Array.isArray(v) && v.every(x => x === null || typeof x !== 'object'));
+/** Champs de position d'une entité fusionnés d'un bloc (X / Y RGFG95 / UTM 22N, WGS84, saisie d'origine en UTM 21N). */
+export const COORD_FIELDS = { site: ['x', 'y', 'lat', 'lon', 'srs', 'x21', 'y21'] };
+/** Valeur d'un groupe X / Y (feuilles) ou d'un point : objet portant des coordonnées planes (nombres). */
+const PLANE = ['x', 'y', 'x21', 'y21'];
+const isCoord = c => typeof c === 'number' || (typeof c === 'string' && c.trim() !== '' && Number.isFinite(Number(c.replace(',', '.'))));
+const isPosition = v => isObj(v) && PLANE.some(k => v[k] !== undefined) && PLANE.every(k => v[k] === undefined || v[k] === null || isCoord(v[k]));
+
+/** Fusion d'un groupe de champs d'un bloc : modifié d'un seul côté → ce côté ; des deux côtés → le plus récent entier. */
+function mergeGroup(keys, base, local, remote, ctx) {
+  const pick = o => { const out = {}; for (const k of keys) if (o?.[k] !== undefined) out[k] = o[k]; return out; };
+  const gb = pick(base), gl = pick(local), gr = pick(remote);
+  if (deepEqual(gl, gr) || deepEqual(gb, gr)) return clone(gl);
+  if (deepEqual(gb, gl)) return clone(gr);
+  const keepLocal = String(ctx.localStamp) > String(ctx.remoteStamp);
+  for (const k of keys) {
+    if (!deepEqual(gl[k], gr[k])) ctx.conflicts.push({ path: k, kept: keepLocal ? 'local' : 'remote', reason: 'position modifiée des deux côtés : la plus récente est retenue entière', localValue: gl[k] ?? null, remoteValue: gr[k] ?? null });
+  }
+  return clone(keepLocal ? gl : gr);
+}
 /**
  * Fusion d'ensembles : un élément retiré d'un côté (présent dans la version commune) est retiré ; un élément ajouté
  * d'un côté est gardé. Ordre : version distante, puis ajouts locaux.
@@ -46,12 +69,16 @@ function mergeValue(base, local, remote, path, ctx, depth) {
   if (deepEqual(base, remote)) return clone(local);
   // Liste de codes d'une station (réseaux, types de tournée) modifiée des deux côtés : fusion d'ensembles, sans conflit.
   if (depth === 1 && SET_FIELDS[ctx.type]?.has(path) && [base, local, remote].every(isSimpleList)) return mergeSet(base, local, remote);
-  // Modifié des deux côtés
-  if (depth < 4 && (isObj(local) || local === undefined) && (isObj(remote) || remote === undefined) && (isObj(local) || isObj(remote))) {
+  // Modifié des deux côtés (une position — valeur X / Y — n'est jamais fusionnée champ par champ : conflit ci-dessous)
+  const position = depth > 0 && (isPosition(local) || isPosition(remote));
+  if (!position && depth < 4 && (isObj(local) || local === undefined) && (isObj(remote) || remote === undefined) && (isObj(local) || isObj(remote))) {
     const b = isObj(base) ? base : {}, l = local || {}, r = remote || {};
     const out = {};
+    const group = depth === 0 ? COORD_FIELDS[ctx.type] : null;
+    if (group) Object.assign(out, mergeGroup(group, b, l, r, ctx));
     for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
       if (depth === 0 && META.has(k)) continue;
+      if (group?.includes(k)) continue;
       const v = mergeValue(b[k], l[k], r[k], path ? `${path}.${k}` : k, { ...ctx, parentLocal: l, parentRemote: r }, depth + 1);
       if (v !== undefined) out[k] = v;
     }

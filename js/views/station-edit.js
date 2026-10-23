@@ -32,13 +32,20 @@ const POINT_KINDS = Object.entries(SAMPLING_KINDS).filter(([k]) => k !== 'statio
 const num = v => { const s = String(v ?? '').trim().replace(/\s/g, '').replace(',', '.'); return s === '' || isNaN(Number(s)) ? null : Number(s); };
 /** Liste de choix du système des coordonnées X / Y (UTM 22N RGFG95 par défaut, UTM 21N converti en 22N). */
 const srsSelect = (attrs, cur) => html`<select ${raw(attrs)}>${Object.entries(SRS).map(([k, l]) => html`<option value="${k}" ${k === cur ? raw('selected') : ''}>${l}</option>`)}</select>`;
-/** Aperçu de la conversion d'une saisie X / Y (UTM 21N → RGFG95 / UTM 22N) et contrôle de cohérence. */
+/**
+ * Aperçu de la conversion d'une saisie X / Y (UTM 21N → RGFG95 / UTM 22N) et contrôle de cohérence :
+ * {text, state ('conv' : conversion affichée, 'warn' : incohérence — refusée à l'enregistrement, '' : rien à dire)}.
+ */
 function xyPreview(x, y, srs) {
   const c = siteXY(x, y, srs);
-  if (!c) return srs === '21N' ? 'Saisissez X et Y en UTM 21N : ils seront convertis en RGFG95 / UTM 22N.' : '';
+  if (!c) return { text: srs === '21N' ? 'Saisissez X et Y en UTM 21N : ils seront convertis en RGFG95 / UTM 22N.' : '', state: '' };
   const issue = c.issues[0]?.message || '';
-  return `${srs === '21N' ? `→ ${convertedText(c)}` : 'RGFG95 / UTM 22N'}${issue ? ' — ⚠ ' + issue : ''}`;
+  if (issue) return { text: `⚠ ${issue}`, state: 'warn' };
+  return srs === '21N' ? { text: `→ ${convertedText(c)} (valeurs enregistrées)`, state: 'conv' } : { text: '', state: '' };
 }
+/** Paragraphe de l'aperçu (station ou point de prélèvement). */
+const previewP = (attrs, p) => html`<p class="hint se-xy-conv" ${raw(attrs)} data-state="${p.state}" aria-live="polite">${p.text}</p>`;
+const setPreview = (out, p) => { if (out) { out.textContent = p.text; out.dataset.state = p.state; } };
 /** Champs X / Y à l'affichage d'une saisie enregistrée (UTM 21N : saisie d'origine) ; à défaut, X / Y 22N. */
 const shownXY = p => { const e = entryOf(p); return { x: e.x ?? p?.x ?? '', y: e.y ?? p?.y ?? '' }; };
 
@@ -49,12 +56,12 @@ function pointRow(p = {}) {
   const srs = srsOf(p), xy = shownXY(p);
   return html`<div class="se-sp-row">
     <label class="se-sp-kind"><span class="sr">Type de point</span><select data-sp="kind">${options(POINT_KINDS, p.kind || 'prelevement', { placeholder: null })}</select></label>
-    <label><span class="sr">Libellé</span><input data-sp="label" value="${p.label || ''}" placeholder="Libellé (ex. Radier amont)"></label>
+    <label class="se-sp-label"><span class="sr">Libellé</span><input data-sp="label" value="${p.label || ''}" placeholder="Libellé (ex. Radier amont)"></label>
     <label class="se-sp-srs"><span class="sr">Système des coordonnées du point</span>${srsSelect('data-sp="srs" data-change="se-srs" title="Système des coordonnées X / Y du point"', srs)}</label>
-    <label><span class="sr">X (m)</span><input data-sp="x" inputmode="decimal" value="${xy.x}" placeholder="X (m)" data-input="se-xy"></label>
-    <label><span class="sr">Y (m)</span><input data-sp="y" inputmode="decimal" value="${xy.y}" placeholder="Y (m)" data-input="se-xy"></label>
+    <label class="se-sp-x"><span class="sr">X (m)</span><input data-sp="x" inputmode="decimal" value="${xy.x}" placeholder="X (m)" data-input="se-xy"></label>
+    <label class="se-sp-y"><span class="sr">Y (m)</span><input data-sp="y" inputmode="decimal" value="${xy.y}" placeholder="Y (m)" data-input="se-xy"></label>
     <button type="button" class="icon-btn" data-act="spDel" title="Retirer ce point" aria-label="Retirer ce point">${icon('trash', { size: 20 })}</button>
-    <p class="hint se-xy-conv" data-sp="conv" aria-live="polite">${srs === '21N' ? xyPreview(xy.x, xy.y, srs) : ''}</p>
+    ${previewP('data-sp="conv"', xyPreview(xy.x, xy.y, srs))}
   </div>`;
 }
 const pointXY = p => {
@@ -67,14 +74,11 @@ const pointXY = p => {
 function updatePreview(el) {
   const row = el.closest('.se-sp-row');
   if (row) {
-    const out = row.querySelector('[data-sp=conv]');
-    const srs = row.querySelector('[data-sp=srs]')?.value || '22N';
-    if (out) out.textContent = srs === '21N' || guessUtmZone(num(row.querySelector('[data-sp=x]')?.value), num(row.querySelector('[data-sp=y]')?.value)) === '21N' ? xyPreview(row.querySelector('[data-sp=x]')?.value, row.querySelector('[data-sp=y]')?.value, srs) : '';
+    setPreview(row.querySelector('[data-sp=conv]'), xyPreview(row.querySelector('[data-sp=x]')?.value, row.querySelector('[data-sp=y]')?.value, row.querySelector('[data-sp=srs]')?.value || '22N'));
     return;
   }
   const form = el.closest('form');
-  const out = form?.querySelector('#seXYConv');
-  if (out) out.textContent = xyPreview(form.querySelector('[name=x]')?.value, form.querySelector('[name=y]')?.value, form.querySelector('[name=srs]')?.value || '22N');
+  if (form) setPreview(form.querySelector('#seXYConv'), xyPreview(form.querySelector('[name=x]')?.value, form.querySelector('[name=y]')?.value, form.querySelector('[name=srs]')?.value || '22N'));
 }
 
 export default {
@@ -110,10 +114,12 @@ export default {
           ${field('Bassin versant', html`<input name="bassin" value="${s.bassin || ''}">`)}
           ${field('Cours d’eau', html`<input name="riverName" value="${s.riverName || ''}">`)}
           ${field('Masse d’eau', html`<input name="masseEau" value="${s.masseEau || ''}">`)}
-          ${field('Système des coordonnées X / Y', srsSelect('name="srs" id="seSrs" data-change="se-srs"', srsOf(s)), { hint: 'Enregistrées en RGFG95 / UTM 22N : une saisie en UTM 21N (ouest guyanais) est convertie, la saisie d’origine est conservée.' })}
-          <div class="field se-xy-conv-f"><p class="hint se-xy-conv" id="seXYConv" aria-live="polite">${xyPreview(shownXY(s).x, shownXY(s).y, srsOf(s))}</p></div>
-          ${field('X (m)', html`<input name="x" inputmode="decimal" value="${shownXY(s).x}" data-input="se-xy">`, { hint: 'Prioritaire : la position WGS84 est recalculée.' })}
-          ${field('Y (m)', html`<input name="y" inputmode="decimal" value="${shownXY(s).y}" data-input="se-xy">`)}
+          <div class="se-xy" role="group" aria-label="Coordonnées X / Y de la station">
+            ${field('Système des coordonnées X / Y', srsSelect('name="srs" id="seSrs" data-change="se-srs"', srsOf(s)), { hint: 'RGFG95 / UTM 22N par défaut ; une saisie en UTM 21N (ouest guyanais) est convertie en UTM 22N, la saisie d’origine est conservée.' })}
+            ${field('X (m)', html`<input name="x" inputmode="decimal" value="${shownXY(s).x}" data-input="se-xy">`, { hint: 'Prioritaire : la position WGS84 est recalculée.' })}
+            ${field('Y (m)', html`<input name="y" inputmode="decimal" value="${shownXY(s).y}" data-input="se-xy">`)}
+            ${previewP('id="seXYConv"', xyPreview(shownXY(s).x, shownXY(s).y, srsOf(s)))}
+          </div>
           ${field('Latitude WGS84', html`<input name="lat" inputmode="decimal" value="${s.lat ?? ''}">`, { hint: 'Utilisée seulement si X / Y sont vides.' })}
           ${field('Longitude WGS84', html`<input name="lon" inputmode="decimal" value="${s.lon ?? ''}">`)}
           ${field('Hydro-écorégion (HER)', html`<input name="her" value="${s.her ?? ''}">`)}

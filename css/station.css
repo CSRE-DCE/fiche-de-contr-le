@@ -411,9 +411,21 @@
 .se-sec>h2 .ico{color:var(--sky)}
 .se-checks .check .ico{color:var(--sky)}
 .se-sp{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
-.se-sp-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:12px;background:#f7fbfe;border:1px solid var(--line)}
+/* Points de prélèvement : type, libellé, système (UTM 22N / 21N), X, Y, retrait ; aperçu de la conversion dessous.
+   Téléphone : type + retrait, libellé, système, X | Y, aperçu. */
+.se-sp-row{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.5fr) minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:12px;background:#f7fbfe;border:1px solid var(--line)}
 .se-sp-row :is(input,select){width:100%}
-@media(max-width:700px){.se-sp-row{grid-template-columns:1fr 1fr}.se-sp-row>label:nth-child(2){grid-column:1 / -1;grid-row:2}.se-sp-row>.icon-btn{justify-self:end}}
+.se-sp-row>.se-xy-conv{grid-column:1 / -1;margin:0}
+.se-sp-row>.se-xy-conv:empty{display:none}
+@media(max-width:700px){.se-sp-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.se-sp-kind{grid-column:1 / 3}.se-sp-row>.icon-btn{grid-column:3;grid-row:1;justify-self:end}
+  .se-sp-label,.se-sp-srs{grid-column:1 / -1}.se-sp-y{grid-column:2 / -1}}
+/* Coordonnées X / Y de la station : système, X, Y sur une ligne ; conversion (UTM 21N → 22N) ou incohérence dessous. */
+.se-xy{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:0 10px;align-items:start}
+.se-xy>.se-xy-conv{grid-column:1 / -1;margin:-4px 0 12px}
+.se-xy>.se-xy-conv:empty{display:none}
+@media(max-width:640px){.se-xy{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.se-xy>.field:first-child{grid-column:1 / -1}}
+.se-xy-conv[data-state=conv]{font-size:14px;font-weight:700;color:var(--oeg-navy,#0d3577)}
+.se-xy-conv[data-state=warn]{font-size:13.5px;font-weight:600;color:#8a4b00;background:#fff4e0;border-radius:8px;padding:6px 9px}
 .se-inline{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-weight:600;color:var(--nc)}
 .se-inline input{width:20px;height:20px}
 .se-reason{border-color:#9cc8ea}

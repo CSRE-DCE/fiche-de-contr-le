@@ -55,7 +55,7 @@ import {
 import { linkProposal, sourceInfo, LINK_GROUPS } from '../domain/links.js';
 import { alertBox, documentsCard, signaturesStep, deviationChips, findItem, allowClear, cancelTourButton, cancelTourBlock, cancelledBanner, tourOperatorsCard, openOperatorForm } from './audit-modules.js';
 import { setTourOperator } from '../app/operators.js';
-import { SRS, srsOf, entryOf, withXYEntry, withSrs, withGpsReading, convertedText, coordIssues } from '../domain/coords.js';
+import { SRS, srsOf, entryOf, withXYEntry, withSrs, withGpsReading, convertedText, coordIssues, fmtMeters } from '../domain/coords.js';
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const optVal = o => (o && typeof o === 'object' ? o.value : o);
@@ -211,7 +211,8 @@ function fieldsControl(c, it, input, v, pfx, dis) {
   if (!input.gps) return html`<span class="st-fields">${parts}</span>`;
   const sid = `${pfx}-${it.id}-srs`;
   const srsSel = html`<span class="st-field is-srs"><label class="st-k" for="${sid}">Système&nbsp;:</label><select id="${sid}" class="st-srs" data-change="fsrs" data-item="${it.id}" aria-label="Système de coordonnées — ${it.label}" title="Coordonnées enregistrées en RGFG95 / UTM 22N ; une saisie en UTM 21N est convertie" ${dis}>${Object.entries(SRS).map(([k, l]) => html`<option value="${k}" ${k === srs ? raw('selected') : ''}>${l}</option>`)}</select></span>`;
-  const conv = srs === '21N' && convertedText(obj) ? html`<span class="as-xy-conv" title="Valeur enregistrée (convertie depuis l’UTM 21N)">→ ${convertedText(obj)}</span>` : '';
+  const conv = srs !== '21N' ? '' : convertedText(obj) ? html`<span class="as-xy-conv" title="Valeur enregistrée (convertie depuis l’UTM 21N)">→ RGFG95 / UTM 22N : <span>X ${fmtMeters(obj.x)}</span> · <span>Y ${fmtMeters(obj.y)}</span></span>`
+    : html`<span class="as-xy-conv is-pending">→ conversion en RGFG95 / UTM 22N dès que X et Y sont saisis</span>`;
   const warn = coordIssues(obj).map(w => html`<span class="as-xy-warn" role="note">${icon('warning', { size: 15 })}${w.message}</span>`);
   const gps = html`${c.editable ? html`<button type="button" class="st-gps" data-act="gps-fill" data-item="${it.id}" title="Relever la position GPS de l’appareil (X / Y RGFG95 / UTM 22N)">${icon('pin')}<span>Relever${pfx === 't' ? '' : ' la position'}</span></button>` : ''}
     ${obj.lat !== undefined && obj.at ? html`<span class="as-gps-meta" title="${Number(obj.lat).toFixed(6)}, ${Number(obj.lon).toFixed(6)} (WGS84)">Relevé GPS ${fmtTime(obj.at)}${obj.accuracy ? ` · ±${Math.round(obj.accuracy)} m` : ''}</span>` : ''}`;
@@ -802,7 +803,8 @@ export const sheetHandlers = {
     const cur = audit.responses?.[id];
     // Le GPS de la tablette donne directement l'UTM 22N ; en mode « UTM 21N », la saisie 21N équivalente est affichée.
     await setResponse(audit, id, { value: withGpsReading(cur?.value, xy), status: cur?.status === 'NA' ? undefined : cur?.status }, { reason: this.amendReason });
-    toast(`Position relevée (RGFG95 / UTM 22N) : X ${xy.x} · Y ${xy.y}${xy.accuracy ? ` (±${Math.round(xy.accuracy)} m)` : ''}`, 'ok', 4000);
+    const out = coordIssues(xy)[0];   // position hors de la Guyane (GPS non calé, appareil hors du terrain…)
+    toast(`Position relevée (RGFG95 / UTM 22N) : X ${xy.x} · Y ${xy.y}${xy.accuracy ? ` (±${Math.round(xy.accuracy)} m)` : ''}${out ? ` — ⚠ ${out.message}` : ''}`, out ? 'warn' : 'ok', out ? 8000 : 4000);
     await refreshKeep(this);
   },
   /** Valeur proposée (ex. amplitude horaire 5.2 → 5.3) appliquée à la demande de l'auditeur. */

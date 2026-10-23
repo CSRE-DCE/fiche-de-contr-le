@@ -1,6 +1,8 @@
 /* Tests unitaires des coordonnées UTM 21N / 22N : conversion (js/lib/geo.js : utmConvert, guessUtmZone, inGuyane) et
  * saisies des fiches et des stations (js/domain/coords.js : système choisi, conversion en UTM 22N, saisie d'origine
- * conservée, contrôle de cohérence), affichage (formatValue) et contrôle avant clôture (valueIssues).
+ * conservée, contrôle de cohérence), affichage (formatValue), contrôle avant clôture (valueIssues), alerte
+ * d'éloignement (GPS_XY_FAR, comparée en UTM 22N), correspondance des colonnes d'un import de stations et fusion
+ * d'un bloc des positions à la réception d'un fichier d'échange (js/domain/merge.js, js/domain/exchange.js).
  * Points de contrôle : étude des demandes OEG du 14/10/2026 (RGFG95 / GRS80, implémentation de Krüger indépendante,
  * identique à PROJ 9.8 — EPSG:3313 → EPSG:2972 — à moins de 0,001 mm). */
 import { test, assert, eq, deepEq } from './harness.js';
@@ -11,6 +13,9 @@ import { valueIssues } from '../../js/domain/grids.js';
 import { GRID_CT_2026 } from '../../js/domain/grid-ct-2026.js';
 import { guessMapping } from '../../js/domain/normalize.js';
 import { TARGETS } from '../../js/app/imports.js';
+import { computeAlerts } from '../../js/domain/rules.js';
+import { mergeEntity, COORD_FIELDS } from '../../js/domain/merge.js';
+import { planEntity } from '../../js/domain/exchange.js';
 
 const near = (a, b, tol, msg) => assert(Math.abs(a - b) <= tol, `${msg || ''} attendu ${b} ± ${tol}, obtenu ${a}`);
 
@@ -150,4 +155,63 @@ test('import de stations : colonnes « X », « Y » et « Fuseau UTM » reconnu
   deepEq(guessMapping(['Code station', 'Nom', 'Réseau(x)', 'Type', 'X (m)', 'Y (m)', 'Zone UTM'], TARGETS.site.fields),
     { code: 0, name: 1, networks: 2, kind: 3, x: 4, y: 5, srs: 6 });
   deepEq(guessMapping(['Code', 'Nom', 'Latitude', 'Longitude', 'EPSG'], TARGETS.site.fields), { code: 0, name: 1, lat: 2, lon: 3, srs: 4 });
+});
+
+test('saisie arrondie au mètre : la conversion 21N → 22N d’une saisie est exacte au mètre sur tous les points de contrôle', () => {
+  for (const [name, , , x21, y21, x22, y22] of POINTS) {
+    const c = convertEntry(Math.round(x21), Math.round(y21), '21N');
+    const [ex, ey] = utmConvert(Math.round(x21), Math.round(y21), 21, 22);
+    eq(c.x, Math.round(ex), `${name} X arrondi`); eq(c.y, Math.round(ey), `${name} Y arrondi`);
+    // L'arrondi de la saisie (± 0,5 m sur X et Y) déplace le point de moins d'un mètre.
+    assert(Math.hypot(c.x - x22, c.y - y22) < 1.5, `${name} : ${c.x} / ${c.y} au lieu de ${x22} / ${y22}`);
+    eq(guessUtmZone(c.x21, c.y21), '21N'); eq(guessUtmZone(c.x, c.y), '22N'); assert(c.inGuyane, name);
+  }
+});
+
+test('alerte d’éloignement (GPS_XY_FAR) : saisie en UTM 21N comparée après conversion en UTM 22N', () => {
+  const site = { id: 'site-60007489', code: '60007489', name: 'AV St Laurent', x: 167202, y: 619395 };
+  const ctx = { auditType: 'ce', compartments: ['organisation', 'physico'] };
+  const run = value => computeAlerts({ audit: { startedAt: '2026-10-21T12:00:00Z', responses: { 'it-F3-15': { status: 'C', value } }, compartments: ctx.compartments }, grid: GRID_CT_2026, ctx, site, settings: { gpsThresholdM: 300 } })
+    .filter(a => a.code === 'GPS_XY_FAR');
+  // Saisie 21N au bon endroit : convertie (X / Y 22N) — aucune alerte.
+  deepEq(run(withXYEntry(withXYEntry(withSrs({}, '21N'), 'x', 831991), 'y', 619391)), []);
+  // Même saisie en 22N (fuseau oublié) : alerte d'éloignement (et avertissement de saisie, voir valueIssues).
+  eq(run({ x: 831991, y: 619391 }).length, 1);
+  // Saisie 21N éloignée : le message cite les X / Y convertis ET la saisie d'origine.
+  const far = run(withXYEntry(withXYEntry(withSrs({}, '21N'), 'x', 832991), 'y', 619391));
+  eq(far.length, 1);
+  const c = convertEntry(832991, 619391, '21N');
+  assert(far[0].message.includes(`position X ${c.x} / Y ${c.y} (saisi en UTM 21N : X 832991 · Y 619391) à 1`), far[0].message);
+  assert(far[0].deviation.description.includes('RGFG95 / UTM 22N, saisi en UTM 21N'), far[0].deviation.description);
+});
+
+test('échange entre tablettes : coordonnées d’une station et valeur X / Y d’une feuille fusionnées d’un bloc', () => {
+  deepEq(COORD_FIELDS.site, ['x', 'y', 'lat', 'lon', 'srs', 'x21', 'y21']);
+  const base = { id: 'site-60007489', code: '60007489', name: 'AV St Laurent', x: 167202, y: 619395, lat: 5.595981, lon: -54.003638, commune: '', updatedAt: '2026-10-20T10:00:00Z' };
+  const c21 = siteXY(831991, 619391, '21N');
+  const at21 = { x: c21.x, y: c21.y, lat: c21.lat, lon: c21.lon, srs: '21N', x21: 831991, y21: 619391 };
+  // Une seule tablette modifie la position (saisie en UTM 21N), l'autre la commune : les deux sont gardées, sans conflit.
+  let r = mergeEntity('site', base, { ...base, ...at21, updatedAt: '2026-10-21T09:00:00Z' }, { ...base, commune: 'Saint-Laurent-du-Maroni', updatedAt: '2026-10-21T10:00:00Z' });
+  deepEq(r.conflicts, []); eq(r.merged.commune, 'Saint-Laurent-du-Maroni');
+  for (const k of COORD_FIELDS.site) eq(r.merged[k], at21[k], k);
+  // Les deux tablettes déplacent la station (21N d'un côté, 22N de l'autre, plus récent) : la position la plus récente
+  // est retenue ENTIÈRE (jamais le X de l'une avec le fuseau ou le Y de l'autre) ; conflit tracé, valeurs restaurables.
+  const at22 = { x: 167250, y: 619300, lat: 5.5951, lon: -54.0032 };
+  r = mergeEntity('site', base, { ...base, ...at21, updatedAt: '2026-10-21T09:00:00Z' }, { ...base, ...at22, updatedAt: '2026-10-21T11:00:00Z' });
+  deepEq(COORD_FIELDS.site.map(k => r.merged[k]), [167250, 619300, 5.5951, -54.0032, undefined, undefined, undefined]);
+  assert(r.conflicts.length >= 2 && r.conflicts.every(c => c.kept === 'remote') && r.conflicts.some(c => c.path === 'srs' && c.localValue === '21N'), JSON.stringify(r.conflicts));
+  r = mergeEntity('site', base, { ...base, ...at21, updatedAt: '2026-10-21T12:00:00Z' }, { ...base, ...at22, updatedAt: '2026-10-21T11:00:00Z' });
+  for (const k of COORD_FIELDS.site) eq(r.merged[k], at21[k], `${k} (saisie 21N plus récente)`);
+  // Valeur X / Y d'une feuille saisie des deux côtés : la plus récente entière, l'autre dans le rapport.
+  const resp = (value, at, by) => ({ status: 'C', value, at, by });
+  const audit = (responses, vv) => ({ id: 'a1', number: 'AUD-2026-070001', responses, _vv: vv, updatedAt: '2026-10-21T08:00:00Z' });
+  const v21 = withXYEntry(withXYEntry(withSrs({}, '21N'), 'x', 831991), 'y', 619391);
+  const local = audit({ 'it-F3-15@60007489': resp(v21, '2026-10-21T09:00:00Z', 'u-a') }, { T1: 2 });
+  const remote = audit({ 'it-F3-15@60007489': resp({ x: 167300, y: 619420 }, '2026-10-21T09:30:00Z', 'u-b') }, { T1: 1, T2: 1 });
+  const p = planEntity('audit', local, remote, { deviceId: 'T1' });
+  deepEq(p.result.responses['it-F3-15@60007489'].value, { x: 167300, y: 619420 }, 'plus récente, entière');
+  assert(p.conflicts.some(c => c.path.endsWith('.value')), JSON.stringify(p.conflicts.map(c => c.path)));
+  // Reçue seule (l'autre tablette ne l'a pas modifiée) : transportée telle quelle avec la saisie d'origine.
+  const q = planEntity('audit', audit({}, { T1: 1 }), audit({ 'it-F3-15@60007489': resp(v21, '2026-10-21T09:00:00Z', 'u-a') }, { T1: 1, T2: 1 }), { deviceId: 'T1' });
+  deepEq(q.result.responses['it-F3-15@60007489'].value, v21); eq(formatValue(GRID_CT_2026.sections.flatMap(s => s.items).find(i => i.id === 'it-F3-15'), q.result.responses['it-F3-15@60007489'].value), `X : ${v21.x} · Y : ${v21.y} (saisi en UTM 21N : X 831991 · Y 619391)`);
 });

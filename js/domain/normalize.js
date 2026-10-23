@@ -58,21 +58,24 @@ export function parseInputValue(spec, v) {
 }
 export function parseBool(v) { const s = normalize(v); return ['oui', 'o', 'yes', 'y', 'vrai', 'true', '1', 'x'].includes(s) ? true : ['non', 'n', 'no', 'faux', 'false', '0'].includes(s) ? false : null; }
 
+/** En-tête ou indice comparé sans accents, majuscules ni ponctuation : « X (m) » → « x m », « N° d'inventaire » → « n d inventaire ». */
+const looseText = s => normalize(s).replace(/[^a-z0-9]+/g, ' ').trim();
+
 /**
- * Proposition de correspondance colonne → champ, d'après les en-têtes : égalité avec la clé, le libellé ou un indice
- * du champ (3 points), sinon inclusion de l'un dans l'autre (2 points si le texte INCLUS compte plus de 3 caractères,
- * 1 point sinon — un en-tête court comme « X » ou « Y » n'est jamais associé à « Réseau(x) » ou à un autre libellé qui
- * le contient) ; seuil : 2 points.
+ * Proposition de correspondance colonne → champ, d'après les en-têtes (comparés sans accents, majuscules ni
+ * ponctuation) : égalité avec la clé, le libellé ou un indice du champ (3 points), sinon inclusion de l'un dans
+ * l'autre (2 points si le texte INCLUS compte plus de 3 caractères, 1 point sinon — un en-tête court comme « X » ou
+ * « Y » n'est jamais associé à « Réseau(x) » ou à un autre libellé qui le contient) ; seuil : 2 points.
  */
 export function guessMapping(headers, fields) {
   const mapping = {};
   const used = new Set();
   for (const f of fields) {
-    const hints = [f.key, f.label, ...(f.hints || [])].map(normalize);
+    const hints = [f.key, f.label, ...(f.hints || [])].map(looseText).filter(Boolean);
     let best = -1, bestScore = 0;
     headers.forEach((h, i) => {
       if (used.has(i)) return;
-      const nh = normalize(h);
+      const nh = looseText(h);
       if (!nh) return;
       let score = 0;
       for (const hint of hints) {

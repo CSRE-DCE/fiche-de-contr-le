@@ -5,7 +5,8 @@
  * pré-rempli, l'auditeur garde la décision finale.
  *
  * Grilles en feuilles : règles `item.alerts` appliquées à la valeur saisie (`input` numérique, ou champ
- * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps) aux
+ * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps, toujours en RGFG95 /
+ * UTM 22N : une saisie en UTM 21N est comparée après conversion, js/domain/coords.js) aux
  * coordonnées théoriques de LA station du critère (tournée : `stationSites[clé]`), ancienneté des calibrations
  * des sondes (module « instruments », donnée de tournée : une alerte par appareil). Une alerte liée à un critère
  * de station porte `stationKey`.
@@ -14,6 +15,7 @@ import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAns
 import { itemInput, auditDate as dateOfAudit } from './model.js';
 import { haversine, fmtDistance, fmtDate, daysBetween } from '../core/util.js';
 import { ecartGPS } from '../lib/geo.js';
+import { originText } from './coords.js';
 
 const LEVEL_RANK = { critique: 3, attention: 2, info: 1 };
 
@@ -227,11 +229,12 @@ export function computeAlerts(input) {
       const site = itSite;
       const d = xyDistance(r.value, site);
       const threshold = Number(grid?.settings?.gpsThresholdM) || Number(settings.gpsThresholdM) || 100;
+      const origin = originText(r.value);   // saisie en UTM 21N : x / y comparés sont ceux convertis en UTM 22N
       if (d !== null && d > threshold) add({
         code: 'GPS_XY_FAR', level: 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, stationKey: stationKeyOf(it), key: 'GPS_XY_FAR:' + it.id,
         title: 'Coordonnées éloignées de la station',
-        message: `${it.label} : position X ${r.value.x} / Y ${r.value.y} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
-        deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
+        message: `${it.label} : position X ${r.value.x} / Y ${r.value.y}${origin ? ` (${origin})` : ''} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
+        deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}${origin ? ` RGFG95 / UTM 22N, ${origin}` : ''}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
       });
     }
     // Version du protocole présentée ≠ version applicable
