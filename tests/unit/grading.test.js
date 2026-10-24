@@ -3,7 +3,8 @@
  * - barème C = 1, P = 0,5, NC = 0, N/A et non renseignés non comptés ; note au dixième calculée en entiers (vecteurs
  *   d'arrondi : 23,5 / 200 → « 2,4 », 37,5 / 47 → « 16,0 » Satisfaisant, 119,5 / 200 → « 12,0 ») ; « non noté » ;
  * - appréciation d'après la note affichée et les seuils (défaut 16 / 12, seuils personnalisés, bornes, saisie invalide) ;
- * - points majeurs × 2 (26 points de CT-2026, liste MAJOR_ITEMS) et points de synthèse hors note (F2.2.8, F4.27) ;
+ * - points majeurs × 2 (28 points de CT-2026 depuis la version 1.3, liste MAJOR_ITEMS) et points de synthèse hors note
+ *   (F2.2.8, F4.27) ;
  * - barème d'un instantané antérieur (grille du code par identifiant d'origine, numéro retiré × 1) ;
  * - portées : feuille (points affichés, communs compris), station, commun à la tournée, tournée (point commun et
  *   opération mutualisée d'une tournée mixte comptés une fois) ;
@@ -107,18 +108,21 @@ test('points majeurs × 2 et points de synthèse hors note', () => {
   eq(gradeItems([maj, ord, syn], { 'it-F4-12': { status: 'C' }, 'it-F4-14': { status: 'NC' }, 'it-F4-27': { status: 'NC' } }).text, '13,3', 'gradeItems : 2 / 3');
 });
 
-test('CT-2026 : 26 points majeurs validés (MAJOR_ITEMS), F8.A2 réunit A2 et A3, synthèses hors note', () => {
+test('CT-2026 : 28 points majeurs validés (MAJOR_ITEMS, PEZSML depuis 1.3), F8.A2 réunit A2 et A3, synthèses hors note', () => {
+  // 26 points validés le 23/10/2026, puis F6.15 et F6.16 (substrats artificiels du PEZSML, équivalents de F6.5 et F6.11)
+  // validés le 24/10/2026 ; F6.12 reste commun aux deux protocoles.
   deepEq([...MAJOR_ITEMS], ['F2.4.4', 'F3.19', 'F10.4', 'F10.5', 'F10.6', 'F4.2', 'F4.12', 'F4.13', 'F4.31', 'F5.7', 'F5.13', 'F5.21', 'F5.24', 'F5.26', 'F5.27',
-    'F6.5', 'F6.11', 'F6.12', 'F7.6', 'F7.12', 'F8.A2', 'F8.A5', 'F8.B4', 'F8.B5', 'F9.9', 'F9.12']);
+    'F6.5', 'F6.11', 'F6.12', 'F6.15', 'F6.16', 'F7.6', 'F7.12', 'F8.A2', 'F8.A5', 'F8.B4', 'F8.B5', 'F9.9', 'F9.12']);
   const items = allItems(G);
-  deepEq(items.filter(i => i.major).map(i => i.code).sort(), [...MAJOR_ITEMS].sort(), 'attribut major sur les 26 points, et eux seuls');
+  deepEq(items.filter(i => i.major).map(i => i.code).sort(), [...MAJOR_ITEMS].sort(), 'attribut major sur les 28 points, et eux seuls');
+  for (const c of ['F6.14', 'F5.31', 'F5.32']) assert(!IDX.get(c).major, `${c} n’est pas majeur`);
   assert(items.filter(i => i.major).every(i => i.kind === 'conformity' && !i.noScore), 'points majeurs : critères cotés, jamais hors note');
   deepEq(items.filter(i => i.noScore).map(i => i.code), ['F2.2.8', 'F4.27']);
   for (const c of ['F2.4.3', 'F2.7.3', 'F8.A1', 'F8.A4']) assert(!IDX.get(c).major, `${c} n’est pas majeur`);
   eq(IDX.get('F8.A2').label, 'Filets maillants / batteries et mailles utilisées');
   assert(!IDX.get('F8.A3') && !IDX.get('it-F8-A3'), 'F8.A3 retiré');
   const sc = scoringOf(G);
-  deepEq([sc.source, sc.majors.size, [...sc.noScore].sort()], ['grille', 26, ['it-F2-2.8', 'it-F4-27']]);
+  deepEq([sc.source, sc.majors.size, [...sc.noScore].sort()], ['grille', 28, ['it-F2-2.8', 'it-F4-27']]);
   assert(scoringOf(G) === sc, 'barème mémorisé par grille');
   // Grille effective : critère de station (id@clé) et critère commun : même barème (identifiant d'origine).
   const E = expandGrid(G, [{ siteId: ATHANASE.id }, { siteId: ACAROUANY.id }], SITES);
@@ -135,7 +139,8 @@ test('barème d’un instantané antérieur : grille du code par identifiant d�
   const f8 = old.sections.find(s => s.id === 's-F8-A');
   f8.items.splice(2, 0, { id: 'it-F8-A3', code: 'F8.A3', no: 'A3', label: 'Mailles utilisées', short: 'A3', kind: 'conformity', responses: ['C', 'P', 'NC', 'NA'], required: true });
   const sc = scoringOf(old);
-  deepEq([sc.source, sc.majors.size, [...sc.noScore].sort()], ['reference', 26, ['it-F2-2.8', 'it-F4-27']]);
+  // Barème de la grille du code (1.3 : 28 points ; F6.15 et F6.16 absents de l'instantané, sans effet)
+  deepEq([sc.source, sc.majors.size, [...sc.noScore].sort()], ['reference', 28, ['it-F2-2.8', 'it-F4-27']]);
   eq(weightOf({ id: 'it-F8-A3@' + B, baseId: 'it-F8-A3', kind: 'conformity' }, sc), 1, 'numéro retiré : × 1');
   eq(weightOf({ id: 'it-F8-A2@' + B, kind: 'conformity' }, sc), 2, 'identifiant d’origine déduit de l’identifiant effectif');
   // Grille sans barème et sans grille de référence : × 1 partout.
@@ -223,7 +228,7 @@ test('note figée à la signature : enregistrement, seuils figés, modification 
   const live = collectGrades(auditSummary({ audit, grid: E, ctx, grading }));
   eq(live.tour.text, '12,0'); eq(live.tour.label, 'À améliorer');
   const rec = gradingRecord(live, { ...grading, at: '2026-10-23T15:00:00.000Z', by: 'u1', byName: 'Admin Test' });
-  deepEq([rec.version, rec.thresholds, rec.scale, rec.majorWeight, rec.source, rec.majors.length, rec.noScore], [1, { good: 16, fair: 12 }, { C: 1, P: 0.5, NC: 0 }, 2, 'grille', 26, ['it-F2-2.8', 'it-F4-27']]);
+  deepEq([rec.version, rec.thresholds, rec.scale, rec.majorWeight, rec.source, rec.majors.length, rec.noScore], [1, { good: 16, fair: 12 }, { C: 1, P: 0.5, NC: 0 }, 2, 'grille', 28, ['it-F2-2.8', 'it-F4-27']]);
   deepEq([rec.tour.note, rec.tour.level, rec.tour.points, rec.tour.max, rec.tour.evaluated], [12, 'fair', 3, 5, 3]);
   assert(rec.sheets[`4@${B}`] && rec.stations[B] && rec.tournee, 'notes des feuilles, des stations et du commun');
   eq(JSON.stringify(rec), JSON.stringify(JSON.parse(JSON.stringify(rec))), 'données JSON simples (enregistrables, scellables)');

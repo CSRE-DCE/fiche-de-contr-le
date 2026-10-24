@@ -9,7 +9,9 @@
  *  - le modèle d'affichage par type de tournée (attendusModel) : feuilles VISIBLES pour le type (conditions de la
  *    grille évaluées par sheetsOf / expandGrid sur une station fictive, conditions portant sur des réponses
  *    ignorées), sections, critères, badges « Commun à la tournée », « Point majeur (×2) » (note sur 20) et « Point de
- *    synthèse, hors note », règle de la note sur 20 (data.notation) ;
+ *    synthèse, hors note », règle de la note sur 20 (data.notation) ; valeurs propres à chaque réseau (`parReseau` :
+ *    CCTP 2026 de chaque réseau, « tous » pour une règle commune) et sources (`sources` : CCTP du réseau et marché,
+ *    paragraphe, page ; protocoles et guides) de chaque critère ;
  *  - le PDF A4 portrait (generateAttendusPdf / buildAttendusPdf) : en-tête OEG, échelle, liste de préparation à
  *    cocher, puis une section par feuille aux couleurs de son thème (js/ui/themes.js), pied de page avec la version
  *    des attendus et la pagination. Polices Barlow / Barlow Condensed / Montserrat incorporées (fonts/pdf), repli
@@ -88,6 +90,8 @@ const relaxGrid = grid => ({
   sections: flatSections(grid).map(s => ({ ...s, subsections: undefined, condition: relax(s.condition), items: (s.items || []).map(it => ({ ...it, condition: relax(it.condition) })) }))
 });
 const hasItemCondition = cond => !!cond && (Array.isArray(cond) ? cond.some(hasItemCondition) : cond.all ? cond.all.some(hasItemCondition) : cond.any ? cond.any.some(hasItemCondition) : cond.not ? hasItemCondition(cond.not) : !!cond.item);
+/** Condition portant sur les réseaux de la station (ctx.networks / ctx.network) : critère affiché selon le réseau. */
+const hasNetworkCondition = cond => !!cond && (Array.isArray(cond) ? cond.some(hasNetworkCondition) : cond.all ? cond.all.some(hasNetworkCondition) : cond.any ? cond.any.some(hasNetworkCondition) : cond.not ? hasNetworkCondition(cond.not) : cond.ctx === 'networks' || cond.ctx === 'network');
 const STATION_KEY = 'ATTENDUS';
 
 const visCache = new WeakMap();
@@ -95,13 +99,17 @@ const visCache = new WeakMap();
  * Visibilité de la grille par type de tournée, calculée par les fonctions de la grille (expandGrid + sheetsOf) sur
  * une tournée fictive d'UNE station de la matrice du type, toutes les conditions portant sur des réponses étant
  * levées. Retourne {types: {bio: {sheets: [{no, title, tab, kicker, theme, scope, items: [idDeBase]}], items: Set}},
- * typesOf: Map(idDeBase → [types]), conditional: Set(idDeBase affichés selon une réponse)}.
+ * typesOf: Map(idDeBase → [types]), conditional: Set(idDeBase affichés selon une réponse), byNetwork: Set(idDeBase
+ * affichés selon le réseau de la station)}.
  */
 export function typeVisibility(grid = GRID_CT_2026) {
   if (visCache.has(grid)) return visCache.get(grid);
   const relaxed = relaxGrid(grid);
-  const out = { types: {}, typesOf: new Map(), conditional: new Set() };
-  for (const it of allItems(grid)) if (hasItemCondition(it.condition)) out.conditional.add(it.id);
+  const out = { types: {}, typesOf: new Map(), conditional: new Set(), byNetwork: new Set() };
+  for (const it of allItems(grid)) {
+    if (hasItemCondition(it.condition)) out.conditional.add(it.id);
+    if (hasNetworkCondition(it.condition)) out.byNetwork.add(it.id);
+  }
   for (const t of gridTypes(grid)) {
     const siteId = 'site-' + STATION_KEY;
     const sites = { [siteId]: { id: siteId, name: 'Station type', code: STATION_KEY, matrixId: t.matrixId || '' } };
@@ -125,8 +133,8 @@ const sectionTheme = (sec, sheet) => sec.theme || sheet.theme || 'ocean';
  * Modèle du document pour un type de tournée (null : tous les types) :
  * {type, typeLabel, data, echelle, avertissement, preparation: [{key, label, groups}], sheets: [{no, code, title, tab,
  *  theme, scope, icon, types, intro, documents, sections: [{id, no, title, icon, theme, items}], items, values, count}], count}.
- * Critère : {id, code, no, label, kind, shared, types, conditional, noScore (point de synthèse, hors note), major (point
- *  majeur : compte double dans la note sur 20), value (critère sans
+ * Critère : {id, code, no, label, kind, shared, types, conditional, byNetwork (affiché selon le réseau de la station),
+ *  noScore (point de synthèse, hors note), major (point majeur : compte double dans la note sur 20), value (critère sans
  *  cotation), theme, entry}.
  * Les feuilles et critères sont ceux AFFICHÉS pour le type (tous les types : réunion, titres de base des feuilles).
  */
@@ -146,7 +154,7 @@ export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = 
       const items = (s.items || []).filter(it => allowed.has(it.id)).map(it => ({
         id: it.id, code: it.code, no: it.no, label: it.label, kind: it.kind, value: it.kind !== 'conformity',
         shared: base.scope === 'tournee' || it.scope === 'tournee', sheetScope: base.scope,
-        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), noScore: !!it.noScore, major: !!it.major, help: it.help || '',
+        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), byNetwork: vis.byNetwork.has(it.id), noScore: !!it.noScore, major: !!it.major, help: it.help || '',
         theme: sectionTheme(s, base), entry: data?.criteres?.[it.id] || null
       }));
       if (items.length) secs.push({ id: s.id, no: s.no || '', title: s.title, icon: s.icon || '', theme: sectionTheme(s, base), items });
@@ -418,15 +426,22 @@ function drawValues(flow, items, theme) {
   doc.text('Informations relevées par le contrôleur (sans cotation)', M, doc.y, { font: F.bold, size: 8.8, color: t.title });
   doc.y += 13;
   items.forEach((it, i) => {
-    const a = flow.lines(String(it.entry?.attendu || '').replace(/^Information à relever\s*:\s*/i, ''), F.text, 7.8, w3 - 8);
+    const e = it.entry || {};
+    const a = flow.lines(String(e.attendu || '').replace(/^Information à relever\s*:\s*/i, ''), F.text, 7.8, w3 - 8);
     const l = flow.lines(it.label, F.semi, 7.8, w2 - 8);
-    const h = Math.max(a.length, l.length) * 9.6 + 6;
+    // Sources et « à préciser » éventuels, sous la description (colonne de droite)
+    const s = (e.sources || []).length ? flow.lines('Sources : ' + e.sources.join(' · '), F.italic, 7.1, w3 - 8) : [];
+    const p = e.aPreciser ? flow.lines('À préciser (OEG) : ' + e.aPreciser, F.text, 7.4, w3 - 8) : [];
+    const h = Math.max(a.length * 9.6 + (s.length ? s.length * 8.6 + 2 : 0) + (p.length ? p.length * 9 + 2 : 0), l.length * 9.6) + 6;
     flow.ensure(h);
     const y = doc.y;
     doc.rect(M, y, flow.width, h, { fill: i % 2 ? t.rowAlt || '#f6fbfe' : '#ffffff', stroke: t.line, lineWidth: 0.4 });
     doc.text(it.code, M + 4, y + 3, { font: F.cond, size: 8.4, color: t.num });
     flow.textLines(l, M + w1, y + 3, { font: F.semi, size: 7.8, color: t.ink, lh: 9.6 });
     flow.textLines(a, M + w1 + w2, y + 3, { size: 7.8, lh: 9.6 });
+    let yy = y + 3 + a.length * 9.6 + 2;
+    if (s.length) { flow.textLines(s, M + w1 + w2, yy, { font: F.italic, size: 7.1, color: MUTED, lh: 8.6 }); yy += s.length * 8.6 + 2; }
+    if (p.length) flow.textLines(p, M + w1 + w2, yy, { size: 7.4, color: '#5c3b00', lh: 9 });
     doc.y += h;
   });
   doc.y += 8;
@@ -440,6 +455,7 @@ function criterionCard(flow, model, it) {
   const badges = [];
   if (it.shared && it.sheetScope !== 'tournee') badges.push({ text: 'Commun à la tournée', color: '#0b4f9c', bg: '#e8f3fc' });
   if (it.conditional) badges.push({ text: 'Affiché selon une réponse', color: MUTED, bg: '#eef1f4' });
+  if (it.byNetwork) badges.push({ text: 'Selon le réseau de la station', color: MUTED, bg: '#eef1f4' });
   if (it.major) badges.push({ text: 'Point majeur (×2)', color: '#6b3600', bg: '#fff1d6' });
   if (it.noScore) badges.push({ text: 'Point de synthèse, hors note', color: '#6b4e00', bg: '#fff4d6' });
   if (!model.type && it.types.length < TOUR_TYPES.length) it.types.forEach(k => badges.push({ text: gridType(GRID_CT_2026, k)?.short || k, color: th(TYPE_THEMES[k]).dark, bg: th(TYPE_THEMES[k]).light }));
@@ -451,9 +467,14 @@ function criterionCard(flow, model, it) {
   const cellH = cells.length ? Math.max(...cells.map(c => c.lines.length * 9.3)) + 22 : 0;
   const refs = (e.refs || []).length ? flow.lines('Références : ' + e.refs.join(' · '), F.italic, 7.5, inner) : [];
   const prec = e.aPreciser ? flow.lines(e.aPreciser, F.text, 7.7, inner - 74) : [];
+  // Valeurs propres à chaque réseau (CCTP 2026) et sources (CCTP, protocoles)
+  const netW = 44;
+  const nets = Object.entries(e.parReseau || {}).filter(([, v]) => v).map(([k, v]) => ({ k: k === 'tous' ? 'Tous' : k, lines: flow.lines(v, F.text, 7.6, inner - netW - 10) }));
+  const netH = nets.length ? 15 + nets.reduce((n, r) => n + r.lines.length * 9.2 + 2, 0) + 4 : 0;
+  const srcs = (e.sources || []).length ? flow.lines('Sources : ' + e.sources.join(' · '), F.italic, 7.1, inner) : [];
   const head = Math.max(labelLines.length * 12, 12) + (badges.length ? 13 : 0) + 6;
   const body = rows.reduce((n, r) => n + r.lines.length * 10.4 + 4, 0);
-  const h = pad + head + body + (cellH ? cellH + 4 : 0) + (refs.length ? refs.length * 9.2 + 3 : 0) + (prec.length ? prec.length * 9.4 + 9 : 0) + pad - 2;
+  const h = pad + head + body + (cellH ? cellH + 4 : 0) + (netH ? netH + 4 : 0) + (refs.length ? refs.length * 9.2 + 3 : 0) + (srcs.length ? srcs.length * 8.6 + 3 : 0) + (prec.length ? prec.length * 9.4 + 9 : 0) + pad - 2;
   if (doc.y + h > flow.bottom && h <= flow.bottom - TOP) flow.page();
   const x = M, y = doc.y;
   doc.roundRect(x, y, W, h, 7, { fill: '#ffffff', stroke: t.line, lineWidth: 0.8 });
@@ -493,7 +514,19 @@ function criterionCard(flow, model, it) {
     });
     yy += cellH + 4;
   }
+  if (nets.length) {
+    doc.roundRect(ix, yy, inner, netH, 3.5, { fill: t.light || '#eef6fb', stroke: t.line, lineWidth: 0.5 });
+    doc.text('Selon le réseau (CCTP 2026)', ix + 5, yy + 3.5, { font: F.bold, size: 7.4, color: t.title });
+    let ny = yy + 15;
+    for (const r of nets) {
+      doc.text(r.k, ix + 5, ny, { font: F.cond, size: 7.8, color: t.num });
+      flow.textLines(r.lines, ix + netW + 5, ny, { size: 7.6, lh: 9.2 });
+      ny += r.lines.length * 9.2 + 2;
+    }
+    yy += netH + 4;
+  }
   if (refs.length) { flow.textLines(refs, ix, yy, { font: F.italic, size: 7.5, color: MUTED, lh: 9.2 }); yy += refs.length * 9.2 + 3; }
+  if (srcs.length) { flow.textLines(srcs, ix, yy, { font: F.italic, size: 7.1, color: MUTED, lh: 8.6 }); yy += srcs.length * 8.6 + 3; }
   if (prec.length) {
     const ph = prec.length * 9.4 + 6;
     doc.roundRect(ix, yy, inner, ph, 3.5, { fill: '#fff6e6', stroke: '#f3c27a', lineWidth: 0.6 });

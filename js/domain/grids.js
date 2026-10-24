@@ -152,7 +152,8 @@ export function conditionErrors(cond, index, path = 'condition') {
 /**
  * Structure visible de la grille pour un audit : les sections/critères dont la condition n'est pas
  * remplie sont masqués (et exclus de l'avancement et des contrôles de complétude). Section d'une station
- * (grille effective) : la matrice de la station (`station.matrixCode`) prime sur celle du contexte.
+ * (grille effective) : la matrice et les réseaux de la station (`station.matrixCode`, `station.networks`) priment sur
+ * ceux du contexte.
  */
 export function visibleStructure(grid, responses = {}, ctx = {}) {
   const index = itemIndex(grid);
@@ -165,7 +166,9 @@ export function visibleStructure(grid, responses = {}, ctx = {}) {
       const sheet = s.sheet !== undefined ? s.sheet : parentSheet;
       const station = s.station || parentStation;
       const base = parts ? (station ? parts.station(station) : parts.tour) : [ctx];
-      const ctxs = station?.matrixCode ? base.map(c => ({ ...c, matrixCode: station.matrixCode })) : base;
+      // Matrice et réseaux de LA station (grille effective) : priment sur ceux du contexte de la tournée.
+      const own = station ? { ...(station.matrixCode ? { matrixCode: station.matrixCode } : {}), ...(station.networks ? { networks: station.networks, network: station.networks.join(',') } : {}) } : null;
+      const ctxs = own && Object.keys(own).length ? base.map(c => ({ ...c, ...own })) : base;
       // Visible pour l'une des parties contrôlées (une seule partie : condition évaluée comme avant).
       const test = cond => ctxs.some(c => evalCondition(cond, responses, index, c));
       const visible = parentVisible && test(s.condition);
@@ -486,7 +489,8 @@ const siteFrom = (sites, id) => !sites ? null : typeof sites === 'function' ? si
 
 /**
  * Grille EFFECTIVE d'une tournée (fonction pure). Chaque section d'une feuille `scope: 'station'` est dupliquée
- * pour chaque station (`id: sec.id + '@' + clé`, `baseId`, `station: {key, index, siteId, name, code, matrixCode}`) ;
+ * pour chaque station (`id: sec.id + '@' + clé`, `baseId`, `station: {key, index, siteId, name, code, matrixCode,
+ * networks?}`) ;
  * ses critères sont suffixés (`id: it.id + '@' + clé`, `code: it.code + '·S' + (index + 1)`, `baseId`, `baseCode`,
  * `station`), leurs conditions visant un critère de la même feuille station sont réécrites pour la station.
  * Les critères `scope: 'tournee'` gardent leur identifiant et sont marqués `shared: true`. Les feuilles tournée ne
@@ -502,7 +506,9 @@ export function expandGrid(grid, stations = [], sites = null, { provider = null 
     const key = s.key || stationKeyOf(s.siteId);
     // Parties contrôlées à la station (tournée mixte) : reprises dans chaque copie de section (visibleStructure).
     const parts = normalizeParts(grid, s.parts);
-    return { key, index, siteId: s.siteId, name: site?.name || s.name || key, code: site?.code || key, matrixCode: String(site?.matrixId || '').replace(/^mat-/, ''), ...(parts ? { parts } : {}) };
+    // Réseaux de la station (conditions `ctx.networks` évaluées station par station : visibleStructure).
+    const networks = Array.isArray(site?.networks) ? site.networks.map(String) : null;
+    return { key, index, siteId: s.siteId, name: site?.name || s.name || key, code: site?.code || key, matrixCode: String(site?.matrixId || '').replace(/^mat-/, ''), ...(parts ? { parts } : {}), ...(networks ? { networks } : {}) };
   });
   const scopeOf = new Map(grid.sheets.map(sh => [String(sh.no), sh.scope || 'station']));
   const isStationSec = s => scopeOf.get(String(s.sheet)) === 'station';
@@ -522,7 +528,7 @@ export function expandGrid(grid, stations = [], sites = null, { provider = null 
     if (cond.item && ownCodes.has(cond.item)) return { ...cond, item: `${cond.item}·S${st.index + 1}` };
     return cond;
   };
-  const ref = st => ({ key: st.key, index: st.index, siteId: st.siteId, name: st.name, code: st.code, matrixCode: st.matrixCode, ...(st.parts ? { parts: st.parts } : {}) });
+  const ref = st => ({ key: st.key, index: st.index, siteId: st.siteId, name: st.name, code: st.code, matrixCode: st.matrixCode, ...(st.parts ? { parts: st.parts } : {}), ...(st.networks ? { networks: st.networks } : {}) });
   const copy = (sec, st) => ({
     ...sec, id: `${sec.id}@${st.key}`, baseId: sec.id, station: ref(st), condition: rewrite(sec.condition, st),
     items: (sec.items || []).map(it => it.scope === 'tournee'
@@ -649,6 +655,16 @@ export function sectionHeaders(section) { return { ...SHEET_HEADERS, ...(section
 /* ---------- Pré-remplissage à la création de l'audit (ou à l'ajout d'une station) ---------- */
 const finite = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
 const operatorName = o => typeof o === 'string' ? o : ([o?.firstName, o?.lastName].filter(Boolean).join(' ') || o?.code || o?.name || '');
+/**
+ * Protocole invertébrés d'une station d'après son hydro-écorégion (CCTP BIO et RCO 2026) : 52 (bouclier guyanais,
+ * zones amont) → PEZADA ; 51 (plaine littorale, zones aval soumises à la marée) → PEZSML ; autre ou inconnue → ''
+ * (choix du contrôleur, ex. stations du lot 2 du RCO). Valeur proposée (F6.14), modifiable.
+ */
+export const PROTOCOL_BY_HER = Object.freeze({ 51: 'PEZSML', 52: 'PEZADA' });
+export function invertebrateProtocol(site) {
+  const m = String(site?.her ?? '').match(/\b(\d{2})\b/);
+  return (m && PROTOCOL_BY_HER[m[1]]) || '';
+}
 /** Valeur d'une source de pré-remplissage (`item.prefill`, voir PREFILL_SOURCES de model.js). */
 export function prefillValue(source, { site = null, auditor = null, provider = null, prestation = null, operators = [], date = '', time = '', kind = '', stationCount = null } = {}) {
   switch (source) {
@@ -656,6 +672,7 @@ export function prefillValue(source, { site = null, auditor = null, provider = n
     case 'site.code': case 'site.bassin': case 'site.riverName': case 'site.commune': case 'site.her': case 'site.pressions': case 'site.strahler':
       return site?.[source.slice(5)] ?? '';
     case 'site.xy': return finite(site?.x) && finite(site?.y) ? { x: Number(site.x), y: Number(site.y) } : null;
+    case 'site.protocoleIA': return invertebrateProtocol(site);
     case 'audit.date': return date || '';
     case 'audit.time': return time ? String(time).slice(0, 5) : '';
     case 'audit.kind': return kind === 'inopine' ? 'Inopiné' : kind ? 'Avec rendez-vous' : '';

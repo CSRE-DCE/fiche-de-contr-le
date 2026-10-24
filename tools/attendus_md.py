@@ -2,7 +2,7 @@
 """Génère docs/ATTENDUS-PRESTATAIRES.md depuis data/attendus-ct-2026.json (source unique des « attendus des
 prestataires » du contrôle terrain 2026 : ce que le prestataire doit faire ou présenter pour chaque point de contrôle
 de la grille CT-2026, comment le contrôleur le vérifie, comment choisir C / P / NC / N/A, note sur 20 et points majeurs,
-liste de préparation).
+valeurs propres à chaque réseau et sources — CCTP 2026 du réseau, paragraphe, page ; protocoles —, liste de préparation).
 
 Python standard uniquement (aucune dépendance). Les libellés, numéros, sections, types de tournée, portée
 (« commun à la tournée ») et points majeurs (« majeur ») des critères sont recopiés de js/domain/grid-ct-2026.js
@@ -25,6 +25,7 @@ SOURCE = ROOT / 'data' / 'attendus-ct-2026.json'
 TARGET = ROOT / 'docs' / 'ATTENDUS-PRESTATAIRES.md'
 TYPES = ('bio', 'ce', 'eso')
 SCALE = (('C', 'C', 'Conforme / satisfaisant'), ('P', 'P', 'Perfectible'), ('NC', 'NC', 'Non conforme'), ('NA', 'N/A', 'Non applicable'))
+NET_ALL = 'tous'
 
 
 def load(path=SOURCE):
@@ -55,6 +56,17 @@ def type_names(data, keys, short=True):
 
 def code_of(crit):
     return f"F{crit['feuille']}.{crit['no']}"
+
+
+def net_lines(crit):
+    """Valeurs propres à chaque réseau (CCTP 2026, champ « parReseau ») : lignes de liste Markdown."""
+    rows = [(k, v) for k, v in (crit.get('parReseau') or {}).items() if str(v or '').strip()]
+    if not rows:
+        return []
+    out = ['- **Selon le réseau (CCTP 2026) :**']
+    for k, v in rows:
+        out.append(f"  - **{'Tous les réseaux' if k == NET_ALL else md_escape(k)}** : {md_escape(v)}")
+    return out
 
 
 def render(data):
@@ -158,6 +170,12 @@ def render(data):
                 what = re.sub(r'^Information à relever\s*:\s*', '', c.get('attendu', ''), flags=re.I)
                 w(f"| {code_of(c)} | {md_escape(c['libelle'])} | {md_escape(what)} |")
             w('')
+            notes = [(c, k) for _, c in values for k in ('sources', 'aPreciser') if c.get(k)]
+            for c, k in notes:
+                text = ' · '.join(c[k]) if k == 'sources' else c[k]
+                w(f"- **{code_of(c)} – {'Sources' if k == 'sources' else 'À préciser (OEG)'} :** {md_escape(text)}")
+            if notes:
+                w('')
         section = None
         for cid, c in items:
             if c.get('valeur'):
@@ -183,8 +201,12 @@ def render(data):
             for code, short, label in SCALE:
                 if c.get(code):
                     w(f"- **{short}** ({label.lower()}) : {md_escape(c[code])}")
+            for line in net_lines(c):
+                w(line)
             if c.get('refs'):
                 w(f"- **Références :** {md_escape(' · '.join(c['refs']))}")
+            if c.get('sources'):
+                w(f"- **Sources :** {md_escape(' · '.join(c['sources']))}")
             if c.get('aPreciser'):
                 w(f"- **À préciser (OEG) :** {md_escape(c['aPreciser'])}")
             w('')
@@ -201,8 +223,10 @@ def render(data):
         for k, v in refs.items():
             w(f'| {md_escape(k)} | {md_escape(v)} |')
         w('')
-        w('Les protocoles du marché (PEZADA, IDGF, pêche, mercure, phytoplancton), le CCTP et les consignes du laboratoire '
-          'sont fournis par l’OEG et le laboratoire ; ils prévalent sur le présent document.')
+        w('Les protocoles du marché (PEZADA, PEZSML, IDGF, pêche, mercure, phytoplancton), le CCTP et les consignes du '
+          'laboratoire sont fournis par l’OEG et le laboratoire ; ils prévalent sur le présent document. Les sources citées '
+          'par critère (CCTP 2026 du réseau et marché, paragraphe, page ; protocoles et guides nationaux) renvoient à ces '
+          'documents, qui ne sont pas reproduits ici.')
         w('')
     return '\n'.join(out).rstrip('\n') + '\n'
 

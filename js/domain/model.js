@@ -119,7 +119,7 @@ export const FIELD_TYPES = { text: 'Texte', number: 'Nombre', date: 'Date', time
 export const PREFILL_SOURCES = {
   'site.name': 'Nom de la station', 'site.code': 'Code de la station (SANDRE / BSS)', 'site.bassin': 'Bassin versant', 'site.riverName': 'Cours d’eau',
   'site.commune': 'Commune', 'site.her': 'Hydro-écorégion', 'site.pressions': 'Pressions', 'site.strahler': 'Rang de Strahler',
-  'site.xy': 'Coordonnées théoriques (X / Y)', 'audit.date': 'Date de l’audit', 'audit.time': 'Heure de début (ou d’arrivée sur la station)',
+  'site.xy': 'Coordonnées théoriques (X / Y)', 'site.protocoleIA': 'Protocole invertébrés (PEZADA / PEZSML, d’après l’hydro-écorégion)', 'audit.date': 'Date de l’audit', 'audit.time': 'Heure de début (ou d’arrivée sur la station)',
   'audit.kind': 'Type d’audit (inopiné / avec rendez-vous)', 'tournee.stationCount': 'Nombre de stations de la tournée',
   'auditor.name': 'Nom du contrôleur', 'provider.name': 'Prestataire', 'prestation.operators': 'Opérateurs du prestataire'
 };

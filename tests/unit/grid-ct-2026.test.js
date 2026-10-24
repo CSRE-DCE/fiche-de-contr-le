@@ -8,9 +8,12 @@
  * commentée), même information demandée sous deux libellés proches ou par la même source (sauf groupes de remplissage
  * déclarés dans js/domain/links.js et liste blanche commentée), aides répétées ou qui débordent de leur rôle (« Inclut :
  * … »), critères de synthèse hors note (noScore), numéros retirés jamais réutilisés, révisions tracées, zones de texte
- * libres distinctes. */
+ * libres distinctes ; CCTP 2026 ET PROTOCOLE PEZSML (version 1.3) : F6.14 (protocole de la station, proposé d'après
+ * l'hydro-écorégion), F6.15 / F6.16 (substrats artificiels, majeurs, affichés si PEZSML), F5.31 (chlorophylle a),
+ * F5.32 (sédiments, stations des réseaux Chimie et RCO, réseaux de CHAQUE station), traçabilité [CCTP], mise à niveau
+ * 1.2 → 1.3 sans toucher aux tournées. */
 import { test, assert, eq, deepEq } from './harness.js';
-import { GRID_CT_2026, INSTRUMENTS_ESO } from '../../js/domain/grid-ct-2026.js';
+import { GRID_CT_2026, INSTRUMENTS_ESO, MAJOR_ITEMS } from '../../js/domain/grid-ct-2026.js';
 import { DEFAULT_GRIDS, CT_GRID_ID, GRID_GENERAL, DEFAULT_GRID_IDS, upToDateGrid } from '../../js/domain/default-grids.js';
 import { RESPONSES, formatValue, responseText, isEmptyValue, itemInput, fieldShown, defaultCriticality, BILAN_OPTIONS } from '../../js/domain/model.js';
 import {
@@ -18,7 +21,7 @@ import {
   itemsOfSheet, normalizeCompartments, prefillResponses, sectionHeaders, expandGrid, groupSheets, sheetStoreKey, headerTitle, headerOf,
   inferAuditType, auditCompartments, typeCompartments, withCompartments, evalCondition, conditionErrors, parseItemId, stationKeyOf, makeStation,
   stationEntries, isEnteredResponse, suggestedValue, durationText, needsJustification,
-  replaceGridUnits, upgradeStoredGrid, compareVersions, UNIT_REPLACEMENTS
+  replaceGridUnits, upgradeStoredGrid, compareVersions, UNIT_REPLACEMENTS, invertebrateProtocol, prefillValue
 } from '../../js/domain/grids.js';
 import { computeAlerts, calibrationStatus, xyDistance } from '../../js/domain/rules.js';
 import { sheetSummary, stationSummary, auditSummary, recurringDeviations } from '../../js/domain/summary.js';
@@ -85,8 +88,9 @@ test('CT-2026 : critères (identifiants, codes, échelle C / P / NC / N/A, nombr
   eq(new Set(items.map(i => i.id)).size, items.length, 'identifiants uniques');
   eq(new Set(items.map(i => i.code)).size, items.length, 'codes uniques');
   assert(items.every(i => i.id === `it-F${i.sheet}-${i.no}` && i.code === `F${i.sheet}.${i.no}`), 'id = it-F<feuille>-<no>, code = F<feuille>.<no>');
-  // 1.2 : F8.A3 réuni à F8.A2 (16 critères en F8, numéro A3 retiré)
-  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 30, 13, 14, 16, 13]);
+  // 1.2 : F8.A3 réuni à F8.A2 (16 critères en F8, numéro A3 retiré) ; 1.3 : F5.31, F5.32, F6.14 à F6.16
+  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 32, 16, 14, 16, 13]);
+  eq(items.length, 217, '217 critères (1.3)');
   deepEq(G.sections.filter(s => s.sheet === 2).map(s => s.items.length), [13, 8, 5, 6, 8, 4, 3]);
   const conf = items.filter(i => i.kind === 'conformity');
   assert(conf.every(i => i.responses.join() === 'C,P,NC,NA' && i.justifyOn.join() === 'P,NC'), 'échelle C / P / NC / N/A partout, observation pour P et NC');
@@ -129,8 +133,9 @@ test('feuilles affichées par type de tournée et numéro « Feuille X / N »', 
   deepEq(nos(sheetsOf(G, {}, { compartments: ['organisation', 'eso'] })), [1, 2, 3, 10, 4, 5], 'type déduit des compartiments');
   // Nombre de critères visibles par type
   const counts = sheets => sheets.map(s => s.items.length);
-  deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 16, 13]);
-  deepEq(counts(ce), [8, 47, 23, 28, 29]);
+  // 1.3 : F5.31 et F5.32 (station sans réseau connu) en biologie et cours d'eau ; F6.14 ; F6.15 et F6.16 selon F6.14
+  deepEq(counts(bio), [8, 47, 27, 28, 31, 14, 14, 16, 13]);
+  deepEq(counts(ce), [8, 47, 23, 28, 31]);
   deepEq(counts(eso), [7, 46, 25, 6, 30, 25], 'F4.11 masqué en eaux souterraines (couvert par F4.30)');
   // Variantes (titres, onglets, appareils) et encadrés selon le type
   eq(ce.find(s => s.no === 2).title, 'Organisation, logistique et sécurité de la tournée');
@@ -466,6 +471,15 @@ test('traçabilité : chaque point des fiches cours d’eau et eaux souterraines
   eq(rows.filter(r => r.src === 'CE').length, 70, 'fiche cours d’eau : 70 points');
   eq(rows.filter(r => r.src === 'ESO').length, 42, 'fiche eaux souterraines : 42 points');
   eq(new Set(rows.map(r => r.src + r.point)).size, rows.length, 'pas de point en double');
+  // CCTP 2026 et protocoles (1.3) : exigences sans critère jusque-là, ou communes aux deux protocoles invertébrés
+  const cctp = [...head.matchAll(/^ \* \[CCTP\] (.+?) → (.+)$/gm)].map(m => ({ point: m[1], target: m[2] }));
+  eq(cctp.length, 6, 'CCTP 2026 : 6 exigences tracées');
+  eq(new Set(cctp.map(r => r.point)).size, cctp.length, 'pas d’exigence CCTP en double');
+  const allIds = new Set(allItems(G).map(i => i.id));
+  const fromCctp = new Set(cctp.flatMap(r => [...r.target.matchAll(/it-F\d+-[A-Z]?[\d.]*\d/g)].map(m => m[0])));
+  for (const id of fromCctp) assert(allIds.has(id), `[CCTP] → critère inexistant ${id}`);
+  for (const id of ['it-F6-14', 'it-F6-15', 'it-F6-16', 'it-F5-31', 'it-F5-32']) assert(fromCctp.has(id), `critère 1.3 sans exigence source : ${id}`);
+  for (let n = 5; n <= 13; n++) assert(fromCctp.has('it-F6-' + n), `F6.${n} commun aux deux protocoles`);
   const ids = new Set(allItems(G).map(i => i.id));
   const covered = new Set();
   for (const r of rows) {
@@ -586,7 +600,7 @@ test('mise à niveau d’une grille par défaut enregistrée : nouvelle version 
   const meta = { createdAt: '2026-10-10T08:00:00.000Z', createdBy: 'u1', updatedAt: '2026-10-11T08:00:00.000Z', _vv: { A: 3 }, _lv: 3 };
   const stored = { ...withFNU(G, '1.0'), ...meta };
   const r = upgradeStoredGrid(stored, G);
-  assert(r.changed && r.replaced, 'version 1.0 → 1.2'); deepEq([r.from, r.to], ['1.0', '1.2']);
+  assert(r.changed && r.replaced, 'version 1.0 → 1.3'); deepEq([r.from, r.to], ['1.0', G.version]);
   const { createdAt, createdBy, updatedAt, _vv, _lv, ...content } = r.grid;
   eq(canonicalJSON(content), canonicalJSON(G), 'contenu = grille du code');
   deepEq({ createdAt, createdBy, updatedAt, _vv, _lv }, meta, 'métadonnées d’enregistrement conservées');
@@ -596,12 +610,12 @@ test('mise à niveau d’une grille par défaut enregistrée : nouvelle version 
   assert(!stored.version || stored.version === '1.0', 'entrée non modifiée');
   // Grille archivée par un administrateur : reste archivée (avec sa date), contenu mis à niveau.
   const arch = upgradeStoredGrid({ ...withFNU(G, '1.0'), status: 'archivee', archivedAt: '2026-10-12T00:00:00.000Z' }, G).grid;
-  deepEq([arch.status, arch.archivedAt, arch.version], ['archivee', '2026-10-12T00:00:00.000Z', '1.2']);
+  deepEq([arch.status, arch.archivedAt, arch.version], ['archivee', '2026-10-12T00:00:00.000Z', G.version]);
   // Même version (grille générale non renumérotée) : unités seules.
   const gen = upgradeStoredGrid({ ...withFNU(GRID_GENERAL), ...meta }, GRID_GENERAL);
   assert(gen.changed && !gen.replaced && gen.units === 1); eq(gen.grid.updatedAt, meta.updatedAt);
   // Version enregistrée plus récente (reçue d'une tablette mise à jour) : jamais de retour à la version du code.
-  const newer = { ...structuredClone(G), version: '1.3', name: 'CT-2026 (1.3)' };
+  const newer = { ...structuredClone(G), version: '1.4', name: 'CT-2026 (1.4)' };
   const n = upgradeStoredGrid(newer, G);
   assert(!n.changed && n.grid === newer, 'pas de retour en arrière');
   // Grille supprimée, autre identifiant : rien.
@@ -613,7 +627,7 @@ test('grille à jour (affichage, fiches vierges, nouvelle tournée) : grilles pa
   deepEq([...DEFAULT_GRID_IDS], DEFAULT_GRIDS.map(g => g.id));
   const old = withFNU(G, '1.0');
   const up = upToDateGrid(old);
-  eq(up.version, '1.2'); deepEq(turbUnits(up), ['NTU', 'NTU', 'NTU']);
+  eq(up.version, '1.3'); deepEq(turbUnits(up), ['NTU', 'NTU', 'NTU']);
   assert(upToDateGrid(old) === up, 'mémorisée par objet');
   assert(upToDateGrid(G) === G, 'grille déjà à jour : même objet');
   const own = { ...withFNU(G, '1.0'), id: 'grid-copie-oeg' };
@@ -646,11 +660,11 @@ const codeOf = id => item(id).code;
 const SAME_LABEL_OK = [
   ['F6.1', 'F7.1', 'F8.A1', 'F9.1'],   // « Agent prestataire & fonction » : un agent par protocole biologique
   ['F6.2', 'F7.2', 'F8.A9', 'F9.2'],   // « Fiche terrain complétée » : une fiche terrain par protocole
-  ['F6.7', 'F7.8'],                    // « Autre matériel utilisé » : PEZADA / IDGF
+  ['F6.7', 'F7.8'],                    // « Autre matériel utilisé » : invertébrés (protocole de la station) / IDGF
   ['F6.8', 'F7.9'],                    // « Récipients de stockage » : invertébrés / diatomées
   ['F6.9', 'F7.10'],                   // « Nature du produit de conservation » : invertébrés / diatomées
   ['F6.10', 'F7.11', 'F9.10'],         // « Traçabilité des flacons » : un échantillon par protocole
-  ['F6.11', 'F7.12', 'F9.12'],         // « Respect des normes de prélèvement » : protocole PEZADA / IDGF / phytoplancton
+  ['F6.11', 'F7.12', 'F9.12'],         // « Respect des normes de prélèvement » : protocole invertébrés de la station (PEZADA / PEZSML) / IDGF / phytoplancton
   ['F1.R6', 'F2.1.8'],                 // « Niveau d’eau » : de la station (repères F1) / de la journée (F2) — groupe « niveau » de links.js
   ['F2.1.9', 'F3.7']                   // « Conditions météo » : de la journée (F2, relevée) / notée par le préleveur (F3, cotée)
 ];
@@ -659,8 +673,8 @@ const SAME_INFO_OK = [
   ['F1.R2', 'F2.1.5'],   // même heure proposée à la création (audit.time) : arrivée sur la 1re station / début du contrôle
   ['F3.4', 'F3.18'],     // même code de station (site.code) : SANDRE (cours d'eau, biologie) / BSS (eaux souterraines), jamais affichés ensemble
   ['F2.2.5', 'F2.2.6'],  // deux catégories d'agents non spécialisés (formés / non formés), comptées séparément
-  ['F6.3', 'F7.3'],      // points distincts : limite amont PEZADA / point IDGF
-  ['F6.4', 'F7.3']       // points distincts : limite aval PEZADA / point IDGF
+  ['F6.3', 'F7.3'],      // points distincts : limite amont de la station invertébrés / point IDGF
+  ['F6.4', 'F7.3']       // points distincts : limite aval de la station invertébrés / point IDGF
 ];
 const pairKey = (a, b) => [a, b].sort().join('|');
 
@@ -783,7 +797,7 @@ test('mise à niveau 1.1 → 1.2 : grille enregistrée remplacée, instantané d
   const audit = Object.freeze({ gridSnapshot: old, gridVersion: '1.1', gridSha256: await sha256Hex(canonicalJSON(old)) });
   const before = canonicalJSON(audit.gridSnapshot);
   const r = upgradeStoredGrid({ ...structuredClone(old), createdAt: '2026-10-10T08:00:00.000Z' }, G);
-  assert(r.replaced && r.from === '1.1' && r.to === '1.2', 'grille enregistrée 1.1 → 1.2');
+  assert(r.replaced && r.from === '1.1' && r.to === G.version, 'grille enregistrée 1.1 → version du code');
   eq(itemIndex(r.grid).get('it-F2-1.5').label, 'Début du contrôle');
   eq(itemIndex(r.grid).get('it-F4-16').scope, 'tournee');
   eq(canonicalJSON(audit.gridSnapshot), before, 'instantané de la tournée inchangé');
@@ -791,4 +805,89 @@ test('mise à niveau 1.1 → 1.2 : grille enregistrée remplacée, instantané d
   // La tournée commencée en 1.1 garde ses critères par station (F4.16 répété) ; une nouvelle tournée suit la 1.2.
   const E1 = expandGrid(old, [{ siteId: ATHANASE.id }], SITES), E2 = expandGrid(upToDateGrid(r.grid), [{ siteId: ATHANASE.id }], SITES);
   assert(itemIndex(E1).get('it-F4-16@09271503') && !itemIndex(E2).get('it-F4-16@09271503'), 'portée propre à chaque grille');
+});
+
+/* ---------- CCTP 2026 et protocole PEZSML (version 1.3) ---------- */
+test('PEZSML (1.3) : F6.14 proposé d’après l’hydro-écorégion (choix manuel sans HER), F6.15 et F6.16 si PEZSML, majeurs', () => {
+  // Feuille 6 commune aux deux protocoles (identifiants « pezada » inchangés)
+  const f6 = G.sheets.find(s => s.no === 6), sec = G.sections.find(s => s.id === 's-F6-pezada');
+  deepEq([f6.key, f6.title, sec.title, G.compartments.find(c => c.key === 'invertebres').label],
+    ['pezada', 'Invertébrés aquatiques – PEZADA / PEZSML', 'Invertébrés aquatiques – PEZADA / PEZSML', 'Invertébrés aquatiques – PEZADA / PEZSML']);
+  deepEq(sec.items.map(i => i.no), ['14', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '15', '16'], 'F6.14 en tête (numéro stable)');
+  for (let n = 1; n <= 13; n++) { const it = item(`it-F6-${n}`); assert(!/PEZADA|PEZSML/.test(`${it.label} ${it.help || ''}`), `F6.${n} neutre (protocole de la station)`); assert(!it.condition, `F6.${n} sans condition`); }
+  const f14 = item('it-F6-14');
+  deepEq([f14.kind, f14.options, f14.prefill, f14.required, !!f14.condition, !!f14.major], ['select', ['PEZADA', 'PEZSML'], 'site.protocoleIA', false, false, false]);
+  deepEq(['it-F6-15', 'it-F6-16'].map(id => [item(id).label, item(id).kind, item(id).major, item(id).condition]), [
+    ['Pose des substrats artificiels (PEZSML)', 'conformity', true, { item: 'it-F6-14', op: 'eq', value: 'PEZSML' }],
+    ['Relève des substrats artificiels (PEZSML)', 'conformity', true, { item: 'it-F6-14', op: 'eq', value: 'PEZSML' }]
+  ]);
+  eq(MAJOR_ITEMS.length, 28, '28 points majeurs');
+  // Protocole déduit de l'hydro-écorégion : 52 → PEZADA, 51 → PEZSML, sinon rien (choix du contrôleur)
+  deepEq([52, '52', 51, 'HER 51', '', null, 15].map(her => invertebrateProtocol({ her })), ['PEZADA', 'PEZADA', 'PEZSML', 'PEZSML', '', '', '']);
+  eq(invertebrateProtocol(null), '');
+  deepEq([prefillValue('site.protocoleIA', { site: ATHANASE }), prefillValue('site.protocoleIA', { site: ACAROUANY })], ['PEZADA', 'PEZSML']);
+  // Tournée biologie à trois stations : HER 52, HER 51, sans HER (lot 2 du RCO)
+  const RCO2 = { id: 'site-RCOB', code: 'RCOB', name: 'Station RCO lot 2', bassin: 'Mana', matrixId: 'mat-ESU', networks: ['RCO'] };
+  const sites = { ...SITES, [RCO2.id]: RCO2 };
+  const E = expandGrid(G, [{ siteId: ATHANASE.id }, { siteId: ACAROUANY.id }, { siteId: RCO2.id }], sites);
+  const ctx = { auditType: 'bio', compartments: BIO_ALL };
+  const pre = prefillResponses(E, { stations: [ATHANASE, ACAROUANY, RCO2].map(site => ({ key: site.code, site })), auditType: 'bio', compartments: BIO_ALL });
+  deepEq(['09271503', '09160201', 'RCOB'].map(k => pre[`it-F6-14@${k}`]?.value), ['PEZADA', 'PEZSML', undefined], 'proposé d’après l’HER ; sans HER : choix manuel');
+  let vis = visibleIds(E, ctx, pre);
+  deepEq(['09271503', '09160201', 'RCOB'].map(k => [vis.has(`it-F6-15@${k}`), vis.has(`it-F6-16@${k}`)]), [[false, false], [true, true], [false, false]]);
+  eq(itemIndex(E).get('it-F6-16@09160201').condition.item, 'it-F6-14@09160201', 'condition réécrite pour la station');
+  // Choix manuel (station sans HER) puis correction (PEZADA pour la station HER 51) : affichage mis à jour
+  vis = visibleIds(E, ctx, { ...pre, 'it-F6-14@RCOB': { value: 'PEZSML' }, 'it-F6-14@09160201': { value: 'PEZADA', valueManual: true } });
+  assert(vis.has('it-F6-15@RCOB') && vis.has('it-F6-16@RCOB') && !vis.has('it-F6-15@09160201'), 'choix du contrôleur');
+  // Points majeurs à renseigner quand ils sont affichés
+  const issues = validateResponses(E, pre, ctx);
+  assert(issues.some(i => i.itemId === 'it-F6-15@09160201') && !issues.some(i => i.itemId === 'it-F6-15@09271503'), 'F6.15 requis pour la station PEZSML seulement');
+  assert(!issues.some(i => /^it-F6-14@/.test(i.itemId) && i.level === 'error'), 'F6.14 : valeur facultative, jamais bloquante');
+});
+
+test('F5.31 (chlorophylle a) et F5.32 (sédiments) : types de tournée et réseaux de CHAQUE station', () => {
+  for (const id of ['it-F5-31', 'it-F5-32']) {
+    eq(item(id).kind, 'conformity'); assert(!item(id).major, `${id} non majeur`);
+    eq(G.sections.find(s => s.items.some(i => i.id === id)).id, 's-F5-complements');
+  }
+  deepEq([item('it-F5-31').label, item('it-F5-32').label], ['Filtration chlorophylle a', 'Prélèvement de sédiments']);
+  const bio = visibleIds(G, { auditType: 'bio', compartments: BIO_ALL }), ce = visibleIds(G, ctxOf('ce')), eso = visibleIds(G, ctxOf('eso'));
+  assert(bio.has('it-F5-31') && ce.has('it-F5-31') && !eso.has('it-F5-31'), 'F5.31 : biologie et cours d’eau');
+  assert(bio.has('it-F5-32') && ce.has('it-F5-32') && !eso.has('it-F5-32'), 'F5.32 : réseau inconnu (fiche vierge générique) affiché, jamais en eaux souterraines');
+  // Réseaux de la station : Chimie et RCO seulement (une station sur plusieurs réseaux : l'un d'eux suffit)
+  const mk = (code, networks) => ({ id: 'site-' + code, code, name: code, matrixId: 'mat-ESU', ...(networks ? { networks } : {}) });
+  const list = [mk('BIO1', ['BIO']), mk('CH1', ['Chimie']), mk('BC1', ['BIO', 'Chimie']), mk('RCO1', ['RCO']), mk('EL1', ['EL']), mk('VIDE', [])];
+  const E = expandGrid(G, list.map(s => ({ siteId: s.id })), Object.fromEntries(list.map(s => [s.id, s])));
+  deepEq(E.stations.map(s => s.networks), [['BIO'], ['Chimie'], ['BIO', 'Chimie'], ['RCO'], ['EL'], []], 'réseaux recopiés dans la station');
+  // Contexte de la tournée : réseaux de la station principale (BIO) ; chaque station suit SES réseaux
+  const v = visibleIds(E, { ...ctxOf('ce'), network: 'BIO', networks: ['BIO'] });
+  deepEq(list.map(s => v.has(`it-F5-32@${s.code}`)), [false, true, true, true, false, true]);
+  assert(list.every(s => v.has(`it-F5-31@${s.code}`)), 'F5.31 : toutes les stations de cours d’eau');
+  // Station inconnue de la tablette : contexte de la tournée
+  const E2 = expandGrid(G, [{ siteId: 'site-INCONNUE' }], {});
+  assert(!('networks' in E2.stations[0]), 'pas de réseaux inventés');
+  assert(!visibleIds(E2, { ...ctxOf('ce'), networks: ['EL'] }).has('it-F5-32@INCONNUE') && visibleIds(E2, { ...ctxOf('ce'), networks: ['RCO'] }).has('it-F5-32@INCONNUE'));
+});
+
+test('mise à niveau 1.2 → 1.3 (PEZSML, F5.31, F5.32) : grille enregistrée remplacée, tournée commencée en 1.2 intacte', async () => {
+  const { sha256Hex } = await import('../../js/core/util.js');
+  // Grille 1.2 telle qu'enregistrée : sans F6.14 à F6.16 ni F5.31 / F5.32, feuille 6 « protocole PEZADA »
+  const old = structuredClone(G); old.version = '1.2';
+  const added = new Set(['it-F6-14', 'it-F6-15', 'it-F6-16', 'it-F5-31', 'it-F5-32']);
+  for (const s of old.sections) s.items = s.items.filter(i => !added.has(i.id));
+  old.sheets.find(s => s.no === 6).title = 'Invertébrés aquatiques – protocole PEZADA';
+  old.sections.find(s => s.id === 's-F6-pezada').title = 'Invertébrés aquatiques – protocole PEZADA';
+  const audit = Object.freeze({ gridSnapshot: old, gridVersion: '1.2', gridSha256: await sha256Hex(canonicalJSON(old)), responses: { 'it-F6-5@09160201': { status: 'C' } } });
+  const before = canonicalJSON(audit.gridSnapshot);
+  const r = upgradeStoredGrid({ ...structuredClone(old), createdAt: '2026-10-10T08:00:00.000Z' }, G);
+  assert(r.replaced && r.from === '1.2' && r.to === '1.3', 'grille enregistrée 1.2 → 1.3');
+  for (const id of added) assert(itemIndex(r.grid).get(id), `${id} ajouté`);
+  eq(r.grid.sheets.find(s => s.no === 6).title, 'Invertébrés aquatiques – PEZADA / PEZSML');
+  eq(upgradeStoredGrid(r.grid, G).changed, false, 'idempotent');
+  eq(canonicalJSON(audit.gridSnapshot), before, 'instantané de la tournée inchangé');
+  eq(await sha256Hex(canonicalJSON(audit.gridSnapshot)), audit.gridSha256, 'empreinte de la grille de la tournée inchangée');
+  // La tournée commencée en 1.2 garde sa feuille 6 (13 critères) ; une nouvelle tournée suit la 1.3
+  const E1 = expandGrid(old, [{ siteId: ACAROUANY.id }], SITES), E2 = expandGrid(upToDateGrid(r.grid), [{ siteId: ACAROUANY.id }], SITES);
+  assert(!itemIndex(E1).get('it-F6-14@09160201') && itemIndex(E2).get('it-F6-14@09160201'), 'grille propre à chaque tournée');
+  eq(itemsOfSheet(old, 6).length, 13); eq(itemsOfSheet(r.grid, 6).length, 16);
 });

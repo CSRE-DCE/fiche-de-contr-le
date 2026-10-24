@@ -5,7 +5,8 @@
  * Fichier pur (données uniquement).
  *
  * - `types` : type de tournée choisi à la création (audit.auditType) : bio, ce, eso. Les conditions d'affichage
- *   utilisent `ctx.auditType`, `ctx.compartments` et `ctx.matrixCode`.
+ *   utilisent `ctx.auditType`, `ctx.compartments`, `ctx.matrixCode` et `ctx.networks` (réseaux de la station, 1.3 :
+ *   F5.32), ou la réponse d'un critère de la même feuille (F10.4, F6.15, F6.16).
  * - `sheets[]` : ordre d'affichage = ordre du tableau (F1, F2, F3, F10, F4…F9) ; `no` = identifiant stable ;
  *   `scope` : 'tournee' (renseignée une fois : F2) ou 'station' (répétée pour chaque station de la tournée) ;
  *   `compartment` (+ `compartments` : l'un d'eux suffit) ; `variants[type]` : titre, onglet, surtitre… propres à un
@@ -44,6 +45,14 @@
  *         répétaient l'attendu retirées (renvois dans les attendus) ; F4.17 limité aux flacons sans réactif (F4.13) ;
  *         zones de texte libres des feuilles distinguées (placeholder) ; note sur 20 : 26 points majeurs (`major`,
  *         × 2), F8.A2 et F8.A3 réunis en F8.A2 « Filets maillants / batteries et mailles utilisées » (F8.A3 retiré).
+ *   1.3 : CCTP 2026 et protocole invertébrés PEZSML (validés par l'OEG le 24/10/2026) : feuille 6 « Invertébrés
+ *         aquatiques – PEZADA / PEZSML », F6.1 à F6.13 communs aux deux protocoles ; F6.14 « Protocole invertébrés de
+ *         la station » (valeur non notée, proposée d'après l'hydro-écorégion : 52 → PEZADA, 51 → PEZSML ; choix manuel
+ *         sans hydro-écorégion) ; F6.15 « Pose des substrats artificiels (PEZSML) » et F6.16 « Relève des substrats
+ *         artificiels (PEZSML) », points majeurs (28 au total), affichés si F6.14 = PEZSML ; F5.31 « Filtration
+ *         chlorophylle a » (biologie, cours d'eau) et F5.32 « Prélèvement de sédiments » (stations des réseaux Chimie
+ *         et RCO), non majeurs ; attendus de F7.5 (brosse renouvelée ou nettoyée à chaque prélèvement, guide IDGF) et
+ *         F9.8 (flacon transparent, CCTP BIO) corrigés dans la fiche des attendus 1.3.
  *
  * TRAÇABILITÉ DES FICHES D'ÉVALUATION (fiches Agences de l'eau / Aquascop 2026, non reproduites dans le dépôt).
  * Une ligne par point de la fiche source → critère(s) CT-2026 qui le couvre(nt). « (Inclut) » : point fusionné dans
@@ -165,6 +174,16 @@
  * [ESO] Bilan – Identification des échantillons → encadré conclusion de F5 (Bilan)
  * [ESO] Commentaires du bilan → conclusion.comments des encadrés « Bilan »
  * [ESO] Autres préconisations → audit.conclusions.preconisations
+ *
+ * CCTP 2026 des cinq réseaux et protocoles nationaux (version 1.3) — exigences terrain sans critère jusque-là, ou à
+ * rendre communes aux deux protocoles invertébrés (analyse des CCTP du 24/10/2026 ; références détaillées : champ
+ * « sources » de data/attendus-ct-2026.json ; aucun extrait des CCTP dans le dépôt).
+ * [CCTP] Protocole invertébrés de la station : PEZADA (zones amont) ou PEZSML (zones aval soumises à la marée) → it-F6-14
+ * [CCTP] PEZSML : points communs avec le PEZADA (Surber, drague, matériel, conservation, traçabilité, identification, transport) → it-F6-5 ; it-F6-6 ; it-F6-7 ; it-F6-8 ; it-F6-9 ; it-F6-10 ; it-F6-11 ; it-F6-12 ; it-F6-13
+ * [CCTP] PEZSML : pose des substrats artificiels dans la colonne d'eau → it-F6-15
+ * [CCTP] PEZSML : relève des substrats artificiels après trois semaines d'immersion → it-F6-16
+ * [CCTP] Filtration de la chlorophylle a (biologie, eaux littorales, chimie, RCO) → it-F5-31
+ * [CCTP] Prélèvement de sédiments, échantillon composite (chimie, RCO) → it-F5-32
  */
 import { SCALE_CPNC, JUSTIFY_CPNC, BILAN_OPTIONS } from './model.js';
 
@@ -173,6 +192,9 @@ const PHYSICO_OR_ESO = { any: [ONLY('physico'), ONLY('eso')] };
 /** Visible pour ces types de tournée seulement / masqué pour ces types. */
 const FOR = (...types) => ({ ctx: 'auditType', op: 'in', value: types });
 const NOT_FOR = (...types) => ({ ctx: 'auditType', op: 'nin', value: types });
+/** Visible pour une station de l'un de ces réseaux (ctx.networks : réseaux de LA station dans une grille effective) ;
+ * réseau inconnu (station sans réseau, fiche vierge générique) : visible. */
+const NETWORKS = (...codes) => ({ any: [{ ctx: 'networks', op: 'in', value: codes }, { ctx: 'networks', op: 'empty' }] });
 const TOURNEE = { scope: 'tournee' };
 const inc = text => `Inclut : ${text}`;
 
@@ -200,6 +222,9 @@ export const NIVEAU_EAU = ['Étiage', 'Basses eaux', 'Moyennes eaux', 'Hautes ea
 const OUI_NON = ['Oui', 'Non'];
 const OUI_NON_PARTIELLE = ['Oui', 'Non', 'Partielle'];
 const OUI_NON_SO = ['Oui', 'Non', 'Sans objet'];
+/** Protocoles invertébrés des CCTP 2026 (BIO, RCO) : F6.14 ; PEZSML ⇒ F6.15 et F6.16 (substrats artificiels). */
+const PROTOCOLES_IA = ['PEZADA', 'PEZSML'];
+const PEZSML = { item: 'it-F6-14', op: 'eq', value: 'PEZSML' };
 
 /**
  * Appareils de mesure de la feuille 4 (module « instruments ») : donnée de TOURNÉE, stockée dans
@@ -237,9 +262,10 @@ export const GRID_CT_2026 = {
   id: 'grid-ct-2026-v1',
   code: 'CT-2026',
   // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 ; 1.2 : doublons et redondances, points majeurs de la note sur
-  // 20, F8.A3 réuni à F8.A2 (voir RÉVISIONS en tête du fichier). Même identifiant : grilles enregistrées mises à niveau par upgradeStoredGrid ; tournées existantes
+  // 20, F8.A3 réuni à F8.A2 ; 1.3 : CCTP 2026 et protocole PEZSML (F6.14 à F6.16, F5.31, F5.32 ; voir RÉVISIONS en
+  // tête du fichier). Même identifiant : grilles enregistrées mises à niveau par upgradeStoredGrid ; tournées existantes
   // inchangées. Toute évolution diffusée aux tablettes incrémente ce numéro.
-  version: '1.2',
+  version: '1.3',
   status: 'publiee',
   publishedAt: '2026-10-10T00:00:00.000Z',
   name: 'Contrôle terrain des prestations de prélèvement – 2026',
@@ -273,7 +299,7 @@ export const GRID_CT_2026 = {
     { key: 'organisation', label: 'Organisation / sécurité / traçabilité', icon: 'gear', always: true },
     { key: 'physico', label: 'Physico-chimie in situ et prélèvement eau', icon: 'drop' },
     { key: 'eso', label: 'Eau souterraine – ouvrage, purge, mesures et échantillonnage', icon: 'drop' },
-    { key: 'invertebres', label: 'Invertébrés aquatiques – PEZADA', icon: 'bug' },
+    { key: 'invertebres', label: 'Invertébrés aquatiques – PEZADA / PEZSML', icon: 'bug' },
     { key: 'diatomees', label: 'Diatomées – IDGF', icon: 'diatom' },
     { key: 'poissons', label: 'Ichtyologie et mercure dans le biote', icon: 'fish' },
     { key: 'phytoplancton', label: 'Phytoplancton d’eau douce', icon: 'algae' }
@@ -320,7 +346,7 @@ export const GRID_CT_2026 = {
         { key: 'conclusion', title: 'Conclusion du contrôle', icon: 'check', options: [['C', 'Conforme (C)'], ['NC', 'Non conforme (NC)'], ['NA', 'Non applicable (N/A)'], ['RES', 'À compléter / Réserve']], fields: SIGN, showFor: ['bio'] },
         BILAN('Bilan – Échantillonnage et identification des échantillons')
       ] },
-    { no: 6, key: 'pezada', tab: 'Invertébrés', title: 'Invertébrés aquatiques – protocole PEZADA', kicker: 'Suivi biologique des eaux douces de surface de Guyane', theme: 'violet', compartment: 'invertebres', scope: 'station', layout: 'table', modules: [],
+    { no: 6, key: 'pezada', tab: 'Invertébrés', title: 'Invertébrés aquatiques – PEZADA / PEZSML', kicker: 'Suivi biologique des eaux douces de surface de Guyane', theme: 'violet', compartment: 'invertebres', scope: 'station', layout: 'table', modules: [],
       blocks: [
         { key: 'observations', title: 'Observations / non-conformités / actions demandées', icon: 'edit', placeholder: 'Constats sur le prélèvement des invertébrés ; actions demandées' },
         { key: 'conclusion', title: 'Conclusion du contrôle', icon: 'check', options: [['C', 'Conforme'], ['NC', 'Non conforme'], ['NA', 'Non applicable']], fields: ['comments', 'date', 'controller', 'signature', 'providerSignature'] }
@@ -682,6 +708,24 @@ export const GRID_CT_2026 = {
         C(5, 25, 'Respect des consignes du laboratoire lors du remplissage des flacons', 'Consignes labo'),
         C(5, 26, 'Filtration pour les analyses de métaux', 'Filtration', {
           input: fields([yn('rincageKit', 'Rinçage du kit de filtration (seringue et filtre)'), yn('seringue', 'Seringue remplie sans intermédiaire')])
+        }),
+        // 1.3 (CCTP BIO, EL, Chimie, RCO) : chlorophylle a, tournées biologie et cours d'eau ; non majeur.
+        C(5, 31, 'Filtration chlorophylle a', 'Chloro', {
+          condition: NOT_FOR('eso'),
+          input: fields([
+            yn('surSite', 'Filtration sur site'),
+            { key: 'volume', label: 'Volume filtré', type: 'number', unit: 'mL', min: 0, step: 1, showIf: { key: 'surSite', value: 'Oui' } },
+            { key: 'filtres', label: 'Nombre de filtres', type: 'number', min: 0, step: 1, showIf: { key: 'surSite', value: 'Oui' } }
+          ])
+        }),
+        // 1.3 (CCTP Chimie, RCO) : sédiments, stations des réseaux Chimie et RCO ; non majeur.
+        C(5, 32, 'Prélèvement de sédiments', 'Sédiments', {
+          condition: { all: [NOT_FOR('eso'), NETWORKS('Chimie', 'RCO')] },
+          input: fields([
+            { key: 'sousEchantillons', label: 'Nombre de sous-échantillons', type: 'number', min: 0, step: 1 },
+            { key: 'epaisseur', label: 'Épaisseur prélevée', type: 'number', unit: 'cm', min: 0, step: 0.5 },
+            { key: 'outil', label: 'Outil', type: 'choice', options: ['Drague manuelle', 'Benne', 'Carottier', 'Écope', 'Autre'] }
+          ])
         })
       ]
     },
@@ -703,11 +747,14 @@ export const GRID_CT_2026 = {
       ]
     },
 
-    /* ---------- Feuille 6 : invertébrés aquatiques – protocole PEZADA ---------- */
+    /* ---------- Feuille 6 : invertébrés aquatiques – PEZADA / PEZSML (protocole de la station, F6.14) ---------- */
+    // F6.1 à F6.13 : communs aux deux protocoles (attendus « protocole de la station ») ; F6.14 en tête (numéro stable,
+    // ajouté en 1.3) : il conditionne F6.15 et F6.16, propres au PEZSML.
     {
-      id: 's-F6-pezada', sheet: 6, no: '', title: 'Invertébrés aquatiques – protocole PEZADA', columns: 'full', domain: 'prelevement', condition: ONLY('invertebres'),
+      id: 's-F6-pezada', sheet: 6, no: '', title: 'Invertébrés aquatiques – PEZADA / PEZSML', columns: 'full', domain: 'prelevement', condition: ONLY('invertebres'),
       headers: { short: 'Réf.', value: 'Valeur / réponse (à renseigner)', obs: 'Observations (détails, précisions, actions…)' },
       items: [
+        V(6, 14, 'Protocole invertébrés de la station', 'PROTO', 'select', { options: [...PROTOCOLES_IA], prefill: 'site.protocoleIA' }),
         C(6, 1, 'Agent prestataire & fonction', 'AGT'),
         C(6, 2, 'Fiche terrain complétée', 'FT', { input: select(OUI_NON_PARTIELLE) }),
         C(6, 3, 'Coordonnées amont (X / Y)', 'AM', { input: xy() }),
@@ -720,7 +767,22 @@ export const GRID_CT_2026 = {
         C(6, 10, 'Traçabilité des flacons', 'TRAC'),
         C(6, 11, 'Respect des normes de prélèvement', 'NORM'),
         C(6, 12, 'Échantillons correctement identifiés', 'ID'),
-        C(6, 13, 'Transport / conservation', 'TRANS', { domain: 'transport' })
+        C(6, 13, 'Transport / conservation', 'TRANS', { domain: 'transport' }),
+        // PEZSML : pose et relève à trois semaines d'intervalle (le contrôleur assiste en général à l'une des deux).
+        C(6, 15, 'Pose des substrats artificiels (PEZSML)', 'SUB', {
+          condition: PEZSML,
+          input: fields([
+            { key: 'nombre', label: 'Substrats posés', type: 'number', min: 0, step: 1 },
+            { key: 'date', label: 'Date de pose', type: 'date' }
+          ])
+        }),
+        C(6, 16, 'Relève des substrats artificiels (PEZSML)', 'RELEVE', {
+          condition: PEZSML,
+          input: fields([
+            { key: 'nombre', label: 'Substrats relevés', type: 'number', min: 0, step: 1 },
+            { key: 'date', label: 'Date de relève', type: 'date' }
+          ])
+        })
       ]
     },
 
@@ -801,15 +863,17 @@ export const GRID_CT_2026 = {
 };
 
 /**
- * POINTS MAJEURS de la note sur 20 (× 2), liste DÉFINITIVE validée par l'OEG le 23/10/2026 : localisation (F3.19),
+ * POINTS MAJEURS de la note sur 20 (× 2), liste validée par l'OEG le 23/10/2026 : localisation (F3.19),
  * purge (F10.4 à F10.6), étalonnage (F4.2), flaconnage et réactifs (F4.12, F4.13), stabilisation (F4.31), EPI
  * (F2.4.4), contamination, conservation, remplissage, renouvellement, filtration et étiquetage (F5), protocoles
- * biologiques (F6.5, F6.11, F6.12, F7.6, F7.12, F8.A2, F8.A5, F8.B4, F8.B5, F9.9, F9.12). Les futurs critères du
- * protocole PEZSML équivalents à F6.5 / F6.11 / F6.12 seront majeurs aussi. Porté par chaque critère : `major: true`.
+ * biologiques (F6.5, F6.11, F6.12, F7.6, F7.12, F8.A2, F8.A5, F8.B4, F8.B5, F9.9, F9.12) ; depuis la version 1.3
+ * (24/10/2026), les critères du protocole PEZSML équivalents à F6.5 et F6.11 : F6.15 (pose des substrats
+ * artificiels) et F6.16 (relève) — F6.12 reste commun aux deux protocoles. 28 points. Porté par chaque critère :
+ * `major: true`.
  */
 export const MAJOR_ITEMS = Object.freeze([
   'F2.4.4', 'F3.19', 'F10.4', 'F10.5', 'F10.6', 'F4.2', 'F4.12', 'F4.13', 'F4.31',
-  'F5.7', 'F5.13', 'F5.21', 'F5.24', 'F5.26', 'F5.27', 'F6.5', 'F6.11', 'F6.12', 'F7.6', 'F7.12',
+  'F5.7', 'F5.13', 'F5.21', 'F5.24', 'F5.26', 'F5.27', 'F6.5', 'F6.11', 'F6.12', 'F6.15', 'F6.16', 'F7.6', 'F7.12',
   'F8.A2', 'F8.A5', 'F8.B4', 'F8.B5', 'F9.9', 'F9.12'
 ]);
 

@@ -128,8 +128,28 @@
 .att-c-prec{display:flex;gap:8px;align-items:flex-start;margin:8px 0 0;padding:7px 10px;border-radius:10px;background:var(--st-p-bg);border:1px solid var(--st-p-line);font-size:14px;line-height:1.4;color:#5c3b00}
 .att-c-prec .ico{flex:none;color:var(--st-p);margin-top:1px}
 .att-c-prec b{color:var(--st-p-ink);margin-right:4px}
+/* Valeurs propres à chaque réseau (CCTP 2026) et sources (CCTP, protocoles) */
+.att-c-net{margin:10px 0 0;padding:7px 10px 8px;border-radius:10px;background:var(--th-light);border:1px solid var(--th-line)}
+.att-c-net-h{display:flex;align-items:center;gap:6px;margin:0 0 4px;font-family:var(--f-cond);font-weight:700;font-size:13.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--th-title)}
+.att-c-net-h .ico{flex:none;color:var(--th-main)}
+.att-c-net dl{display:grid;gap:5px;margin:0}
+.att-c-net dl>div{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:8px;align-items:start}
+.att-c-net dt{margin:0;padding-top:1px}
+.att-c-net dd{margin:0;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.att-net-all{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;line-height:1.35;background:#fff;color:var(--th-dark);border:1px solid var(--th-line)}
+.att-c-src{margin:6px 0 0;font-size:13px;color:var(--oeg-muted)}
+.att-c-src summary{display:flex;align-items:center;gap:6px;cursor:pointer;font-style:italic;list-style:none;min-height:28px}
+.att-c-src summary::-webkit-details-marker{display:none}
+.att-c-src summary::after{content:'▸';margin-left:2px;font-style:normal}
+.att-c-src[open] summary::after{content:'▾'}
+.att-c-src summary .ico{flex:none}
+.att-c-src ul{margin:2px 0 0;padding-left:22px;line-height:1.4;overflow-wrap:anywhere}
+.att-v-more{grid-column:1 / -1}
+.att-v-more .att-c-prec{margin-top:4px}
+@media print{ .att-c-src summary::after{content:''} }
 @media (max-width:640px){
   .att-c-body>div{grid-template-columns:minmax(0,1fr);gap:2px}
+  .att-c-net dl>div{grid-template-columns:minmax(0,1fr);gap:2px}
   .att-c-badges{margin-left:0}
   .att-crits{padding:2px 0}
   .att-vals{margin:2px 0}

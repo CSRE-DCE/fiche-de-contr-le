@@ -8,7 +8,8 @@
  * - jamais d'écrasement : saisie de l'agent (valueManual), valeur effacée volontairement, valeur reprise puis cotée
  *   (proposition « Proposé : … » à la place) ; source vidée : reprises retirées ; nouvelle station : valeurs courantes ;
  * - fiche de la station (référentiel) → F3.1–F3.6, F3.9, F3.10, F3.18 de LA station : recalcul quand la fiche change
- *   (valeurs encore auto-remplies), saisie ou valeur cotée jamais remplacée (proposée), champ vidé retiré ;
+ *   (valeurs encore auto-remplies), saisie ou valeur cotée jamais remplacée (proposée), champ vidé retiré ; protocole
+ *   invertébrés F6.14 (grille 1.3) déduit de l'hydro-écorégion (52 → PEZADA, 51 → PEZSML ; sans HER : choix manuel) ;
  * - liens « proposés » (heures, coordonnées, température, moyens et difficultés d'accès, supports, lot / marché,
  *   effectif, sondes et calibration de F4) : jamais appliqués seuls ; plusieurs moyens d'accès : choix proposés ;
  * - cible restée en retard sur sa source (tournée reçue d'une autre tablette) : valeur proposée, jamais écrite ;
@@ -99,10 +100,13 @@ test('groupes de champs liés : sources et cibles dans la grille, listes de choi
   deepEq(LINK_GROUPS.filter(g => g.mode === 'suggest').map(g => g.key), ['heure-debut', 'heure-fin', 'coordonnees', 'temperature', 'moyens', 'difficultes', 'supports', 'marche', 'effectif', 'sondes', 'calibration']);
   // Écriture automatique seulement pour une information identique (date, météo, niveau, équipe, fiche de la station) :
   // dès qu'il y a une part d'appréciation, la valeur est seulement proposée.
-  deepEq(LINK_GROUPS.filter(g => g.mode !== 'suggest').map(g => g.key), ['date', 'controleurs', 'meteo', 'meteo-station', 'niveau', 'preleveurs', 'prestataire', 'equipe-station', 'station']);
+  deepEq(LINK_GROUPS.filter(g => g.mode !== 'suggest').map(g => g.key), ['date', 'controleurs', 'meteo', 'meteo-station', 'niveau', 'preleveurs', 'prestataire', 'equipe-station', 'station', 'protocole-invertebres']);
   // Fiche de la station : les critères de F3 pré-remplis depuis le référentiel (même `prefill`), aucun autre.
   deepEq(LINK_GROUPS.find(g => g.key === 'station').to, ['it-F3-1', 'it-F3-2', 'it-F3-3', 'it-F3-4', 'it-F3-5', 'it-F3-6', 'it-F3-9', 'it-F3-10', 'it-F3-18']);
   deepEq(LINK_GROUPS.find(g => g.key === 'station').to.map(id => IDX.get(id).prefill).every(p => /^site\./.test(p)), true);
+  // Protocole invertébrés (1.3) : même source « fiche de la station », même calcul qu'à la création (prefill)
+  const proto = LINK_GROUPS.find(g => g.key === 'protocole-invertebres');
+  deepEq([proto.from, proto.to, proto.transform, IDX.get('it-F6-14').prefill], [SITE_SOURCE, ['it-F6-14'], 'site', 'site.protocoleIA']);
   assert(isVirtualSource('@site@09271503') && !isVirtualSource('it-F2-1.9'));
 });
 
@@ -416,4 +420,27 @@ test('échange entre tablettes : valeur et provenance d’une réponse fusionné
   const s1 = { ...sb, updatedAt: '2026-10-23T09:00:00Z', sheets: { [`4@${S1}`]: { agents: 'NB, DB', agentsFrom: 'F1.R4', notes: 'x' } } };
   const s2 = { ...sb, updatedAt: '2026-10-23T09:20:00Z', sheets: { [`4@${S1}`]: { agents: 'Nadia B. (cheffe d’équipe)', agentsManual: true } } };
   deepEq(mergeEntity('audit', sb, s1, s2).merged.sheets[`4@${S1}`], { agents: 'Nadia B. (cheffe d’équipe)', agentsManual: true, notes: 'x' });
+});
+
+test('protocole invertébrés F6.14 (1.3) : déduit de l’hydro-écorégion de la fiche station, choix de l’agent jamais écrasé', () => {
+  const H52 = { ...ATHANASE, her: 52 }, H51 = { ...ACAROUANY, her: '51' }, RCO = { ...SAKOURA };   // RCO : sans hydro-écorégion
+  const sites = { [S1]: H52, [S2]: H51, [S3]: RCO };
+  const E = expandGrid(G, [H52, H51, RCO].map(s => ({ siteId: s.id })), { [H52.id]: H52, [H51.id]: H51, [RCO.id]: RCO });
+  const ctx = { auditType: 'bio', compartments: BIO_ALL };
+  const items = visibleItems(E, {}, ctx).map(x => x.item);
+  const ups = linkedUpdates({ items, changed: [S1, S2, S3].map(k => `${SITE_SOURCE}@${k}`), extra: { sites } }).filter(u => parseItemId(u.id).baseId === 'it-F6-14');
+  deepEq(ups.map(u => [u.id, u.value, u.from]), [[`it-F6-14@${S1}`, 'PEZADA', 'fiche station'], [`it-F6-14@${S2}`, 'PEZSML', 'fiche station']], 'sans hydro-écorégion : rien (choix manuel)');
+  let st = apply(empty(), ups);
+  // Le contrôleur choisit PEZSML pour la station sans HER et corrige la station HER 52 (protocole prévu différent)
+  const all = () => visibleItems(E, st.responses, ctx).map(x => x.item);
+  st = enter(all(), st, `it-F6-14@${S3}`, 'PEZSML');
+  st = enter(all(), st, `it-F6-14@${S1}`, 'PEZSML');
+  deepEq(st.ups, [], 'F6.14 n’alimente aucune autre feuille');
+  // L'hydro-écorégion de la fiche change : valeur auto recalculée, choix de l'agent seulement proposé
+  const sites2 = { ...sites, [S1]: { ...H52, her: '52' }, [S2]: { ...H51, her: 52 } };
+  const ups2 = linkedUpdates({ items: all(), responses: st.responses, changed: [S1, S2].map(k => `${SITE_SOURCE}@${k}`), extra: { sites: sites2 } }).filter(u => parseItemId(u.id).baseId === 'it-F6-14');
+  deepEq(ups2.map(u => [u.id, u.value]), [[`it-F6-14@${S2}`, 'PEZADA']]);
+  const at = id => all().find(i => i.id === id);
+  deepEq((({ value, from, mode }) => ({ value, from, mode }))(linkProposal({ items: all(), responses: st.responses, item: at(`it-F6-14@${S1}`), extra: { sites: sites2 } })), { value: 'PEZADA', from: 'fiche station', mode: 'auto' });
+  eq(linkProposal({ items: all(), responses: st.responses, item: at(`it-F6-14@${S3}`), extra: { sites: sites2 } }), null, 'sans hydro-écorégion : rien à proposer');
 });

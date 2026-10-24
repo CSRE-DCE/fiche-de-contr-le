@@ -1,6 +1,7 @@
 /* Écran « Attendus des prestataires » (#/attendus) : document de référence partagé entre contrôleurs OEG et
  * prestataires. Pour chaque point de contrôle de la grille CT-2026 : ce que le prestataire doit faire ou présenter,
- * comment le contrôleur le vérifie, comment choisir C / P / NC / N/A, références et points « à préciser » par l'OEG ;
+ * comment le contrôleur le vérifie, comment choisir C / P / NC / N/A, références et points « à préciser » par l'OEG,
+ * valeurs propres à chaque réseau (CCTP 2026) et sources (CCTP du réseau, paragraphe, page ; protocoles) ;
  * liste de préparation de la tournée à remettre aux prestataires.
  *
  * - Source unique : data/attendus-ct-2026.json (chargé et mis en cache par js/app/attendus-pdf.js).
@@ -16,12 +17,13 @@
 import { html, raw, normalize, fmtDate } from '../core/util.js';
 import { navigate, parseHash } from '../ui/router.js';
 import { toast, openModal, downloadBlob } from '../ui/dom.js';
-import { pageTitle } from '../ui/components.js';
+import { pageTitle, networkBadge } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { sectionCard, sharedBadge, majorBadge, checkSquare, assetURL } from '../ui/sheet-chrome.js';
 import { themeVars, THEMES } from '../ui/themes.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
 import { gridType, parseItemId } from '../domain/grids.js';
+import { networkOf } from '../domain/networks.js';
 import {
   loadAttendus, attendusData, attenduFor as entryOf, attendusModel, typeVisibility, generateAttendusPdf,
   SCALE, TOUR_TYPES, TYPE_THEMES
@@ -61,11 +63,12 @@ const plural = (n, one, many = one + 's') => `${n} ${n > 1 ? many : one}`;
 const valueText = entry => String(entry?.attendu || '').replace(/^Information à relever\s*:\s*/i, '');
 const fold = s => normalize(String(s ?? '').replace(/[’ʼ]/g, '\''));
 
-/** Texte de recherche d'un critère (code, libellé, attendu, vérification, échelle, références, à préciser). */
+/** Texte de recherche d'un critère (code, libellé, attendu, vérification, échelle, références, à préciser, valeurs par
+ * réseau, sources). */
 export function searchText(item) {
   const e = item.entry || {};
   return fold([item.code, item.label, e.attendu, e.verification, e.C, e.P, e.NC, e.NA, (e.refs || []).join(' '), e.aPreciser,
-    item.shared ? 'commun a la tournee' : ''].filter(Boolean).join(' '));
+    ...netRows(e).flatMap(([k, v]) => [k, v]), (e.sources || []).join(' '), item.shared ? 'commun a la tournee' : ''].filter(Boolean).join(' '));
 }
 /** Vrai si le texte de recherche contient tous les mots de la requête (sans accents ni casse). */
 export function matches(text, query) {
@@ -82,6 +85,23 @@ function hrefWith(patch = {}) {
 }
 
 /* ---------- Gabarits ---------- */
+/** Clé des valeurs communes à tous les réseaux dans `parReseau`. */
+const NET_ALL = 'tous';
+/** Valeurs propres à chaque réseau (CCTP 2026) : [[code, texte]] dans l'ordre du fichier (« tous » en dernier). */
+export const netRows = e => Object.entries(e?.parReseau || {}).filter(([, v]) => typeof v === 'string' && v.trim());
+/** Bloc « Selon le réseau (CCTP 2026) » : badge du réseau (code, couleur) et valeur propre à son CCTP. */
+function netBlock(e) {
+  const rows = netRows(e);
+  if (!rows.length) return '';
+  return html`<div class="att-c-net"><p class="att-c-net-h">${icon('route', { size: 15 })}Selon le réseau (CCTP 2026)</p>
+    <dl>${rows.map(([k, v]) => html`<div><dt>${k === NET_ALL ? html`<span class="att-net-all">Tous les réseaux</span>` : networkBadge(networkOf(k))}</dt><dd>${v}</dd></div>`)}</dl></div>`;
+}
+/** Sources de l'attendu (CCTP du réseau et marché, paragraphe, page ; protocoles et guides), repliées. */
+function sourcesBlock(e) {
+  const list = (e?.sources || []).filter(Boolean);
+  if (!list.length) return '';
+  return html`<details class="att-c-src"><summary>${icon('book', { size: 15 })}Sources : CCTP et protocoles (${list.length})</summary><ul>${list.map(s => html`<li>${s}</li>`)}</ul></details>`;
+}
 /** Pastille de cotation (C, P, NC, N/A). */
 const scaleKey = s => html`<b class="att-k ${SCALE_CLS[s.code]}">${s.short}</b>`;
 
@@ -97,6 +117,7 @@ function critCard(item, model = { type: null }, { id = true } = {}) {
     item.shared && item.sheetScope !== 'tournee' ? sharedBadge() : '',
     item.major ? majorBadge('Point majeur (×2)') : '',
     item.conditional ? html`<span class="att-tb att-cond">${icon('filter', { size: 14 })}Affiché selon une réponse</span>` : '',
+    item.byNetwork ? html`<span class="att-tb att-cond">${icon('route', { size: 14 })}Selon le réseau de la station</span>` : '',
     item.noScore ? html`<span class="att-tb att-noscore" title="Point de synthèse : coté, mais exclu de la note (chaque écart y est déjà compté)">${icon('info', { size: 14 })}Point de synthèse, hors note</span>` : '',
     typeBadges(item, model)
   ].filter(Boolean);
@@ -113,15 +134,22 @@ function critCard(item, model = { type: null }, { id = true } = {}) {
       ${e.verification ? html`<div><dt>${icon('eye', { size: 16 })}Vérification</dt><dd>${e.verification}</dd></div>` : ''}
     </dl>
     ${scale.length ? html`<div class="att-c-scale">${scale.map(s => html`<div class="att-sc ${SCALE_CLS[s.code]}"><div class="att-sc-h">${scaleKey(s)}<span>${s.label}</span></div><p>${e[s.code]}</p></div>`)}</div>` : ''}
+    ${netBlock(e)}
     ${(e.refs || []).length ? html`<p class="att-c-refs">${icon('book', { size: 15 })}<span>Références : ${e.refs.join(' · ')}</span></p>` : ''}
+    ${sourcesBlock(e)}
     ${e.aPreciser ? html`<p class="att-c-prec">${icon('warning', { size: 16 })}<span><b>À préciser (OEG)</b> ${e.aPreciser}</span></p>` : ''}
   </article>`;
 }
 
-/** Ligne d'une information relevée sans cotation (critère « valeur seule »). */
-const valueRow = item => html`<div class="att-val" id="att-${item.id}" data-id="${item.id}" data-q="${searchText(item)}">
+/** Ligne d'une information relevée sans cotation (critère « valeur seule ») ; sources et « à préciser » éventuels. */
+const valueRow = item => {
+  const e = item.entry || {};
+  const more = [sourcesBlock(e), e.aPreciser ? html`<p class="att-c-prec">${icon('warning', { size: 16 })}<span><b>À préciser (OEG)</b> ${e.aPreciser}</span></p>` : ''].filter(Boolean);
+  return html`<div class="att-val" id="att-${item.id}" data-id="${item.id}" data-q="${searchText(item)}">
   <span class="att-v-code">${item.code}</span><span class="att-v-label">${item.label}</span><span class="att-v-what">${valueText(item.entry) || '—'}</span>
+  ${more.length ? html`<div class="att-v-more">${more}</div>` : ''}
 </div>`;
+};
 
 function scaleBox(model) {
   return html`<section class="att-box att-scale-box" aria-labelledby="attScaleH">

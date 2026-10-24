@@ -19,7 +19,8 @@
  *  - OPERATORS_SOURCE : préleveurs du prestataire de la tournée (feuille Organisation, audit.operatorIds, libellés
  *    « Prénom Nom (INI) — fonction ») ; extra.operatorsText, extra.operatorsCount ;
  *  - SITE_SOURCE (« @site@<clé> », portée station) : fiche de la station dans le référentiel (extra.sites[clé]) —
- *    bassin, cours d'eau, nom, codes, Strahler, pressions, commune, HER de F3, recalculés quand la fiche change ;
+ *    bassin, cours d'eau, nom, codes, Strahler, pressions, commune, HER de F3, et protocole invertébrés de F6.14
+ *    (déduit de l'hydro-écorégion), recalculés quand la fiche change ;
  *  - STATIONS_SOURCE : moyens d'accès et difficultés des stations de la tournée (extra.stations) ;
  *  - COMPARTMENTS_SOURCE : compartiments contrôlés (extra.compartments) ; MARKET_SOURCE : référence du marché des
  *    prestations (extra.markets) ; INSTRUMENTS_SOURCE : module « Appareils de mesure » de F4 (extra.instruments).
@@ -77,6 +78,9 @@ export const LINK_GROUPS = Object.freeze([
   { key: 'prestataire', label: 'Prestataire et préleveurs', from: OPERATORS_SOURCE, to: ['it-F2-2.1'], transform: 'providerTeam' },
   { key: 'equipe-station', label: 'Équipe du prestataire sur la station', from: 'it-F1-R4', to: ['it-F3-12', 'it-F4-1', 'it-F6-1', 'it-F7-1', 'it-F8-A1', 'it-F9-1'], sheets: [{ no: 4, key: 'agents' }] },
   { key: 'station', label: 'Informations de la station (référentiel)', from: SITE_SOURCE, to: SITE_TARGETS, transform: 'site' },
+  // F6.14 (grille 1.3) : protocole invertébrés déduit de l'hydro-écorégion de la fiche de la station (52 → PEZADA,
+  // 51 → PEZSML) ; sans hydro-écorégion : rien (choix du contrôleur) ; choix de l'agent jamais écrasé (proposition).
+  { key: 'protocole-invertebres', label: 'Protocole invertébrés (hydro-écorégion de la station)', from: SITE_SOURCE, to: ['it-F6-14'], transform: 'site' },
   { key: 'heure-debut', label: 'Heure de début', mode: 'suggest', from: 'it-F2-1.5', to: ['it-F2-5.2'] },
   { key: 'heure-fin', label: 'Heure de fin', mode: 'suggest', from: 'it-F2-1.6', to: ['it-F2-5.3'] },
   { key: 'coordonnees', label: 'Coordonnées du point de prélèvement', mode: 'suggest', from: 'it-F3-15', to: ['it-F7-3', 'it-F9-3'] },
