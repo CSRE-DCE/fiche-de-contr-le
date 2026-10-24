@@ -99,6 +99,9 @@ export function toast(message, kind = '', ms = 3200) {
 
 /* ---------- Modales ---------- */
 let modalDepth = 0;
+const openModals = new Set();
+/** Ferme toutes les fenêtres ouvertes (fermeture de session : rien ne reste affiché pour l'agent suivant). */
+export function closeAllModals() { for (const m of [...openModals]) m.close(undefined); }
 /**
  * Ouvre une fenêtre modale. Retourne {root, close(value), result:Promise}.
  * opts : {title, body:SafeHTML, actions:[{label, cls, act}], handlers, wide, urgent, onMount, dismissable}
@@ -123,6 +126,7 @@ export function openModal(opts) {
     root: dialog,
     close(value) {
       if (!back.isConnected) return;
+      openModals.delete(api);
       unbind(); back.remove(); modalDepth--;
       document.removeEventListener('keydown', onKey);
       opts.onClose?.(value);
@@ -132,12 +136,15 @@ export function openModal(opts) {
     setBody(safe) { dialog.querySelector('.modal-body').innerHTML = String(safe); },
     result
   };
+  openModals.add(api);
   const unbind = bindActions(dialog, { __close: () => api.close(undefined), ...(opts.handlers || {}) }, api);
   const onKey = e => { if (e.key === 'Escape' && opts.dismissable !== false) api.close(undefined); };
   document.addEventListener('keydown', onKey);
   if (opts.dismissable !== false) back.addEventListener('click', e => { if (e.target === back) api.close(undefined); });
   opts.onMount?.(dialog, api);
-  setTimeout(() => (dialog.querySelector('[autofocus]') || dialog.querySelector('input,select,textarea'))?.focus?.(), 50);
+  // Premier champ activé, sauf si l'utilisateur a déjà choisi un champ de la fenêtre (saisie rapide : jamais de texte
+  // tapé dans un autre champ que celui touché).
+  setTimeout(() => { if (!dialog.contains(document.activeElement)) (dialog.querySelector('[autofocus]') || dialog.querySelector('input,select,textarea'))?.focus?.(); }, 50);
   return api;
 }
 
@@ -150,15 +157,20 @@ export function confirmDialog({ title = 'Confirmer', message = '', okLabel = 'Co
   return m.result.then(v => v === true);
 }
 
-/** Saisie d'un texte (motif de modification, commentaire…). Retourne la chaîne ou null si annulé. */
-export function promptDialog({ title = '', label = '', value = '', required = true, multiline = true, placeholder = '', hint = '', okLabel = 'Valider', voice = true } = {}) {
+/**
+ * Saisie d'un texte (motif de modification, commentaire…). Retourne la chaîne ou null si annulé.
+ * dismissable: false — la fenêtre ne se ferme ni par un appui hors du cadre (ex. pour fermer le clavier d'une tablette
+ * Android) ni par Échap : seulement par ses boutons ; cancelLabel : libellé du bouton de renoncement ; danger : bouton
+ * de validation rouge (action irréversible).
+ */
+export function promptDialog({ title = '', label = '', value = '', required = true, multiline = true, placeholder = '', hint = '', okLabel = 'Valider', cancelLabel = 'Annuler', voice = true, dismissable = true, danger = false } = {}) {
   const m = openModal({
-    title,
+    title, dismissable,
     body: html`<div class="field"><label for="__prompt">${label}${required ? html` <span class="req">*</span>` : ''}</label>
       <div class="input-wrap">${multiline ? html`<textarea id="__prompt" placeholder="${placeholder}">${value}</textarea>` : html`<input id="__prompt" value="${value}" placeholder="${placeholder}">`}
       ${voice && hasSpeech() ? html`<button class="icon-btn" data-act="voice" title="Dicter">🎤</button>` : ''}</div>
       ${hint ? html`<div class="hint">${hint}</div>` : ''}<div class="hint" id="__prompt_err" style="color:var(--nc)"></div></div>`,
-    actions: [{ label: 'Annuler', act: 'cancel' }, { label: okLabel, cls: 'primary', act: 'ok' }],
+    actions: [{ label: cancelLabel, act: 'cancel' }, { label: okLabel, cls: danger ? 'danger' : 'primary', act: 'ok' }],
     handlers: {
       ok() {
         const v = this.root.querySelector('#__prompt').value.trim();

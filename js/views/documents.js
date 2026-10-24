@@ -88,7 +88,7 @@ export const detailView = {
         ${d.summary ? html`<p>${d.summary}</p>` : ''}
         <div class="btn-row" style="margin-top:10px">
           ${file ? html`<button class="btn ghost" data-act="open-file" data-id="${file.id}">📄 ${file.name || 'Fichier joint'} ${local ? '(hors connexion ✓)' : '(à télécharger)'}</button>` : ''}
-          ${manage && d.status === 'brouillon' ? html`<label class="btn ghost">📎 ${file ? 'Remplacer le fichier' : 'Joindre le fichier (PDF…)'}<input type="file" hidden accept="application/pdf,.doc,.docx,.odt,image/*" data-change="file" data-link='${JSON.stringify({ type: 'document', id: d.id })}' data-kind="document"></label>
+          ${manage && d.status === 'brouillon' ? html`<label class="btn ghost">📎 ${file ? 'Remplacer le fichier' : 'Joindre le fichier (PDF…)'}<input type="file" hidden accept="application/pdf,.doc,.docx,.odt,image/*" data-change="file" data-source="document" data-link='${JSON.stringify({ type: 'document', id: d.id })}' data-kind="document"></label>
             <button class="btn ghost" data-act="edit">✏️ Modifier</button><button class="btn ok" data-act="publish">Mettre en vigueur</button>` : ''}
           ${manage && d.status === 'en_vigueur' ? html`<button class="btn primary" data-act="newversion">＋ Nouvelle version</button><button class="btn ghost" data-act="archive">Archiver</button>` : ''}
         </div></div>

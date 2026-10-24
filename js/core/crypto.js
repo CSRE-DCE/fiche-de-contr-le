@@ -6,6 +6,8 @@
  * (PBKDF2-SHA256, sel aléatoire). Ouvrir une session hors connexion = réussir à désenvelopper la DEK
  * (l'étiquette d'authentification AES-GCM prouve que le mot de passe est correct).
  * À la fermeture de session (manuelle ou par inactivité), la DEK est effacée de la mémoire.
+ * Les fichiers qui quittent la tablette (sauvegarde, échange entre tablettes) sont chiffrés avec une clé dérivée
+ * d'un mot de passe dédié (passwordKey), jamais avec la DEK.
  */
 import { bytesToBase64, base64ToBytes } from './util.js';
 
@@ -20,6 +22,8 @@ async function deriveKey(password, salt, iterations) {
   return subtle().deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, base,
     { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
+/** Clé AES-GCM 256 dérivée d'un mot de passe (PBKDF2-SHA256) : sauvegardes, fichiers d'échange entre tablettes. */
+export function passwordKey(password, salt, iterations = KDF_ITERATIONS) { return deriveKey(password, salt, iterations); }
 export async function importDEK(raw) {
   return subtle().importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }

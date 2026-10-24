@@ -1,7 +1,14 @@
 /* Prise de photographies et de pièces jointes, visionneuse et annotation.
  * Chaque photo est compressée (1600 px max, JPEG), horodatée, géolocalisée si possible et rattachée à
- * l'objet contrôlé (audit, critère, échantillon, équipement, écart, point…). */
+ * l'objet contrôlé (audit, critère, échantillon, équipement, écart, point…).
+ * Origine enregistrée dans le média (media.source) : « camera » (« Prendre une photo » : appareil photo de la
+ * tablette), « gallery » (« Importer depuis la galerie » : photos déjà dans l'appareil), « document » (pièce jointe).
+ * Date de prise de vue (media.takenAt) : métadonnées EXIF de la photo (takenAtSource 'exif') ; à défaut, instant de la
+ * prise pour l'appareil photo ('capture') ou date d'import, signalée ('import') ; date d'import : media.importedAt.
+ * Position (media.gps) : celle de la tablette pour une photo prise (comme avant) ; pour une photo importée, la
+ * position EXIF de la photo (gps.source 'exif') sinon celle de la tablette au moment de l'import, signalée. */
 import { html, fmtDateTime, fmtBytes, nowISO } from '../core/util.js';
+import { readExif } from '../lib/exif.js';
 import { saveMedia, mediaURL, mediaBytes, verifyMedia } from '../core/media.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -38,9 +45,40 @@ export async function toJPEG(bytes, mime, maxSide = 1400) {
   return (await compressImage(new Blob([bytes], { type: mime }), maxSide, 0.88)).bytes;
 }
 
+/** Origine d'un champ de fichier : data-source, sinon « camera » (attribut capture), « document » ou « gallery ». */
+export function inputSource(input) {
+  const s = input?.dataset?.source;
+  if (s === 'camera' || s === 'gallery' || s === 'document') return s;
+  return input?.hasAttribute?.('capture') ? 'camera' : input?.dataset?.kind === 'document' ? 'document' : 'gallery';
+}
+/** Métadonnées EXIF d'une image JPEG choisie (date de prise de vue, position) ou null. */
+export async function imageMeta(file) {
+  if (!/jpe?g/i.test(file?.type || '') && !/\.jpe?g$/i.test(file?.name || '')) return null;
+  try { return readExif(new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer())); } catch (e) { return null; }
+}
 /**
- * Enregistre les fichiers choisis dans un <input type=file data-link=…>.
- * Retourne la liste des médias créés.
+ * Photographie prête à enregistrer : { bytes, width, height (compressée), takenAt, takenAtSource ('exif' | 'capture' |
+ * 'import'), importedAt, gps (ou null), source }. `gps` : position de la tablette déjà relevée (undefined : relevé
+ * rapide ici). Photo importée sans date EXIF : date d'import (signalée) ; sans position EXIF : position de la tablette
+ * au moment de l'import (signalée).
+ */
+export async function preparePhoto(file, { source = 'gallery', gps } = {}) {
+  const now = nowISO();
+  const exif = await imageMeta(file);
+  const { bytes, width, height } = await compressImage(file);
+  const device = gps === undefined ? await quickPosition().catch(() => null) : gps;
+  const exifGps = exif?.gps ? { lat: exif.gps.lat, lon: exif.gps.lon, accuracy: null, at: exif.takenAt || null, source: 'exif' } : null;
+  const devGps = device ? { ...device, source: 'device' } : null;
+  return {
+    bytes, width, height, source, importedAt: now,
+    takenAt: exif?.takenAt || now, takenAtSource: exif?.takenAt ? 'exif' : source === 'camera' ? 'capture' : 'import',
+    gps: source === 'camera' ? devGps || exifGps : exifGps || devGps
+  };
+}
+
+/**
+ * Enregistre les fichiers choisis dans un <input type=file data-link=… data-source=…>.
+ * Retourne la liste des médias créés. Photo importée sans date de prise de vue (EXIF) : signalée par un message.
  */
 export async function addFilesFromInput(input, extra = {}) {
   const files = [...(input.files || [])];
@@ -49,22 +87,38 @@ export async function addFilesFromInput(input, extra = {}) {
   const link = JSON.parse(input.dataset.link || 'null');
   const auditId = input.dataset.audit || extra.auditId || null;
   const asDocument = input.dataset.kind === 'document';
+  const source = inputSource(input);
   const gps = await quickPosition().catch(() => null);
   const created = [];
+  let undated = 0;
   for (const f of files) {
     try {
       if (f.type.startsWith('image/') && !asDocument || (asDocument && f.type.startsWith('image/') && f.size > 2_000_000)) {
-        const { bytes, width, height } = await compressImage(f);
-        created.push(await saveMedia(bytes, { mime: 'image/jpeg', kind: extra.kind || 'photo', name: f.name, link, auditId, gps, width, height, takenAt: nowISO(), caption: extra.caption || '' }));
+        const ph = await preparePhoto(f, { source: asDocument ? 'document' : source, gps });
+        if (ph.takenAtSource === 'import') undated++;
+        created.push(await saveMedia(ph.bytes, { mime: 'image/jpeg', kind: extra.kind || 'photo', name: f.name, link, auditId, gps: ph.gps, width: ph.width, height: ph.height, takenAt: ph.takenAt, takenAtSource: ph.takenAtSource, importedAt: ph.importedAt, source: ph.source, caption: extra.caption || '' }));
       } else {
         if (f.size > 25_000_000) { toast(`${f.name} : fichier trop volumineux (25 Mo maximum).`, 'err'); continue; }
         const bytes = new Uint8Array(await readFileAsArrayBuffer(f));
-        created.push(await saveMedia(bytes, { mime: f.type || 'application/octet-stream', kind: extra.kind || 'document', name: f.name, link, auditId, gps, takenAt: nowISO(), caption: extra.caption || '' }));
+        const now = nowISO();
+        created.push(await saveMedia(bytes, { mime: f.type || 'application/octet-stream', kind: extra.kind || 'document', name: f.name, link, auditId, gps: gps ? { ...gps, source: 'device' } : null, takenAt: now, takenAtSource: 'import', importedAt: now, source: 'document', caption: extra.caption || '' }));
       }
     } catch (e) { toast(`${f.name} : ${e.message}`, 'err'); }
   }
-  if (created.length) toast(`${created.length} preuve(s) enregistrée(s) ✓`, 'ok', 1800);
+  if (created.length) {
+    const photos = created.filter(m => m.mime?.startsWith('image/')).length;
+    const what = source === 'camera' ? 'Photo enregistrée' : source === 'gallery' && photos === created.length ? `${photos} photo${photos > 1 ? 's' : ''} importée${photos > 1 ? 's' : ''} de la galerie` : `${created.length} preuve(s) enregistrée(s)`;
+    toast(undated ? `${what} ✓ — ${undated === created.length && undated === 1 ? 'date de prise de vue inconnue : date d’import retenue' : `${undated} photo${undated > 1 ? 's' : ''} sans date de prise de vue : date d’import retenue`}` : `${what} ✓`, undated ? 'warn' : 'ok', undated ? 5000 : 1800);
+  }
   return created;
+}
+
+/** Origine et date d'un média, en clair (visionneuse, vignettes) : { origin, when, whenNote, gpsNote }. */
+export function mediaProvenance(m) {
+  const origin = m?.source === 'camera' ? 'Appareil photo de la tablette' : m?.source === 'gallery' ? `Importée depuis la galerie${m.importedAt ? ` le ${fmtDateTime(m.importedAt)}` : ''}` : m?.source === 'document' ? `Document joint${m.importedAt ? ` le ${fmtDateTime(m.importedAt)}` : ''}` : '';
+  const whenNote = m?.takenAtSource === 'exif' ? 'lue dans les métadonnées de la photo' : m?.takenAtSource === 'import' ? 'date d’import : date de prise de vue inconnue' : '';
+  const gpsNote = m?.gps?.source === 'exif' ? 'position enregistrée par l’appareil photo' : m?.gps && m?.source === 'gallery' ? 'position de la tablette au moment de l’import, pas celle de la prise de vue' : '';
+  return { origin, when: m?.takenAt || null, whenNote, gpsNote };
 }
 
 function linkLabel(link) {
@@ -84,12 +138,13 @@ export async function viewMedia(id, { readOnly = false, onChange } = {}) {
   const audit = m.auditId ? store.get('audit', m.auditId) : null;
   const derived = store.filter('media', x => x.derivedFrom === id);
   const isImg = m.mime?.startsWith('image/');
+  const prov = mediaProvenance(m);
   const modal = openModal({
     title: isImg ? 'Photographie' : (m.name || 'Document'), wide: true,
-    body: html`${!url ? html`<div class="banner warn">Contenu non disponible sur cet appareil (il sera téléchargé à la prochaine synchronisation).</div>` : isImg ? html`<img src="${url}" alt="" style="width:100%;border-radius:12px;background:#111">` : html`<div class="btn-row"><a class="btn primary" href="${url}" target="_blank" rel="noopener">Ouvrir le document</a></div>`}
+    body: html`${!url ? html`<div class="banner warn">Contenu non disponible sur cette tablette (${session.mode === 'github' ? 'il sera téléchargé à la prochaine synchronisation' : 'il arrivera avec un prochain fichier de l’autre tablette, ou demandez-lui « Tout envoyer »'}).</div>` : isImg ? html`<img src="${url}" alt="" style="width:100%;border-radius:12px;background:#111">` : html`<div class="btn-row"><a class="btn primary" href="${url}" target="_blank" rel="noopener">Ouvrir le document</a></div>`}
       <div style="margin-top:12px">${kv([
-        ['Date et heure', fmtDateTime(m.takenAt)], ['Auteur', m.authorName], ['Audit', audit?.number], ['Objet contrôlé', linkLabel(m.link)],
-        ['Position GPS', m.gps ? `${m.gps.lat.toFixed(6)}, ${m.gps.lon.toFixed(6)} (±${Math.round(m.gps.accuracy || 0)} m)` : 'non relevée'],
+        [isImg ? 'Prise de vue' : 'Date et heure', html`${fmtDateTime(m.takenAt)}${prov.whenNote ? html` <span class="muted">(${prov.whenNote})</span>` : ''}`], ['Origine', prov.origin], ['Auteur', m.authorName], ['Audit', audit?.number], ['Objet contrôlé', linkLabel(m.link)],
+        ['Position GPS', m.gps ? html`${m.gps.lat.toFixed(6)}, ${m.gps.lon.toFixed(6)}${m.gps.accuracy ? ` (±${Math.round(m.gps.accuracy)} m)` : ''}${prov.gpsNote ? html` <span class="muted">(${prov.gpsNote})</span>` : ''}` : 'non relevée'],
         ['Légende', m.caption], ['Fichier', `${m.name || ''} ${m.mime} · ${fmtBytes(m.size)}`], ['Empreinte SHA-256', html`<span class="mono tiny">${m.sha256}</span>`],
         ['Version annotée de', m.derivedFrom ? 'la photographie originale (conservée)' : ''], ['Versions annotées', derived.length ? `${derived.length}` : '']
       ])}</div><div id="__verify" class="hint"></div>`,

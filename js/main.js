@@ -5,8 +5,9 @@ import { store } from './core/store.js';
 import * as auth from './core/auth.js';
 import { revokeAllURLs } from './core/media.js';
 import { route, startRouter, stopRouter, refresh } from './ui/router.js';
-import { toast, settleInput } from './ui/dom.js';
+import { toast, settleInput, closeAllModals } from './ui/dom.js';
 import { initSync, stopSync, runSync } from './app/sync.js';
+import { pendingChanges, stopWatchExchange } from './app/exchange.js';
 import { applyDisplayPrefs, orgSettings } from './app/settings.js';
 import { renderSetup, renderLogin, renderMessage, teardownAuth } from './views/auth.js';
 import { renderShell, updateShell } from './views/shell.js';
@@ -79,19 +80,34 @@ function watchActivity() {
 }
 
 let locking = null;
+// Agent dont la session vient d'être fermée (« Changer d'agent », inactivité…) : écran d'arrivée de l'agent suivant.
+let previousAgent = null;
 export function lockApp(reason = 'manuel') {
   // Un seul verrouillage à la fois (minuteur d'inactivité et cadenas peuvent se croiser pendant l'enregistrement).
   if (!locking) locking = doLock(reason).finally(() => { locking = null; });
   return locking;
 }
 async function doLock(reason) {
+  const who = session.user?.name || '', whoId = session.user?.id || null;
   // Saisie en cours (observation commencée, champ non quitté) enregistrée AVANT la fermeture de la session.
   await saveInput();
-  stopSync(); stopRouter(); revokeAllURLs();
+  // Rappel non bloquant (mode autonome) : modifications pas encore envoyées à l'autre tablette.
+  let reminder = '';
+  if (session.unlocked && !auth.isTeamMode() && reason !== 'compte désactivé') {
+    const p = await pendingChanges().catch(() => null);
+    if (p?.total) reminder = ` Rappel : ${p.total} modification${p.total > 1 ? 's' : ''} de cette tablette ${p.total > 1 ? 'ne sont' : 'n’est'} pas encore ${p.total > 1 ? 'envoyées' : 'envoyée'} à l’autre tablette (Échanges entre tablettes › Envoyer).`;
+  }
+  stopSync(); stopWatchExchange(); stopRouter(); revokeAllURLs();
   await auth.lock(reason);
   document.body.classList.remove('in-audit');
-  showLogin(reason === 'inactivité' ? 'Session verrouillée après inactivité. Vos saisies sont enregistrées sur l’appareil.'
-    : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).' : '');
+  // Rien de la session précédente ne reste à l'écran : messages et fenêtres ouvertes (verrouillage par inactivité).
+  closeAllModals();
+  document.querySelectorAll('.toast').forEach(el => el.remove());
+  previousAgent = whoId;
+  showLogin(reason === 'inactivité' ? `${who ? who + ' : session' : 'Session'} verrouillée après inactivité. Les saisies sont enregistrées sur la tablette.${reminder}`
+    : reason === 'compte désactivé' ? 'Ce compte a été désactivé par l’administrateur de l’équipe (config/utilisateurs.json).'
+    : reason === 'changement d’agent' ? `${who} : session fermée. Les saisies sont enregistrées sur la tablette et la tournée en cours y reste pour l’agent suivant.${reminder}` : reminder.trim(),
+  { pick: reason === 'changement d’agent' ? 'none' : 'last' });
 }
 
 /** Appareil révoqué par l'administrateur : effacement complet des données locales. */
@@ -114,7 +130,13 @@ async function enterApp() {
   document.body.classList.remove('auth-mode');
   teardownAuth();
   auth.restoreToken();
-  renderShell(app, { lock: () => lockApp('manuel') });
+  // Tablette partagée (« Changer d'agent », verrouillage par inactivité) : un AUTRE agent que le précédent arrive sur
+  // la tournée affichée par celui-ci (binôme) ; sur tout autre écran (administration, menu…), sur l'accueil.
+  if (previousAgent && previousAgent !== session.user?.id && !/^#\/audit\//.test(location.hash)) history.replaceState(null, '', '#/');
+  previousAgent = null;
+  renderShell(app, { lock: () => lockApp('changement d’agent') });
+  // Logo de l'application (Administration) : copie locale accordée au réglage de l'organisation (reçu d'une autre tablette…).
+  import('./app/logo.js').then(m => m.watchLogo()).catch(() => null);
   watchActivity();
   watchBackground();
   initSync({ revoked: onRevoked, disabled: () => lockApp('compte désactivé') });
@@ -135,9 +157,9 @@ async function enterApp() {
   }).catch(() => {});
 }
 
-function showLogin(message = '') {
+function showLogin(message = '', { pick = 'last' } = {}) {
   document.body.classList.add('auth-mode');
-  renderLogin(app, { message, onUnlocked: () => enterApp() });
+  renderLogin(app, { message, pick, onUnlocked: () => enterApp() });
 }
 
 async function boot() {

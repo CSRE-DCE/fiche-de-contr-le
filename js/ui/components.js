@@ -6,6 +6,8 @@ import { hasSpeech } from './dom.js';
 import {
   PRESTATION_STATUS, AUDIT_STATUS, DEVIATION_STATUS, DOC_STATUS, PROVIDER_KINDS, RESPONSES, ALERT_LEVELS
 } from '../domain/model.js';
+import { networkColors } from '../domain/networks.js';
+import { icon } from './icons.js';
 
 export function badge(text, cls = '') { return html`<span class="badge ${cls}">${text}</span>`; }
 export function statusBadge(map, key) { const s = map[key]; return s ? badge(s.label || s, s.cls || '') : badge(key || '—', 'na'); }
@@ -30,6 +32,39 @@ export function empty(icon, text, action = '') { return html`<div class="empty">
 export function pageTitle(title, sub = '', right = '', back = '') {
   return html`${back ? html`<a class="back" href="${back}">‹ Retour</a>` : ''}<div class="page-title"><div><h1>${title}</h1>${sub ? html`<div class="sub">${sub}</div>` : ''}</div>${right ? html`<div class="row">${right}</div>` : ''}</div>`;
 }
+/** Pastille de couleur d'un réseau de surveillance (décorative : le code ou le libellé l'accompagne toujours). */
+export function networkDot(network) { return html`<span class="net-dot" style="--net:${networkColors(network).main}" aria-hidden="true"></span>`; }
+/** Variables CSS des couleurs d'un réseau (--net, --net-light, --net-line, --net-dark : texte et fond sélectionné). */
+export function networkVars(network) {
+  const c = networkColors(network);
+  return `--net:${c.main};--net-light:${c.light};--net-line:${c.line};--net-dark:${c.dark}`;
+}
+/**
+ * Badge d'un réseau (pastille + code, libellé en info-bulle ; `long` : « CODE – Libellé ») ; `href` : lien (stations
+ * du réseau à l'accueil). Le code est du texte : l'information ne repose jamais sur la seule couleur.
+ */
+export function networkBadge(network, { href = '', long = false } = {}) {
+  const n = network || {};
+  const text = long && n.label && n.label !== n.code ? `${n.code} – ${n.label}` : n.code;
+  const title = n.label && n.label !== n.code ? `${n.code} – ${n.label}` : `Réseau ${n.code}`;
+  const inner = html`${networkDot(n)}${text}`;
+  return href ? html`<a class="net-badge" href="${href}" style="${networkVars(n)}" title="${title}">${inner}</a>`
+    : html`<span class="net-badge" style="${networkVars(n)}" title="${title}">${inner}</span>`;
+}
+/** Badges d'une liste de réseaux (objets du référentiel, js/app/networks.js : siteNetworks). */
+export const networkBadges = (list, opts = {}) => (list || []).map(n => networkBadge(n, { ...opts, href: typeof opts.href === 'function' ? opts.href(n) : opts.href || '' }));
+/**
+ * Cases à cocher des réseaux de surveillance (valeur enregistrée = code) : pastille, code et libellé. `networks` :
+ * réseaux proposés (js/app/networks.js : currentNetworkList, qui garde les réseaux déjà portés même inactifs ou
+ * hors référentiel) ; `selected` : codes cochés.
+ */
+export function networkChecks(name, networks, selected = []) {
+  const state = n => n.virtual ? 'hors référentiel' : n._deleted ? 'supprimé du référentiel' : n.active === false ? 'inactif' : '';
+  return html`<div class="checks net-checks">${networks.map(n => {
+    const on = selected.includes(n.code);
+    return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" name="${name}" data-multi value="${n.code}" ${on ? raw('checked') : ''}>${networkDot(n)}<span><b>${n.code}</b>${n.label && n.label !== n.code ? ` – ${n.label}` : ''}${state(n) ? html`<small class="net-state"> (${state(n)})</small>` : ''}</span></label>`;
+  })}</div>`;
+}
 export function field(label, control, { required = false, hint = '', id = '' } = {}) {
   return html`<div class="field"><label ${id ? raw(`for="${esc(id)}"`) : ''}>${label}${required ? html` <span class="req">*</span>` : ''}</label>${control}${hint ? html`<div class="hint">${hint}</div>` : ''}</div>`;
 }
@@ -50,18 +85,50 @@ export function voiceBtn(targetId) {
 }
 export function progressBar(pct) { return html`<div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>`; }
 
-/** Boutons d'ajout de preuves (photo appareil, galerie, fichier). link = {type, id, itemId?} */
-export function evidenceButtons(link, { auditId = '', photo = true, gallery = true, file = true, label = 'Photo' } = {}) {
-  const data = raw(`data-link="${esc(JSON.stringify(link))}" data-audit="${esc(auditId || '')}"`);
-  return html`${photo ? html`<label class="btn primary sm"><span class="ic">📷</span>${label}<input type="file" accept="image/*" capture="environment" hidden data-change="media-add" ${data}></label>` : ''}
-    ${gallery ? html`<label class="btn ghost sm"><span class="ic">🖼️</span>Galerie<input type="file" accept="image/*" multiple hidden data-change="media-add" ${data}></label>` : ''}
-    ${file ? html`<label class="btn ghost sm"><span class="ic">📎</span>Document<input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,.odt,.txt" multiple hidden data-change="media-add" data-kind="document" ${data}></label>` : ''}`;
+/** Libellés des trois façons d'ajouter une preuve (boutons, info-bulles, lecteurs d'écran). */
+export const MEDIA_SOURCES = {
+  camera: { label: 'Prendre une photo', title: 'Prendre une photo avec l’appareil photo de la tablette', icon: 'camera' },
+  gallery: { label: 'Importer depuis la galerie', title: 'Importer des photos déjà dans l’appareil (galerie) : la date de prise de vue est reprise de la photo', icon: 'gallery' },
+  document: { label: 'Joindre un document', title: 'Joindre un document (PDF, tableur, texte…)', icon: 'doc' }
+};
+/**
+ * Ajout d'une photographie ou d'un document (preuve) : deux choix DISTINCTS et explicites partout où une photo
+ * s'ajoute — « Prendre une photo » (appareil photo de la tablette : accept image/*, capture=environment, une photo) et
+ * « Importer depuis la galerie » (photos déjà dans l'appareil : accept image/* sans capture, sélection multiple ;
+ * Android ouvre le sélecteur de photos du système, iOS la photothèque) — et, si utile, « Joindre un document ».
+ * data-source (camera | gallery | document) : origine enregistrée dans le média (js/ui/capture.js) ; gestionnaire
+ * data-change = `act` (défaut « media-add »). link = {type, id, itemId?} ; compact : icônes seules (lignes de tableau,
+ * libellé en info-bulle et pour les lecteurs d'écran) ; labels : libellés propres à l'écran ; data : attributs
+ * data-* supplémentaires du champ.
+ */
+export function mediaInputs(link, { auditId = '', photo = true, gallery = true, document = false, compact = false, cls = 'btn ghost sm', camCls = '', act = 'media-add', labels = {}, data = {} } = {}) {
+  const attrs = raw([link ? `data-link="${esc(JSON.stringify(link))}"` : '', `data-audit="${esc(auditId || '')}"`, ...Object.entries(data).map(([k, v]) => `data-${k}="${esc(v)}"`)].filter(Boolean).join(' '));
+  const one = (key, accept) => {
+    const d = MEDIA_SOURCES[key], label = labels[key] || d.label;
+    const input = html`<input type="file" ${raw(accept)} hidden data-change="${act}" data-source="${key}" ${key === 'document' ? raw('data-kind="document"') : ''} ${attrs}>`;
+    return compact
+      ? html`<label class="as-tool ms-${key}" title="${label}" aria-label="${label}">${icon(d.icon, { size: 18 })}${input}</label>`
+      : html`<label class="${key === 'camera' && camCls ? camCls : cls} ms-btn ms-${key}" title="${d.title}"><span class="ic">${icon(d.icon, { size: 18 })}</span><span class="ms-l">${label}</span>${input}</label>`;
+  };
+  return html`${photo ? one('camera', 'accept="image/*" capture="environment"') : ''}${gallery ? one('gallery', 'accept="image/*" multiple') : ''}${document ? one('document', 'accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt" multiple') : ''}`;
 }
+/** Boutons d'ajout de preuves (grilles historiques, écarts, modules) : prendre une photo, importer depuis la galerie,
+ * joindre un document. link = {type, id, itemId?} ; label : libellé du bouton « appareil photo ». */
+export function evidenceButtons(link, { auditId = '', photo = true, gallery = true, file = true, label = '' } = {}) {
+  return mediaInputs(link, { auditId, photo, gallery, document: file, camCls: 'btn primary sm', labels: label ? { camera: label } : {} });
+}
+/** Heure de la vignette : date et heure si la prise de vue n'est pas du jour (photo importée), « import » si inconnue. */
+function thumbTime(m) {
+  if (m?.takenAtSource === 'import') return `import ${fmtTime(m.takenAt)}`;
+  const d = m?.takenAt ? new Date(m.takenAt) : null;
+  return d && d.toDateString() !== new Date().toDateString() ? `${fmtDate(m.takenAt).slice(0, 5)} ${fmtTime(m.takenAt)}` : fmtTime(m?.takenAt);
+}
+const thumbWhen = m => m?.source === 'gallery' ? (m.takenAtSource === 'exif' ? `photo du ${fmtDateTime(m.takenAt)}, importée de la galerie` : 'importée de la galerie : date de prise de vue inconnue') : '';
 /** Vignettes de médias ; les images sont chargées ensuite par hydrateMedia(). */
 export function thumbs(list) {
   if (!list?.length) return '';
   return html`<div class="thumbs">${list.map(m => m.mime?.startsWith('image/')
-    ? html`<button type="button" class="thumb" data-act="media-view" data-id="${m.id}" title="${m.caption || ''}"><img data-media="${m.id}" alt="${m.caption || 'Photographie'}">${m.derivedFrom ? html`<span class="t-badge">annotée</span>` : ''}<span class="t-meta">${fmtTime(m.takenAt)} · ${m.authorName || ''}</span></button>`
+    ? html`<button type="button" class="thumb" data-act="media-view" data-id="${m.id}" title="${[m.caption, thumbWhen(m)].filter(Boolean).join(' — ')}"><img data-media="${m.id}" alt="${m.caption || 'Photographie'}">${m.derivedFrom ? html`<span class="t-badge">annotée</span>` : m.source === 'gallery' ? html`<span class="t-badge t-gal">galerie</span>` : ''}<span class="t-meta">${thumbTime(m)} · ${m.authorName || ''}</span></button>`
     : html`<button type="button" class="thumb file" data-act="media-view" data-id="${m.id}"><span class="ic">📄</span>${m.name || 'Document'}</button>`)}</div>`;
 }
 export async function hydrateMedia(root) {

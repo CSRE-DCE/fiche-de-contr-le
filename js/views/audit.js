@@ -1,7 +1,8 @@
 /* Audit terrain : Section → Critère → Réponse → Preuve → Validation.
  * Enregistrement automatique de chaque saisie sur l'appareil (« continuer plus tard » hors connexion),
  * alertes intelligentes (jamais converties automatiquement en non-conformité), écarts, synthèse,
- * signatures, verrouillage scellé, puis modifications uniquement motivées et historisées.
+ * signatures, verrouillage scellé, puis modifications uniquement motivées et historisées ; « Annuler la tournée »
+ * (motif obligatoire, confirmation, retour à l'accueil).
  * Deux affichages : grilles « en feuilles » (CT-2026 : tournée de stations, feuilles fidèles aux fiches papier —
  * js/views/audit-sheet.js) et grilles historiques par sections (ci-dessous). Les actions de saisie sont communes. */
 import { html, raw, fmtDate, fmtTime, fmtDateTime, localDate, localTime, localDateTime, nowISO, sortBy } from '../core/util.js';
@@ -13,12 +14,12 @@ import { navigate } from '../ui/router.js';
 import { toast, promptDialog, confirmDialog, openModal, downloadBlob, choiceDialog } from '../ui/dom.js';
 import { kv, badge, thumbs, hydrateMedia, evidenceButtons, voiceBtn, progressBar, auditBadge, critBadge, deviationBadge, empty, operatorName, siteName, providerName, kindBadge } from '../ui/components.js';
 import { addFilesFromInput, viewMedia } from '../ui/capture.js';
-import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate } from '../domain/model.js';
-import { allowedResponses, isAnswered, isAnswerable, needsJustification } from '../domain/grids.js';
-import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, abandonAudit, auditDeviations } from '../app/audits.js';
+import { RESPONSES, DOMAINS, DOC_TYPES, responseText, defaultCriticality, auditDate, OPEN_DEVIATION, auditKindLabel, auditTimeTexts } from '../domain/model.js';
+import { allowedResponses, isAnswered, isAnswerable, needsJustification, isEnteredResponse } from '../domain/grids.js';
+import { auditState, setResponse, updateAudit, finishAudit, reopenAudit, signAudit, lockAudit, verifyAuditSeal, cancelTour, cancelTourRefusal, auditDeviations, controllersLabel, canJoinAudit } from '../app/audits.js';
 import { refLabel, refArticle } from '../app/documents.js';
-import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem, allowClear } from './audit-modules.js';
-import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor } from './audit-sheet.js';
+import { operatorsModule, operatorHandlers, equipmentModule, equipmentHandlers, gpsModule, gpsHandlers, samplesModule, sampleHandlers, openDeviationForm, deviationChips, alertBox, documentsCard, signaturesStep, findItem, allowClear, cancelTourButton, cancelTourBlock, cancelledBanner } from './audit-modules.js';
+import { isSheetAudit, renderSheetAudit, mountSheetAudit, unmountSheetAudit, sheetHandlers, refreshKeep, normalizeStep, issueHrefFor, deName } from './audit-sheet.js';
 
 const amendState = new Map();   // « utilisateur:audit » → motif de la modification en cours (audit signé)
 const amendBaseline = new Map(); // même clé → points bloquants déjà présents au début de la modification
@@ -95,19 +96,19 @@ function identificationStep(audit, st, editable) {
   const p = st.prestation;
   return html`
     <div class="card"><h2>Identification de l’audit</h2>${kv([
-      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type', audit.kind === 'inopine' ? 'Audit inopiné' : 'Audit planifié'],
-      ['Date', fmtDate(auditDate(audit))], ['Heure de début', fmtTime(audit.startedAt)], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'en cours'],
-      ['Auditeur', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
+      ['Numéro d’audit', html`<b class="mono">${audit.number}</b>`], ['Type', auditKindLabel(audit.kind, { long: true })],
+      ['Date', fmtDate(auditDate(audit))], ['Heure de début', auditTimeTexts(audit).start], ['Heure de fin', auditTimeTexts(audit).end],
+      ['Contrôleur(s) OEG', controllersLabel(audit)], ['Créé par', audit.auditorName], ['Appareil utilisé', audit.device?.name], ['Version de l’application', audit.appVersion],
       ['Grille', `${audit.gridSnapshot?.name} — v${audit.gridVersion}`], ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
       ['Prestataire', prov ? html`${prov.name} ${kindBadge(prov.kind)}` : '—'], ['Opérateur(s) contrôlé(s)', st.operators.map(o => operatorName(o)).join(', ') || 'à identifier'],
       ['Site', siteName(audit.siteId)], ['Point', store.get('point', audit.pointId)?.code], ['Prestation', p ? html`<a href="#/prestation/${p.id}">${p.ref} — ${fmtDate(p.plannedDate)}</a>` : 'non programmée']
     ])}</div>
     ${documentsCard(audit)}
     ${st.alerts.length ? html`<div class="card"><h2>Alertes en cours (${st.alerts.length})</h2>${st.alerts.map(a => alertBox(a, editable))}</div>` : ''}
-    ${editable && !audit.lock?.lockedAt ? html`<div class="card"><h2>Actions</h2><div class="btn-row">
-      <button class="btn ghost" data-act="later">⏸ Continuer plus tard</button>
-      ${audit.auditorId === session.user.id || can('audit.delete') ? html`<button class="btn danger-ghost" data-act="abandon">Abandonner l’audit</button>` : ''}</div>
-      <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. L’audit peut être repris à tout moment depuis le planning.</p></div>` : ''}`;
+    ${editable && !audit.lock?.lockedAt ? html`<div class="card" id="tourActions"><h2>Actions</h2><div class="btn-row">
+      <button class="btn ghost" data-act="later">⏸ Continuer plus tard</button></div>
+      <p class="note">Chaque saisie est enregistrée immédiatement sur l’appareil, même sans connexion. L’audit peut être repris à tout moment depuis le planning.</p>
+      ${cancelTourBlock(audit)}</div>` : cancelTourBlock(audit) ? html`<div class="card" id="tourActions"><h2>Annuler la tournée</h2>${cancelTourBlock(audit)}</div>` : ''}`;
 }
 
 function deviationsStep(audit, st, editable) {
@@ -125,7 +126,8 @@ function synthesisStep(audit, st, editable) {
   const tiles = [['Critères contrôlés', c.controlled, ''], ['Conformes', c.C, 'ok'], ['Non conformes', c.NC, 'nc'], ['Non applicables', c.NA, 'na'], ['Non observés', c.NO, 'no'], ['Non vérifiables', c.NV, 'nv'], ['Écarts', s.deviationsCount, 'nc'], ['Échantillons', s.samples, ''], ['Équipements', s.equipment, '']];
   const max = Math.max(1, ...s.byCriticality.map(x => x.count));
   const dis = editable ? '' : raw('disabled');
-  return html`<div class="card"><h2>Synthèse factuelle <span class="badge outline">sans score global</span></h2>
+  // Grille historique (par sections) : décomptes seulement ; la note sur 20 concerne les tournées en feuilles (CT-2026).
+  return html`<div class="card"><h2>Synthèse factuelle <span class="badge outline" title="La note sur 20 concerne les tournées de la grille CT-2026 (fiches en feuilles)">grille historique : sans note sur 20</span></h2>
       <div class="kpis">${tiles.map(([k, v, cls]) => html`<div class="kpi"><span class="k">${k}</span><span class="v" style="${cls ? `color:var(--${cls})` : ''}">${v}</span></div>`)}</div>
       <h3>Écarts par niveau de criticité</h3>
       <div class="bars">${s.byCriticality.map(b => html`<div class="bar-row"><span class="bl">${b.label}</span><span class="bt"><span style="width:${b.count / max * 100}%;background:${b.color || 'var(--sky)'}"></span></span><span class="bn">${b.count}</span></div>`)}</div>
@@ -194,7 +196,7 @@ export default {
     }
     return html`
       <div class="audit-head">
-        <div class="ah-row"><div style="min-width:0"><div class="ah-num">${audit.number} ${auditBadge(audit)}</div><div class="ah-meta">${siteName(audit.siteId)} · ${providerName(audit.providerId)}</div></div>
+        <div class="ah-row"><div style="min-width:0"><div class="ah-num">${audit.number} ${auditBadge(audit)} ${!locked ? cancelTourButton(audit, { cls: 'btn danger-ghost sm as-cancel', id: 'tourCancelTop' }) : ''}</div><div class="ah-meta">${siteName(audit.siteId)} · ${providerName(audit.providerId)}</div></div>
           <div style="text-align:right"><div class="strong">${st.progress.percent} %</div><div class="save-state" id="saveState">${editable ? `Enregistré sur l’appareil ✓ ${fmtTime(audit.updatedAt)}` : locked ? 'Lecture seule' : ''}</div></div></div>
         ${progressBar(st.progress.percent)}
         <div class="steps" style="margin-top:6px">${stepState.map(([l, s], i) => html`${i ? html`<span class="arr">→</span>` : ''}<span class="st ${s}">${l}</span>`)}</div>
@@ -202,8 +204,9 @@ export default {
       </div>
       ${locked ? html`<div class="banner ${amendReason ? 'warn' : 'ok'} locked-banner"><span class="grow">${amendReason ? html`✏️ Modification tracée en cours — motif : « ${amendReason} ». Chaque changement est historisé (valeur précédente conservée).` : '🔒 Audit signé et verrouillé : lecture seule.'}</span>
         ${can('audit.amend') ? (amendReason ? html`<button class="btn sm ghost" data-act="amend-stop">Terminer les modifications</button>` : html`<button class="btn sm ghost" data-act="amend-start">Modifier (avec motif)</button>`) : ''}</div>` : ''}
-      ${!editable && !locked && audit.status !== 'abandonne' ? html`<div class="banner info">Lecture seule : audit réalisé par ${audit.auditorName}.</div>` : ''}
-      ${audit.status === 'abandonne' ? html`<div class="banner na">Audit abandonné — ${audit.abandonReason || ''}</div>` : ''}
+      ${!locked && canJoinAudit(audit, session.user) ? html`<div class="banner info as-join" id="tourJoin"><span class="grow">Audit ${deName(controllersLabel(audit))}<b>${controllersLabel(audit)}</b>${editable ? ' — en tant qu’encadrement, vous pouvez le modifier.' : ' — rejoignez-le pour saisir avec vos collègues.'}</span><button type="button" class="btn primary sm" data-act="tour-join">Rejoindre la tournée</button></div>`
+        : !editable && !locked && audit.status !== 'abandonne' ? html`<div class="banner info">Lecture seule : audit réalisé par ${controllersLabel(audit)}.</div>` : ''}
+      ${cancelledBanner(audit)}
       ${body}
       <div class="audit-footer">
         ${idx > 0 ? html`<a class="btn ghost lg" href="#/audit/${audit.id}/${steps[idx - 1]}">◀ Précédent</a>` : html`<a class="btn ghost lg" href="#/">◀ Stations</a>`}
@@ -343,10 +346,13 @@ export default {
     async reopen() { await reopenAudit(store.get('audit', this.params.id)); this.refresh(); },
     async 'sign-auditor'() {
       const { signaturePad } = await import('../ui/signature.js');
-      const s = await signaturePad({ title: 'Signature de l’auditeur', signer: session.user.name, statement: 'Je certifie l’exactitude des constats consignés dans le présent audit.' });
+      const audit = store.get('audit', this.params.id);
+      const sheets = isSheetAudit(audit);
+      const s = await signaturePad({ title: sheets ? 'Signature du contrôleur OEG' : 'Signature de l’auditeur', signer: session.user.name, statement: sheets ? `Je certifie l’exactitude des constats consignés dans la présente tournée (contrôleurs : ${controllersLabel(audit)}).` : 'Je certifie l’exactitude des constats consignés dans le présent audit.' });
       if (!s) return;
-      await signAudit(store.get('audit', this.params.id), 'auditor', { ...s, name: session.user.name, fn: 'Auditeur' });
-      toast('Signature de l’auditeur enregistrée', 'ok'); this.refresh();
+      try { await signAudit(store.get('audit', this.params.id), 'auditor', { ...s, name: session.user.name, fn: sheets ? 'Contrôleur OEG' : 'Auditeur' }); }
+      catch (e) { toast(e.message, 'err', 5000); return; }
+      toast(sheets ? 'Signature du contrôleur enregistrée' : 'Signature de l’auditeur enregistrée', 'ok'); this.refresh();
     },
     async 'sign-provider'() {
       const name = document.getElementById('repName')?.value.trim(), fn = document.getElementById('repFn')?.value.trim();
@@ -417,11 +423,29 @@ export default {
       await store.log('export', { entityType: 'audit', entityId: audit.id, entityLabel: audit.number, details: 'Dossier de preuve JSON' });
     },
     later() { toast('Audit enregistré sur l’appareil : reprise possible depuis l’accueil ou le planning.', 'ok'); navigate('/'); },
+    /**
+     * « Annuler la tournée » (en-tête ou onglet Infos) : refus expliqué (tournée signée et verrouillée, agent qui n'en
+     * est pas contrôleur…), motif obligatoire dans une fenêtre qui ne se ferme pas par un appui hors du cadre (clavier
+     * d'une tablette Android), écarts ouverts annoncés puis annulés avec le même motif ; message de confirmation et
+     * retour à l'accueil (la tournée n'apparaît plus dans les tournées en cours ni dans les listes par défaut).
+     */
     async abandon() {
-      const reason = await promptDialog({ title: 'Abandonner l’audit', label: 'Motif de l’abandon' });
+      const audit = store.get('audit', this.params.id);
+      const refusal = cancelTourRefusal(audit, session.user);
+      if (refusal) { toast(refusal, 'err', 7000); return; }
+      const open = auditDeviations(audit.id).filter(d => OPEN_DEVIATION.includes(d.status));
+      const n = Object.values(audit.responses || {}).filter(isEnteredResponse).length;
+      const stations = (audit.stations || []).length;
+      const reason = await promptDialog({
+        title: `Annuler la tournée ${audit.number}`, label: 'Motif de l’annulation', okLabel: 'Annuler la tournée', cancelLabel: 'Garder la tournée',
+        dismissable: false, danger: true, placeholder: 'Ex. : crue, accès impossible, prélèvement reporté par le prestataire…',
+        hint: `${stations > 1 ? `${stations} stations` : stations ? '1 station' : ''}${n ? ` · ${n} réponse${n > 1 ? 's' : ''} saisie${n > 1 ? 's' : ''} (conservée${n > 1 ? 's' : ''})` : ''}${open.length ? ` · écart${open.length > 1 ? 's' : ''} ouvert${open.length > 1 ? 's' : ''} ${open.map(d => d.number).join(', ')} : ${open.length > 1 ? 'ils seront annulés' : 'il sera annulé'} avec ce motif` : ''}. La tournée annulée n’apparaît plus dans les tournées en cours ; elle reste consultable (Audits › filtre « Annulées »).`.replace(/^ · /, '')
+      });
       if (!reason) return;
-      await abandonAudit(store.get('audit', this.params.id), reason);
-      navigate('/audits');
+      try { await cancelTour(store.get('audit', audit.id), reason, { cancelDeviations: open.length > 0 }); }
+      catch (e) { toast(e.message, 'err', 7000); return; }
+      toast(`Tournée ${audit.number} annulée${open.length ? ` (${open.length} écart${open.length > 1 ? 's' : ''} annulé${open.length > 1 ? 's' : ''})` : ''}`, 'ok', 6000);
+      navigate('/');
     }
   }
 };

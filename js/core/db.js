@@ -53,6 +53,14 @@ export const idb = {
     req.onsuccess = () => { const c = req.result; if (c) { out.push([c.key, c.value]); c.continue(); } else resolve(out); };
     req.onerror = () => reject(req.error);
   })),
+  /** Lecture de plusieurs clés en une transaction (undefined pour une clé absente). */
+  getMany: (store, keys) => !keys.length ? Promise.resolve([]) : openDB().then(db => new Promise((resolve, reject) => {
+    const t = db.transaction(store, 'readonly'), s = t.objectStore(store), out = new Array(keys.length);
+    keys.forEach((k, i) => { const r = s.get(k); r.onsuccess = () => { out[i] = r.result; }; });
+    t.oncomplete = () => resolve(out);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Lecture annulée'));
+  })),
   /** Écritures groupées atomiques : ops = [{store, key, value}] (value undefined = suppression). */
   batch: ops => {
     const stores = [...new Set(ops.map(o => o.store))];

@@ -13,7 +13,9 @@
  *  4. NUMÉROS d'audit réservés par blocs dans config/sequences.json (dans le même commit) ; APPAREILS
  *     enregistrés dans config/appareils.json (n° unique) — un appareil révoqué est effacé à sa synchronisation
  *     suivante (callback revoked) ; RÔLES lus dans config/utilisateurs.json (login GitHub du compte, à
- *     défaut rôle local).
+ *     défaut rôle local). Tablette partagée : le jeton est celui de la TABLETTE (son propriétaire, en général
+ *     l'administrateur, est indifférent pour les autres agents) ; seuls les comptes explicitement rattachés à
+ *     un login GitHub suivent config/utilisateurs.json.
  *  5. JOURNAL : chaque synchronisation est tracée (date, origine, volumes, commit, conflits, erreurs).
  *  6. SÉCURITÉ : les droits sont appliqués par l'application ; la vraie frontière de sécurité est l'accès au
  *     dépôt privé (quiconque possède un jeton donnant accès au dépôt peut en lire et modifier les fichiers).
@@ -22,9 +24,9 @@ import { idb, meta } from '../core/db.js';
 import { store, LOCAL_ONLY, META_FIELDS } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { decryptBytes } from '../core/crypto.js';
-import { ROLES, can, isTeamMode, teamLabel, getKeyring, syncKeyringProfile, normUsername, updateDevice, attachTeam, detachTeam, saveTeamToken, linkGithubLogin } from '../core/auth.js';
+import { ROLES, can, isTeamMode, teamLabel, getKeyring, syncKeyringProfile, normUsername, updateDevice, attachTeam, detachTeam, saveTeamToken, linkGithubLogin, tokenInfo } from '../core/auth.js';
 import { setRemoteFetcher, storeRemoteBytes } from '../core/media.js';
-import { mergeEntity, stripMeta } from '../domain/merge.js';
+import { mergeEntity, stripMeta, presumedBase } from '../domain/merge.js';
 import { availableNumbers, addBlock, BLOCK_SIZE, BLOCK_LOW } from './numbering.js';
 import {
   createGitHub, teamSettings, dataPaths, parseDataPath, stableJSON, gitBlobSha, utf8, fromUtf8, mapLimit, trailDay,
@@ -59,7 +61,7 @@ export async function refreshPending() {
 
 /* ---------- Contexte : client, chemins, mémoire locale des empreintes ---------- */
 
-export { isTeamMode };
+export { isTeamMode, presumedBase };
 const team = () => session.team;
 const client = (t = team(), token = session.token) => createGitHub({ token, owner: t.owner, repo: t.repo, apiUrl: t.apiUrl });
 const paths = (t = team()) => dataPaths(t.prefix);
@@ -306,25 +308,6 @@ async function pull(ctx, head, { full = false } = {}) {
 
 const isRevoked = config => !!(config.appareils?.devices || []).find(d => d.id === session.device?.id && d.revoked);
 
-const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-/**
- * Version commune présumée quand aucune base n'est connue (même donnée créée des deux côtés, ex. référentiel
- * initial d'un appareil autonome rattaché à l'équipe) : ce qui est identique des deux côtés, préfixe commun
- * des listes (un ajout en fin de liste n'est pas un conflit), métadonnées de création reçues retenues.
- * Une valeur différente des deux côtés reste un conflit tracé.
- */
-export function presumedBase(local, remote) {
-  const walk = (l, r) => {
-    if (deepEqual(l, r)) return clone(l);
-    if (Array.isArray(l) && Array.isArray(r)) { const out = []; for (let i = 0; i < Math.min(l.length, r.length) && deepEqual(l[i], r[i]); i++) out.push(clone(l[i])); return out; }
-    if (isObj(l) && isObj(r)) { const out = {}; for (const k of Object.keys(l)) if (k in r) { const b = walk(l[k], r[k]); if (b !== undefined) out[k] = b; } return out; }
-    return undefined;
-  };
-  const base = walk(local, remote) || {};
-  for (const k of ['createdAt', 'createdBy', 'createdByName']) if (local?.[k] !== undefined) base[k] = local[k];
-  return base;
-}
-
 /** Fusion à trois versions et rapport de conflit. */
 async function resolveConflict(type, id, remote, log) {
   const local = store.getRaw(type, id);
@@ -346,7 +329,11 @@ async function resolveConflict(type, id, remote, log) {
   }
 }
 
-/** Rôles de config/utilisateurs.json appliqués aux comptes locaux rattachés à un login GitHub. */
+/**
+ * Rôles de config/utilisateurs.json appliqués aux comptes locaux EXPLICITEMENT rattachés à un login GitHub (champ
+ * githubLogin du profil, qui fait foi ; à défaut celui du trousseau). Le login du jeton de la tablette n'est jamais
+ * appliqué aux autres agents de la tablette : un agent sans login garde le profil défini par l'administrateur.
+ */
 async function applyTeamRoles(ctx) {
   const list = ctx.config?.utilisateurs?.users;
   if (!Array.isArray(list)) return;
@@ -354,7 +341,7 @@ async function applyTeamRoles(ctx) {
   const k = await getKeyring();
   for (const [username, e] of Object.entries(k.users)) {
     const ent = store.get('user', e.userId);
-    const login = String(ent?.githubLogin || e.githubLogin || '').toLowerCase();
+    const login = String((ent && 'githubLogin' in ent ? ent.githubLogin : e.githubLogin) || '').toLowerCase();
     const m = login ? byLogin.get(login) : null;
     if (!m || !ROLES[m.role]) continue;
     const active = m.active !== false;
@@ -457,7 +444,7 @@ async function buildPush(ctx) {
   if (plan.media.some(m => !m.unchanged)) parts.push(`${plan.media.filter(m => !m.unchanged).length} fichier(s)`);
   if (plan.device) parts.push(me ? 'mise à jour de l’appareil' : 'enregistrement de l’appareil');
   if (plan.block) parts.push(`réservation AUD-${year} ${plan.block.from}–${plan.block.to}`);
-  plan.message = `Synchronisation : ${parts.join(', ') || 'mise à jour'}\n\nAppareil : ${session.device.name} (n° ${plan.device?.entry.no || me?.no || session.device.number}, ${session.device.id})\nUtilisateur : ${session.user.name}${session.githubLogin ? ' (@' + session.githubLogin + ')' : ''}\nApplication : ${appVersion()}`;
+  plan.message = `Synchronisation : ${parts.join(', ') || 'mise à jour'}\n\nAppareil : ${session.device.name} (n° ${plan.device?.entry.no || me?.no || session.device.number}, ${session.device.id})\nAgent connecté : ${session.user.name}${session.githubLogin ? `\nJeton de l’appareil : @${session.githubLogin}` : ''}\nApplication : ${appVersion()}`;
   return plan;
 }
 
@@ -545,7 +532,30 @@ export async function outboxEntries() { return (await idb.entries('outbox')).map
  * branche, initialisation, appartenance à config/utilisateurs.json.
  * → { team, login, userName, repo: { fullName, private, defaultBranch }, empty, branchMissing, initialized, equipe, member, devices }
  */
-export async function probeTeam(settings, token) {
+/**
+ * Profils d'agents (entites/user/*.json) du dépôt rattachés au login GitHub `login` : à la configuration d'une
+ * deuxième tablette, l'administrateur y retrouve SON profil (même identité sur les deux tablettes).
+ */
+async function readLinkedProfiles(gh, treeSha, P, login) {
+  const want = String(login || '').toLowerCase();
+  const dir = want ? await gh.lookup(treeSha, P.prefix + 'entites/user') : null;
+  if (!dir || dir.type !== 'tree') return [];
+  const t = await gh.getTree(dir.sha);
+  const out = [];
+  await mapLimit((t.tree || []).filter(e => e.type === 'blob' && e.path.endsWith('.json')).slice(0, 200), 6, async e => {
+    try {
+      const u = JSON.parse(fromUtf8(await gh.getBlob(e.sha)));
+      if (u && u.id && !u._deleted && u.active !== false && String(u.githubLogin || '').toLowerCase() === want) out.push({ id: u.id, name: u.name || '', username: u.username || '', role: u.role || '' });
+    } catch (err) { if (!(err instanceof SyntaxError)) throw err; }
+  });
+  return out.sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+}
+
+/**
+ * Vérifie l'accès au dépôt d'une équipe avec un jeton. profiles : lire aussi les profils de l'équipe déjà
+ * rattachés au login du jeton (out.profiles ; écran « Rejoindre une équipe »).
+ */
+export async function probeTeam(settings, token, { profiles = false } = {}) {
   if (!token) throw new Error('Jeton d’accès GitHub requis.');
   const t = teamSettings(settings);
   const gh = createGitHub({ token, owner: t.owner, repo: t.repo, apiUrl: t.apiUrl });
@@ -553,7 +563,7 @@ export async function probeTeam(settings, token) {
   let repo;
   try { repo = await gh.repo(); }
   catch (e) { if (e.code === 'not-found') e.message = `Dépôt ${t.owner}/${t.repo} introuvable ou inaccessible avec ce jeton : vérifiez le nom et que le jeton donne accès à ce dépôt (Repository access › Only select repositories).`; throw e; }
-  const out = { team: t, login: user.login, userName: user.name || user.login, repo: { fullName: repo.full_name || `${t.owner}/${t.repo}`, private: repo.private === true, defaultBranch: repo.default_branch || 'main', htmlUrl: repo.html_url || '' }, empty: false, branchMissing: false, initialized: false, equipe: null, member: null, devices: null, users: null };
+  const out = { team: t, login: user.login, userName: user.name || user.login, repo: { fullName: repo.full_name || `${t.owner}/${t.repo}`, private: repo.private === true, defaultBranch: repo.default_branch || 'main', htmlUrl: repo.html_url || '' }, empty: false, branchMissing: false, initialized: false, equipe: null, member: null, devices: null, users: null, profiles: [] };
   const h = await gh.head(t.branch);
   if (h?.empty) { out.empty = true; return out; }
   if (!h) { out.branchMissing = true; return out; }
@@ -563,6 +573,7 @@ export async function probeTeam(settings, token) {
   out.users = cfg.utilisateurs?.users || null;
   out.devices = cfg.appareils?.devices || null;
   out.member = (out.users || []).find(u => String(u.login || '').toLowerCase() === String(user.login).toLowerCase()) || null;
+  if (profiles && out.initialized) out.profiles = await readLinkedProfiles(gh, h.treeSha, dataPaths(t.prefix), user.login);
   return out;
 }
 
@@ -655,12 +666,19 @@ export async function detachDevice(reason = null) {
   emit();
 }
 
-/** Remplace le jeton de l'appareil (jeton expiré ou révoqué) après vérification. */
+/**
+ * Remplace le jeton de l'appareil (jeton expiré ou révoqué) après vérification. Tablette partagée : le jeton est
+ * celui de la tablette ; l'agent connecté n'est rattaché au login du nouveau jeton QUE s'il était déjà rattaché au
+ * login du jeton remplacé (le propriétaire renouvelle son jeton) — un autre agent ne prend jamais le profil
+ * d'équipe du propriétaire du jeton.
+ */
 export async function replaceToken(token) {
   if (!isTeamMode() || !team()) throw new Error('Cet appareil n’est rattaché à aucune équipe.');
   const probe = await probeTeam(team(), token);
+  const previous = String(tokenInfo()?.login || session.githubLogin || '').toLowerCase();
+  const mine = String(store.get('user', session.user.id)?.githubLogin || '').toLowerCase();
   await saveTeamToken(token, probe.login);
-  await linkGithubLogin(session.user.id, probe.login);
+  if (mine && previous && mine === previous) await linkGithubLogin(session.user.id, probe.login);
   syncState.needsLogin = false; syncState.lastError = null; emit();
   return probe;
 }

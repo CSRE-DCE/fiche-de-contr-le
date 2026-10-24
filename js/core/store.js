@@ -9,17 +9,30 @@
  *        chaînée par empreinte SHA-256 à l'entrée précédente : toute suppression ou altération
  *        d'une entrée rompt la chaîne et est détectée par la vérification d'intégrité.
  * - Les suppressions sont logiques (pierre tombale `_deleted`) : rien n'est effacé sans trace.
+ * - Vecteur de versions `_vv` ({ identifiant de tablette: nombre de modifications faites sur cette tablette }),
+ *   incrémenté à chaque écriture locale d'une donnée partagée : l'échange par fichier entre tablettes
+ *   (js/app/exchange.js) sait ainsi si une version reçue est plus ancienne, plus récente ou concurrente.
  */
 import { idb, meta } from './db.js';
 import { encryptJSON, decryptJSON } from './crypto.js';
 import { session } from './session.js';
 import { uuid, nowISO, diff, compactValue, canonicalJSON, sha256Hex, clone } from './util.js';
 
-export const META_FIELDS = ['_rev', '_lv', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy', 'updatedByName', '_conflict'];
-/** Types jamais envoyés au serveur. */
-export const LOCAL_ONLY = new Set(['conflict', 'syncLog', 'localSecret', 'syncBase']);
+export const META_FIELDS = ['_rev', '_lv', '_vv', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy', 'updatedByName', '_conflict'];
+/** Types jamais envoyés au serveur ni à l'autre tablette (éléments propres à l'appareil). */
+export const LOCAL_ONLY = new Set(['conflict', 'syncLog', 'localSecret', 'syncBase', 'exchangeLog', 'heldChange']);
+/** Types lus à la demande, jamais chargés en mémoire : versions de base des échanges par fichier (« xbase »). */
+export const LAZY_TYPES = new Set(['xbase']);
 /** Types sans entrée de journal (le journal lui-même, éléments techniques). */
-const NO_TRAIL = new Set(['trail', 'conflict', 'syncLog', 'localSecret', 'syncBase']);
+const NO_TRAIL = new Set(['trail', 'conflict', 'syncLog', 'localSecret', 'syncBase', 'exchangeLog', 'heldChange']);
+/** Vecteur de versions après une écriture locale (données partagées seulement ; le journal est immuable). */
+function nextVersion(type, vv) {
+  const dev = session.device?.id;
+  if (!dev || LOCAL_ONLY.has(type) || type === 'trail') return vv;
+  const out = { ...(vv && typeof vv === 'object' ? vv : {}) };
+  out[dev] = (Number(out[dev]) || 0) + 1;
+  return out;
+}
 
 export function entityLabel(type, e) {
   if (!e) return '';
@@ -41,6 +54,7 @@ class DataStore {
     this.data.clear();
     const rows = await idb.entries('entities');
     for (const [, v] of rows) {
+      if (LAZY_TYPES.has(v.type)) continue;
       try { const obj = await decryptJSON(session.dek, v.iv, v.ct); this._map(v.type).set(obj.id, obj); }
       catch (e) { console.warn('Entité illisible', v.type, v.id, e); }
     }
@@ -83,6 +97,8 @@ class DataStore {
     if (prev && !changes.length && !opts.force) return Promise.resolve(prev);
     entity.updatedAt = now; entity.updatedBy = u.id || null; entity.updatedByName = u.name || null;
     entity._lv = (prev?._lv || 0) + 1;
+    const vv = nextVersion(type, prev ? prev._vv : entity._vv);
+    if (vv) entity._vv = vv;
     this._map(type).set(entity.id, entity);
     this.emit(type, entity.id);
     const action = opts.action || (prev ? (entity._deleted ? 'delete' : 'update') : 'create');
@@ -114,6 +130,8 @@ class DataStore {
       e._rev = prev?._rev || e._rev || 0;
       if (prev && !diff(prev, e, { ignore: META_FIELDS }).length) continue;
       e.updatedAt = now; e.updatedBy = u.id || null; e.updatedByName = u.name || null; e._lv = (prev?._lv || 0) + 1;
+      const vv = nextVersion(type, prev ? prev._vv : e._vv);
+      if (vv) e._vv = vv;
       this._map(type).set(e.id, e); saved.push(e);
     }
     if (saved.length) this.emit(type, null);
@@ -192,8 +210,9 @@ class DataStore {
    * modifications.
    */
   applyMerged(type, data, { needsPush, baseRev }) {
-    const entity = clone(data);
-    entity._lv = (this.getRaw(type, entity.id)?._lv || 0) + 1;
+    const entity = clone(data), prev = this.getRaw(type, entity.id);
+    entity._lv = (prev?._lv || 0) + 1;
+    if (!entity._vv && prev?._vv) entity._vv = clone(prev._vv);   // la version fusionnée contient la version locale
     this._map(type).set(entity.id, entity);
     this.emit(type, entity.id);
     return this._enqueue(async () => {
@@ -202,6 +221,61 @@ class DataStore {
       return entity;
     });
   }
+  /**
+   * Échange par fichier entre tablettes (js/app/exchange.js) : enregistre en une transaction les versions retenues à
+   * la réception — sans entrée de journal par élément (la réception est tracée une fois ; chaque modification l'a
+   * été sur la tablette d'origine, dont le journal est reçu) —, la file d'envoi (outbox : 'set' = version à envoyer
+   * à l'autre tablette, 'clear' = déjà connue d'elle, 'keep' = inchangée ; data null : file d'envoi seulement) et les
+   * éléments lus à la demande (lazy : [{ type, id, data }], versions de base des échanges).
+   */
+  applyExchange(writes, { lazy = [] } = {}) {
+    const now = nowISO();
+    const prepared = writes.map(({ type, id, data, outbox = 'keep' }) => {
+      if (!data) return { type, id, entity: null, outbox };
+      const prev = this.getRaw(type, data.id);
+      const entity = clone(data);
+      entity._lv = (prev?._lv || 0) + 1;
+      if (prev?._rev !== undefined) entity._rev = prev._rev; else delete entity._rev;
+      this._map(type).set(entity.id, entity);
+      return { type, id: entity.id, entity, outbox };
+    });
+    if (prepared.some(x => x.entity)) this.emit('*', null);
+    return this._enqueue(async () => {
+      const ops = [];
+      for (const { type, id, entity, outbox } of prepared) {
+        if (entity) ops.push(await this._entityOp(type, entity));
+        if (outbox === 'set') ops.push({ store: 'outbox', key: `${type}:${id}`, value: { type, id, baseRev: entity?._rev || 0, at: now } });
+        else if (outbox === 'clear') ops.push({ store: 'outbox', key: `${type}:${id}`, value: undefined });
+      }
+      for (const { type, id, data } of lazy) ops.push(await this._entityOp(type, { ...data, id }));
+      if (ops.length) await idb.batch(ops);
+    });
+  }
+  /**
+   * Après un envoi à l'autre tablette : retire de la file d'envoi les entrées [{ key, at }] qui n'ont pas changé depuis
+   * la préparation du fichier (une donnée modifiée entre-temps reste à envoyer). Retourne le nombre d'entrées retirées.
+   */
+  dropOutbox(entries) {
+    return this._enqueue(async () => {
+      const cur = await idb.getMany('outbox', entries.map(e => e.key));
+      const ops = entries.filter((e, i) => cur[i] && cur[i].at === e.at).map(e => ({ store: 'outbox', key: e.key, value: undefined }));
+      if (ops.length) await idb.batch(ops);
+      return ops.length;
+    });
+  }
+  /** Élément d'un type lu à la demande (LAZY_TYPES), déchiffré ; null s'il est absent ou illisible. */
+  async getLazy(type, id) { return (await this.getLazyMany(type, [id])).get(id) || null; }
+  /** Plusieurs éléments d'un type lu à la demande : Map(id → élément) (absents ou illisibles omis). */
+  async getLazyMany(type, ids) {
+    const rows = await idb.getMany('entities', ids.map(id => `${type}:${id}`));
+    const out = new Map();
+    await Promise.all(rows.map(async (v, i) => {
+      if (!v) return;
+      try { out.set(ids[i], await decryptJSON(session.dek, v.iv, v.ct)); } catch (e) { /* illisible : ignoré */ }
+    }));
+    return out;
+  }
+
   /** Met à jour uniquement les métadonnées de synchronisation (révision serveur). */
   setRev(type, id, rev) {
     const e = this.getRaw(type, id); if (!e) return Promise.resolve();

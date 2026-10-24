@@ -2,22 +2,31 @@
  * des tournées (modules purs) : structure et feuilles par type de tournée, conditions par type et sur un champ
  * d'objet, échelle C / P / NC / N/A, grille effective (expansion par station, critères partagés comptés une fois),
  * pré-remplissage et alertes par station, synthèse par feuille / station / tournée, logique des stations,
- * traçabilité des fiches d'évaluation (table d'en-tête de grid-ct-2026.js), référentiel et programmes 2026. */
+ * traçabilité des fiches d'évaluation (table d'en-tête de grid-ct-2026.js), référentiel et programmes 2026, turbidité en
+ * NTU (version 1.1) et mise à niveau des grilles par défaut enregistrées (replaceGridUnits, upgradeStoredGrid) ;
+ * DOUBLONS ET REDONDANCES (version 1.2, détection automatique) : libellés identiques entre critères (liste blanche
+ * commentée), même information demandée sous deux libellés proches ou par la même source (sauf groupes de remplissage
+ * déclarés dans js/domain/links.js et liste blanche commentée), aides répétées ou qui débordent de leur rôle (« Inclut :
+ * … »), critères de synthèse hors note (noScore), numéros retirés jamais réutilisés, révisions tracées, zones de texte
+ * libres distinctes. */
 import { test, assert, eq, deepEq } from './harness.js';
 import { GRID_CT_2026, INSTRUMENTS_ESO } from '../../js/domain/grid-ct-2026.js';
-import { DEFAULT_GRIDS, CT_GRID_ID } from '../../js/domain/default-grids.js';
+import { DEFAULT_GRIDS, CT_GRID_ID, GRID_GENERAL, DEFAULT_GRID_IDS, upToDateGrid } from '../../js/domain/default-grids.js';
 import { RESPONSES, formatValue, responseText, isEmptyValue, itemInput, fieldShown, defaultCriticality, BILAN_OPTIONS } from '../../js/domain/model.js';
 import {
   validateGrid, allItems, itemIndex, isAnswered, validateResponses, progress, visibleStructure, sheetsOf, sheetProgress, stationProgress,
   itemsOfSheet, normalizeCompartments, prefillResponses, sectionHeaders, expandGrid, groupSheets, sheetStoreKey, headerTitle, headerOf,
   inferAuditType, auditCompartments, typeCompartments, withCompartments, evalCondition, conditionErrors, parseItemId, stationKeyOf, makeStation,
-  stationEntries, isEnteredResponse, suggestedValue, durationText, needsJustification
+  stationEntries, isEnteredResponse, suggestedValue, durationText, needsJustification,
+  replaceGridUnits, upgradeStoredGrid, compareVersions, UNIT_REPLACEMENTS
 } from '../../js/domain/grids.js';
 import { computeAlerts, calibrationStatus, xyDistance } from '../../js/domain/rules.js';
 import { sheetSummary, stationSummary, auditSummary, recurringDeviations } from '../../js/domain/summary.js';
 import { compareAudits } from '../../js/domain/compare.js';
 import { parseInputValue } from '../../js/domain/normalize.js';
-import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN } from '../../js/domain/seed.js';
+import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN, baseReferential } from '../../js/domain/seed.js';
+import { canonicalJSON } from '../../js/core/util.js';
+import { LINK_GROUPS, isVirtualSource } from '../../js/domain/links.js';
 
 const G = GRID_CT_2026;
 const IDX = itemIndex(G);
@@ -76,24 +85,24 @@ test('CT-2026 : critères (identifiants, codes, échelle C / P / NC / N/A, nombr
   eq(new Set(items.map(i => i.id)).size, items.length, 'identifiants uniques');
   eq(new Set(items.map(i => i.code)).size, items.length, 'codes uniques');
   assert(items.every(i => i.id === `it-F${i.sheet}-${i.no}` && i.code === `F${i.sheet}.${i.no}`), 'id = it-F<feuille>-<no>, code = F<feuille>.<no>');
-  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 30, 13, 14, 17, 13]);
+  // 1.2 : F8.A3 réuni à F8.A2 (16 critères en F8, numéro A3 retiré)
+  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 30, 13, 14, 16, 13]);
   deepEq(G.sections.filter(s => s.sheet === 2).map(s => s.items.length), [13, 8, 5, 6, 8, 4, 3]);
   const conf = items.filter(i => i.kind === 'conformity');
   assert(conf.every(i => i.responses.join() === 'C,P,NC,NA' && i.justifyOn.join() === 'P,NC'), 'échelle C / P / NC / N/A partout, observation pour P et NC');
   deepEq(conf.filter(i => !i.required).map(i => i.id), ['it-F7-14']);
-  // Libellés sans doublon dans une même feuille (seuls « Heure début » / « Heure fin » des sections 1 et 5 de la maquette F2)
-  const MAQUETTE = new Set(['F2:Heure début', 'F2:Heure fin']);
+  // Libellés sans doublon dans une même feuille, sans exception (1.2 : « Heure début / fin » de F2 distingués)
   for (const sh of G.sheets) {
     const seen = new Map();
     for (const it of itemsOfSheet(G, sh.no)) {
       const k = it.label.toLocaleLowerCase('fr');
-      assert(!seen.has(k) || MAQUETTE.has(`F${sh.no}:${it.label}`), `libellé en double dans F${sh.no} : ${it.label}`);
+      assert(!seen.has(k), `libellé en double dans F${sh.no} : ${it.label}`);
       seen.set(k, it.id);
     }
   }
-  // Critères de tournée dans les feuilles station
+  // Critères de tournée dans les feuilles station (1.2 : F4.14 réserve de flacons, F4.16 transport des flacons vides)
   const shared = items.filter(i => i.scope === 'tournee').map(i => i.code);
-  deepEq(shared, ['F4.2', 'F4.18', 'F4.19', 'F4.20', 'F4.21', 'F4.22', 'F4.23', 'F4.24', 'F4.25', 'F5.11', 'F5.12', 'F5.14', 'F5.15', 'F5.17', 'F5.18', 'F5.29', 'F5.30']);
+  deepEq(shared, ['F4.2', 'F4.14', 'F4.16', 'F4.18', 'F4.19', 'F4.20', 'F4.21', 'F4.22', 'F4.23', 'F4.24', 'F4.25', 'F5.11', 'F5.12', 'F5.14', 'F5.15', 'F5.17', 'F5.18', 'F5.29', 'F5.30']);
   // Libellés et numérotation des ajouts (SPEC2 § E)
   eq(item('it-F1-R2').label, 'Heure d’arrivée sur site'); eq(item('it-F1-R8').label, 'Heure de départ du site');
   eq(item('it-F2-1.11').prefill, 'audit.kind'); eq(item('it-F2-5.6').prefill, 'tournee.stationCount');
@@ -102,7 +111,7 @@ test('CT-2026 : critères (identifiants, codes, échelle C / P / NC / N/A, nombr
   eq(item('it-F4-29').input.unit, 'mV'); eq(item('it-F5-28').domain, 'transport'); eq(item('it-F2-7.3').domain, 'transport');
   // Les numéros des maquettes restent corrigés
   eq(item('it-F3-17').short, 'REP_ME'); eq(item('it-F4-17').label, 'Rinçage des flacons'); eq(item('it-F9-13').short, 'A13');
-  deepEq(itemsOfSheet(G, 8).map(i => i.short), ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7']);
+  deepEq(itemsOfSheet(G, 8).map(i => i.short), ['A1', 'A2', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7']);
 });
 
 /* ---------- Feuilles par type de tournée ---------- */
@@ -120,7 +129,7 @@ test('feuilles affichées par type de tournée et numéro « Feuille X / N »', 
   deepEq(nos(sheetsOf(G, {}, { compartments: ['organisation', 'eso'] })), [1, 2, 3, 10, 4, 5], 'type déduit des compartiments');
   // Nombre de critères visibles par type
   const counts = sheets => sheets.map(s => s.items.length);
-  deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 17, 13]);
+  deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 16, 13]);
   deepEq(counts(ce), [8, 47, 23, 28, 29]);
   deepEq(counts(eso), [7, 46, 25, 6, 30, 25], 'F4.11 masqué en eaux souterraines (couvert par F4.30)');
   // Variantes (titres, onglets, appareils) et encadrés selon le type
@@ -245,11 +254,11 @@ test('expansion à trois stations : critères partagés comptés une fois, avanc
   eq(new Set(own.map(i => i.id)).size, own.length, 'identifiants propres uniques après expansion');
   const sharedShown = shown.filter(i => i.shared);
   const sharedIds = new Set(sharedShown.map(i => i.id));
-  eq(sharedIds.size, 17); eq(sharedShown.length, 17 * 3, 'chaque critère partagé affiché dans chaque station');
+  eq(sharedIds.size, 19); eq(sharedShown.length, 19 * 3, 'chaque critère partagé affiché dans chaque station');
   const all = allItems(E);
   eq(new Set(all.map(i => i.id)).size, all.length, 'allItems : chaque critère une fois');
   const base = progress(G, {}, ctx).total;
-  const tournee = 46 + 17, perStation = base - tournee;
+  const tournee = 46 + 19, perStation = base - tournee;
   eq(progress(E, {}, ctx).total, tournee + 3 * perStation, 'critères partagés comptés une fois');
   const sheets = sheetsOf(E, {}, ctx);
   deepEq(sheets.map(s => s.instanceKey).slice(0, 7), ['1@BSS002PANK', '2', '3@BSS002PANK', '10@BSS002PANK', '4@BSS002PANK', '5@BSS002PANK', '1@BSS002PAAX']);
@@ -264,7 +273,7 @@ test('expansion à trois stations : critères partagés comptés une fois, avanc
   const resp = { 'it-F4-18': { status: 'C' }, 'it-F4-5@BSS002PAAX': { status: 'NC', comment: 'sonde HS' }, 'it-F5-11': { status: 'P', comment: 'glacière usée' } };
   const sp = sheetProgress(E, resp, ctx);
   eq(sp['4@BSS002PANK'].answered, 1); eq(sp['4@BSS002PAAX'].answered, 2); eq(sp['4@BSS002NZDT'].answered, 1);
-  eq(sp['4@BSS002PAAX'].nc, 1); eq(sp['5@BSS002PANK'].p, 1); eq(sp['4@BSS002PANK'].shared, 9);
+  eq(sp['4@BSS002PAAX'].nc, 1); eq(sp['5@BSS002PANK'].p, 1); eq(sp['4@BSS002PANK'].shared, 11);
   eq(progress(E, resp, ctx).answered, 3);
   const stp = stationProgress(E, resp, ctx);
   eq(stp.tournee.total, tournee); eq(stp.tournee.answered, 2); eq(stp.stations.BSS002PAAX.answered, 1); eq(stp.stations.BSS002PAAX.nc, 1);
@@ -388,8 +397,8 @@ test('synthèse : décomptes C / P / NC / N/A par feuille, par station et pour l
   const s = sheetSummary({ audit });
   deepEq(s.map(x => x.instanceKey), ['1@09271503', '2', '3@09271503', '4@09271503', '5@09271503', '1@09160201', '3@09160201', '4@09160201', '5@09160201']);
   const f4a = s.find(x => x.instanceKey === '4@09271503'), f4b = s.find(x => x.instanceKey === '4@09160201');
-  deepEq([f4a.C, f4a.P, f4a.NC, f4a.NA, f4a.sharedCounted, f4a.sharedTotal], [2, 0, 1, 0, 9, 9], 'S1 : critères partagés comptés');
-  deepEq([f4b.C, f4b.P, f4b.NC, f4b.NA, f4b.sharedCounted, f4b.sharedTotal], [0, 1, 0, 1, 0, 9], 'S2 : critères partagés non recomptés');
+  deepEq([f4a.C, f4a.P, f4a.NC, f4a.NA, f4a.sharedCounted, f4a.sharedTotal], [2, 0, 1, 0, 11, 11], 'S1 : critères partagés comptés');
+  deepEq([f4b.C, f4b.P, f4b.NC, f4b.NA, f4b.sharedCounted, f4b.sharedTotal], [0, 1, 0, 1, 0, 11], 'S2 : critères partagés non recomptés');
   eq(f4b.hint, '1 NC, 1 P sur cette feuille', 'suggestion sur la feuille affichée (NC partagé compris)');
   const f3b = s.find(x => x.instanceKey === '3@09160201');
   eq(f3b.conclusion, 'P'); eq(f3b.conclusionLabel, 'Perfectible'); eq(f3b.comments, 'à revoir');
@@ -408,7 +417,8 @@ test('synthèse : décomptes C / P / NC / N/A par feuille, par station et pour l
   deepEq(sum.pItems.map(x => [x.itemId, x.stationKey]), [['it-F2-6.2', null], ['it-F4-5@09160201', '09160201']]);
   deepEq(sum.ncItems.map(x => x.code), ['F4.2', 'F3.19·S2']);
   eq(sum.preconisations, 'Vérifier le pont amont'); eq(sum.comment, 'Bonne tournée');
-  assert(!('score' in sum), 'synthèse sans score');
+  assert(!('score' in sum), 'note sur 20 dans « grade » (js/domain/grading.js), jamais « score »');
+  eq(sum.grade.text, sum.stations.global.grade.text, 'note de la tournée = note « ensemble de la tournée »');
   assert(sum.vigilance.some(v => /perfectible/.test(v)), 'P en vigilance');
   eq(sum.stations.stations.length, 2);
   eq(sheetSummary({ audit: { gridSnapshot: DEFAULT_GRIDS[1], responses: {} } }).length, 0, 'grille par sections');
@@ -476,7 +486,7 @@ test('traçabilité : chaque point des fiches cours d’eau et eaux souterraines
   for (const id of added) assert(covered.has(id), `critère ajouté sans point source : ${id}`);
   // Les fusions décrites par l'avenant figurent dans l'aide des critères existants
   for (const id of ['it-F2-2.1', 'it-F2-4.4', 'it-F4-2', 'it-F4-3', 'it-F4-11', 'it-F4-12', 'it-F4-13', 'it-F4-17', 'it-F5-1', 'it-F5-2', 'it-F5-3', 'it-F5-5', 'it-F5-8', 'it-F5-9', 'it-F5-11', 'it-F5-14', 'it-F5-15', 'it-F4-30']) assert(/^Inclut : /.test(item(id).help || ''), `fusion ${id}`);
-  for (const id of ['it-F3-7', 'it-F3-8']) assert(/27–28/.test(item(id).help), `renvoi ${id}`);
+  // Renvois entre critères voisins (« voir aussi F3.27 et F3.28 ») : dans les attendus (tests/unit/attendus.test.js).
   assert(/π × r² × hauteur d’eau/.test(item('it-F10-5').help));
 });
 
@@ -502,6 +512,9 @@ test('référentiel : eaux souterraines (BSS), stations cours d’eau, biologie 
   assert(ath.types.includes('bio')); deepEq(ath.bioLists, ['BIO_CE', 'BIO_FISH', 'BIO_PHYTO']);
   assert(BIO_ALL.every(k => ath.compartments.includes(k)), 'ATHANASE : tous les compartiments biologiques');
   eq(ath.riverName, 'Approuague'); eq(ath.photos.RD.src, 'img/stations/09271503/RD.jpg');
+  // Même pression écrite dans deux listes au seul accent près (BIO « illegal », Chimie « illégal ») : une valeur, accentuée
+  eq(ref.site.find(s => s.code === '09180209').pressions, 'Orpaillage illégal, barrage, route');
+  assert(ref.site.every(s => ref.site.filter(x => x.code === s.code).length === 1), 'une station par code');
   deepEq(bioCompartments(['BIO_FISH']), ['organisation', 'poissons']);
   // Programme biologique
   const prog = bioProgramme(DATA);
@@ -516,4 +529,266 @@ test('référentiel : eaux souterraines (BSS), stations cours d’eau, biologie 
   assert(cep.every(p => ref.site.some(s => s.id === p.siteId) && ref.campaign.some(c => c.id === p.campaignId)), 'sites et campagnes existants');
   eq(new Set(cep.map(p => p.id)).size, cep.length);
   assert(ref.provider.some(p => p.id === 'prov-TL1') && ref.provider.some(p => p.id === 'prov-NBC'));
+});
+
+/* ---------- Turbidité en NTU (grille CT-2026 1.1) et mise à niveau des grilles par défaut ---------- */
+/** Copie d'une grille par défaut « ancienne » : unités de turbidité repassées en FNU (et version donnée). */
+const withFNU = (grid, version = grid.version) => {
+  const g = structuredClone(grid); g.version = version;
+  const walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'unit' && x === 'NTU') v[k] = 'FNU'; else walk(x); } };
+  walk(g.sections);
+  return g;
+};
+const turbUnits = g => { const it = itemIndex(g).get('it-F4-9'); return it ? it.input.fields.map(f => f.unit) : []; };
+
+test('turbidité : NTU dans les grilles par défaut (CT-2026 depuis 1.1, GR-PREL-EAU), unité NTU au référentiel, FNU / NFU conservées', () => {
+  const text = JSON.stringify(DEFAULT_GRIDS);
+  assert(!/"(FNU|NFU)"/.test(text), 'aucune unité FNU / NFU dans les grilles du code');
+  deepEq(turbUnits(G), ['NTU', 'NTU', 'NTU'], 'F4.9 : trois mesures en NTU');
+  eq(itemIndex(GRID_GENERAL).get('it-V08').unit, 'NTU', 'V08 en NTU');
+  eq(G.id, 'grid-ct-2026-v1', 'même identifiant'); eq(G.version, '1.2', 'version 1.2 (NTU depuis 1.1)'); eq(GRID_GENERAL.id, 'grid-prel-eau-general-v1');
+  eq(formatValue(item('it-F4-9'), { t1: 3.1, t2: 3.3, t3: 3.2 }), 'Mesure 1 : 3,1 NTU · Mesure 2 : 3,3 NTU · Mesure 3 : 3,2 NTU');
+  eq(formatValue(itemIndex(GRID_GENERAL).get('it-V08'), 2.5), '2,5 NTU');
+  eq(formatValue(item('it-F4-9'), { t1: 3.1 }, { unit: false }), 'Mesure 1 : 3,1', 'sans l’unité de la grille');
+  eq(formatValue(item('it-F9-5'), { volume: 500, unite: 'mL' }, { unit: false }), 'Volume : 500 mL', 'unité choisie à la saisie conservée');
+  const units = baseReferential().unit;
+  deepEq(units.find(u => u.id === 'unit-NTU'), { id: 'unit-NTU', code: 'NTU', symbol: 'NTU', label: 'NTU (Turbidité)', quantity: 'Turbidité' });
+  assert(units.some(u => u.id === 'unit-FNU') && units.some(u => u.id === 'unit-NFU'), 'FNU et NFU conservées (tournées antérieures)');
+  deepEq(UNIT_REPLACEMENTS, { FNU: 'NTU', NFU: 'NTU' });
+});
+
+test('replaceGridUnits : pur, déterministe, idempotent ; ni unitKey, ni libellés, ni réponses', () => {
+  const old = withFNU(G);
+  const before = canonicalJSON(old);
+  const r = replaceGridUnits(old);
+  eq(r.count, 3, 'trois champs de F4.9'); deepEq(turbUnits(r.grid), ['NTU', 'NTU', 'NTU']);
+  eq(canonicalJSON(old), before, 'entrée non modifiée');
+  eq(canonicalJSON(replaceGridUnits(old).grid), canonicalJSON(r.grid), 'déterministe');
+  const again = replaceGridUnits(r.grid);
+  eq(again.count, 0); assert(again.grid === r.grid, 'idempotent : même objet');
+  eq(canonicalJSON(r.grid), canonicalJSON({ ...old, sections: r.grid.sections }), 'seules les sections changent');
+  eq(itemIndex(r.grid).get('it-F9-5').input.fields.find(f => f.unitKey)?.unitKey, itemIndex(G).get('it-F9-5').input.fields.find(f => f.unitKey)?.unitKey, 'unitKey inchangé');
+  eq(item('it-F4-9').label, itemIndex(r.grid).get('it-F4-9').label);
+  const g2 = replaceGridUnits(withFNU(GRID_GENERAL));
+  eq(g2.count, 1); eq(itemIndex(g2.grid).get('it-V08').unit, 'NTU');
+  const odd = { id: 'x', sections: [{ items: [{ id: 'a', unit: 'NFU', label: 'FNU' }] }] };
+  deepEq(replaceGridUnits(odd).grid.sections[0].items[0], { id: 'a', unit: 'NTU', label: 'FNU' }, 'NFU aussi ; libellé intact');
+  const bare = { id: 'y', name: 'sans sections' };
+  assert(replaceGridUnits(bare).grid === bare && replaceGridUnits(null).grid === null, 'grille sans unité : telle quelle');
+});
+
+test('numéros de version : comparaison numérique', () => {
+  assert(compareVersions('1.1', '1.0') > 0 && compareVersions('1.10', '1.9') > 0 && compareVersions('1.0', '1.0') === 0 && compareVersions('1', '1.0') === 0);
+  assert(compareVersions('1.0', '1.1') < 0 && compareVersions('2.0', '1.12') > 0 && compareVersions('1.0.1', '1.0') > 0);
+});
+
+test('mise à niveau d’une grille par défaut enregistrée : nouvelle version ⇒ contenu du code ; même version ⇒ unités ; jamais de retour', () => {
+  const meta = { createdAt: '2026-10-10T08:00:00.000Z', createdBy: 'u1', updatedAt: '2026-10-11T08:00:00.000Z', _vv: { A: 3 }, _lv: 3 };
+  const stored = { ...withFNU(G, '1.0'), ...meta };
+  const r = upgradeStoredGrid(stored, G);
+  assert(r.changed && r.replaced, 'version 1.0 → 1.2'); deepEq([r.from, r.to], ['1.0', '1.2']);
+  const { createdAt, createdBy, updatedAt, _vv, _lv, ...content } = r.grid;
+  eq(canonicalJSON(content), canonicalJSON(G), 'contenu = grille du code');
+  deepEq({ createdAt, createdBy, updatedAt, _vv, _lv }, meta, 'métadonnées d’enregistrement conservées');
+  deepEq(turbUnits(r.grid), ['NTU', 'NTU', 'NTU']);
+  eq(upgradeStoredGrid(r.grid, G).changed, false, 'idempotent');
+  eq(canonicalJSON(upgradeStoredGrid({ ...withFNU(G, '1.0'), ...meta }, G).grid), canonicalJSON(r.grid), 'déterministe (deux tablettes : même grille)');
+  assert(!stored.version || stored.version === '1.0', 'entrée non modifiée');
+  // Grille archivée par un administrateur : reste archivée (avec sa date), contenu mis à niveau.
+  const arch = upgradeStoredGrid({ ...withFNU(G, '1.0'), status: 'archivee', archivedAt: '2026-10-12T00:00:00.000Z' }, G).grid;
+  deepEq([arch.status, arch.archivedAt, arch.version], ['archivee', '2026-10-12T00:00:00.000Z', '1.2']);
+  // Même version (grille générale non renumérotée) : unités seules.
+  const gen = upgradeStoredGrid({ ...withFNU(GRID_GENERAL), ...meta }, GRID_GENERAL);
+  assert(gen.changed && !gen.replaced && gen.units === 1); eq(gen.grid.updatedAt, meta.updatedAt);
+  // Version enregistrée plus récente (reçue d'une tablette mise à jour) : jamais de retour à la version du code.
+  const newer = { ...structuredClone(G), version: '1.3', name: 'CT-2026 (1.3)' };
+  const n = upgradeStoredGrid(newer, G);
+  assert(!n.changed && n.grid === newer, 'pas de retour en arrière');
+  // Grille supprimée, autre identifiant : rien.
+  assert(!upgradeStoredGrid({ ...withFNU(G, '1.0'), _deleted: true }, G).changed, 'grille supprimée');
+  assert(!upgradeStoredGrid({ ...withFNU(G, '1.0'), id: 'autre' }, G).changed, 'autre identifiant');
+});
+
+test('grille à jour (affichage, fiches vierges, nouvelle tournée) : grilles par défaut seulement, mémorisée', () => {
+  deepEq([...DEFAULT_GRID_IDS], DEFAULT_GRIDS.map(g => g.id));
+  const old = withFNU(G, '1.0');
+  const up = upToDateGrid(old);
+  eq(up.version, '1.2'); deepEq(turbUnits(up), ['NTU', 'NTU', 'NTU']);
+  assert(upToDateGrid(old) === up, 'mémorisée par objet');
+  assert(upToDateGrid(G) === G, 'grille déjà à jour : même objet');
+  const own = { ...withFNU(G, '1.0'), id: 'grid-copie-oeg' };
+  assert(upToDateGrid(own) === own, 'grille créée par l’OEG : jamais modifiée');
+  assert(upToDateGrid(null) === null);
+});
+
+test('comparaison de tournées : turbidité FNU puis NTU, mêmes valeurs ⇒ identique ; chaque tournée garde son unité', () => {
+  const v = { t1: 3.1, t2: 3.3, t3: 3.2 };
+  const a = { gridSnapshot: withFNU(G, '1.0'), stations: [{ key: '09271503', siteId: ATHANASE.id }], responses: { 'it-F4-9@09271503': { status: 'C', value: v } } };
+  const b = { gridSnapshot: G, stations: [{ key: '09271503', siteId: ATHANASE.id }], responses: { 'it-F4-9@09271503': { status: 'C', value: v } } };
+  const row = compareAudits(a, b).rows.find(x => x.code === 'F4.9');
+  eq(row.change, 'identique');
+  assert(/3,1 FNU/.test(row.before) && /3,1 NTU/.test(row.after), 'avant / après : unité de chaque tournée');
+  const c = { ...b, responses: { 'it-F4-9@09271503': { status: 'C', value: { ...v, t1: 4 } } } };
+  eq(compareAudits(a, c).rows.find(x => x.code === 'F4.9').change, 'modifie', 'valeur différente : modifiée');
+});
+
+/* ---------- Doublons et redondances (version 1.2) : détection automatique ---------- */
+/** Clé de comparaison d'un texte : minuscules, sans accents, apostrophes et ponctuation unifiées. */
+const fold = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9&']+/g, ' ').trim();
+const STOP = new Set('de du des la le les et au aux en par pour sur dans un une ou si avec sans est sont in situ'.split(' '));
+/** Mots significatifs d'un libellé (pluriel ramené au singulier). */
+const words = t => new Set(fold(t).replace(/'/g, ' ').split(' ').filter(w => w.length > 2 && !STOP.has(w)).map(w => w.replace(/[sx]$/, '')));
+const subsetOf = (a, b) => a.size > 0 && [...a].every(w => b.has(w));
+const codeOf = id => item(id).code;
+
+/** Libellés portés par plusieurs critères, VOULUS : un critère par protocole ou par portée (le code F6.1… les distingue
+ * dans la synthèse, les PDF et les attendus). Toute autre répétition est un doublon à corriger. */
+const SAME_LABEL_OK = [
+  ['F6.1', 'F7.1', 'F8.A1', 'F9.1'],   // « Agent prestataire & fonction » : un agent par protocole biologique
+  ['F6.2', 'F7.2', 'F8.A9', 'F9.2'],   // « Fiche terrain complétée » : une fiche terrain par protocole
+  ['F6.7', 'F7.8'],                    // « Autre matériel utilisé » : PEZADA / IDGF
+  ['F6.8', 'F7.9'],                    // « Récipients de stockage » : invertébrés / diatomées
+  ['F6.9', 'F7.10'],                   // « Nature du produit de conservation » : invertébrés / diatomées
+  ['F6.10', 'F7.11', 'F9.10'],         // « Traçabilité des flacons » : un échantillon par protocole
+  ['F6.11', 'F7.12', 'F9.12'],         // « Respect des normes de prélèvement » : protocole PEZADA / IDGF / phytoplancton
+  ['F1.R6', 'F2.1.8'],                 // « Niveau d’eau » : de la station (repères F1) / de la journée (F2) — groupe « niveau » de links.js
+  ['F2.1.9', 'F3.7']                   // « Conditions météo » : de la journée (F2, relevée) / notée par le préleveur (F3, cotée)
+];
+/** Paires « même information » voulues hors des groupes de remplissage de js/domain/links.js (commentées). */
+const SAME_INFO_OK = [
+  ['F1.R2', 'F2.1.5'],   // même heure proposée à la création (audit.time) : arrivée sur la 1re station / début du contrôle
+  ['F3.4', 'F3.18'],     // même code de station (site.code) : SANDRE (cours d'eau, biologie) / BSS (eaux souterraines), jamais affichés ensemble
+  ['F2.2.5', 'F2.2.6'],  // deux catégories d'agents non spécialisés (formés / non formés), comptées séparément
+  ['F6.3', 'F7.3'],      // points distincts : limite amont PEZADA / point IDGF
+  ['F6.4', 'F7.3']       // points distincts : limite aval PEZADA / point IDGF
+];
+const pairKey = (a, b) => [a, b].sort().join('|');
+
+/** Graphe (non orienté) des groupes de champs liés de js/domain/links.js : deux critères reliés ⇒ information reprise
+ * automatiquement ou proposée, jamais saisie deux fois. Une source VIRTUELLE (fiche de la station, préleveurs, appareils
+ * de mesure…) alimente des informations différentes (bassin, commune, code…) : elle ne relie pas ses cibles entre elles. */
+function linkComponents() {
+  const adj = new Map();
+  const edge = (a, b) => { for (const [x, y] of [[a, b], [b, a]]) { if (!adj.has(x)) adj.set(x, new Set()); adj.get(x).add(y); } };
+  for (const g of LINK_GROUPS) for (const to of g.to) edge(isVirtualSource(g.from) ? `${g.from}→${to}` : g.from, to);
+  const comp = new Map();
+  for (const start of adj.keys()) {
+    if (comp.has(start)) continue;
+    const stack = [start];
+    while (stack.length) { const x = stack.pop(); if (comp.has(x)) continue; comp.set(x, start); stack.push(...adj.get(x)); }
+  }
+  return (a, b) => comp.has(a) && comp.get(a) === comp.get(b);
+}
+
+test('doublons : libellés identiques entre critères — seulement ceux de la liste blanche commentée', () => {
+  const groups = new Map();
+  for (const it of allItems(G)) { const k = fold(it.label); groups.set(k, [...(groups.get(k) || []), it.code]); }
+  const found = [...groups.values()].filter(g => g.length > 1).map(g => g.join(' = '));
+  deepEq(found.sort(), SAME_LABEL_OK.map(g => g.join(' = ')).sort(), 'libellés en double (hors liste blanche : à préciser)');
+  // Les quatre heures de F2 ne se confondent plus : contrôle OEG (section 1) / tournée du prestataire (section 5)
+  deepEq(['it-F2-1.5', 'it-F2-1.6', 'it-F2-5.2', 'it-F2-5.3'].map(id => item(id).label),
+    ['Début du contrôle', 'Fin du contrôle', 'Début de tournée (prévu au planning)', 'Fin de tournée (prévue)']);
+  // Les maquettes gardent leur « Référence courte »
+  deepEq(['it-F2-1.5', 'it-F2-5.2'].map(id => item(id).short), ['Hdébut', 'Hdébut']);
+});
+
+test('doublons : même information demandée deux fois (source, liste de choix, libellés proches) — groupes liés ou liste blanche', () => {
+  const linked = linkComponents();
+  const items = allItems(G);
+  const ok = new Set([...SAME_INFO_OK.map(([a, b]) => pairKey(a, b)), ...SAME_LABEL_OK.flatMap(g => g.flatMap((a, i) => g.slice(i + 1).map(b => pairKey(a, b))))]);
+  const generic = new Set(['Oui|Non', 'Oui|Non|Partielle', 'Oui|Non|Sans objet', 'Oui|Non|Partiellement'].map(fold)); // réponses génériques
+  // Type de valeur demandée (les zones de texte libre, trop générales, sont exclues de la comparaison des libellés)
+  const kindOf = it => { const inp = itemInput(it); if (!inp) return null; if (inp.type === 'fields') return inp.gps ? 'xy' : null; return ['text', 'longtext'].includes(inp.type) ? null : inp.type; };
+  const issues = [];
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const a = items[i], b = items[j];
+    const why = [];
+    if (a.prefill && a.prefill === b.prefill) why.push(`même source « ${a.prefill} »`);
+    const oa = itemInput(a)?.type === 'select' ? fold((itemInput(a).options || []).join('|')) : '', ob = itemInput(b)?.type === 'select' ? fold((itemInput(b).options || []).join('|')) : '';
+    if (oa && oa === ob && !generic.has(oa)) why.push('même liste de choix');
+    const ka = kindOf(a);
+    if (ka && ka === kindOf(b)) { const wa = words(a.label), wb = words(b.label); if (subsetOf(wa, wb) || subsetOf(wb, wa)) why.push(`libellés proches (${ka})`); }
+    if (why.length && !linked(a.id, b.id) && !ok.has(pairKey(a.code, b.code))) issues.push(`${a.code} « ${a.label} » / ${b.code} « ${b.label} » : ${why.join(', ')}`);
+  }
+  deepEq(issues, [], 'information demandée deux fois sans groupe de remplissage (links.js) ni justification');
+  // Contrôle du contrôle : un nouveau critère « Météo » ou une nouvelle date de tournée serait signalé.
+  const probe = { id: 'it-F5-99', code: 'F5.99', label: 'Date de la tournée', kind: 'date' };
+  assert(!linked(probe.id, 'it-F2-1.4') && subsetOf(words('Date'), words(probe.label)), 'nouvelle date détectée');
+  // Codes SANDRE / BSS : jamais affichés ensemble
+  for (const t of ['bio', 'ce', 'eso']) { const v = visibleIds(G, ctxOf(t)); assert(!(v.has('it-F3-4') && v.has('it-F3-18')), `${t} : un seul code de station`); }
+});
+
+test('doublons : aides — aucune répétée, limitées aux points des fiches inclus (« Inclut : … ») et à leur origine', () => {
+  const items = allItems(G).filter(i => i.help);
+  const seen = new Map();
+  for (const it of items) { const k = fold(it.help); assert(!seen.has(k), `aide identique : ${it.code} et ${seen.get(k)}`); seen.set(k, it.code); }
+  // L'attendu (data/attendus-ct-2026.json, même fenêtre « Aide et attendu ») dit ce que le critère juge et renvoie aux
+  // critères voisins : l'aide ne le répète pas. Autres aides, justifiées :
+  const OTHER = new Map([
+    ['F3.20', 'origine du critère (fiche cours d’eau)'],
+    ['F10.5', 'formule du volume à purger, exigée par la table de traçabilité ([ESO] Volume piézomètre → it-F10-5 (aide))']
+  ]);
+  deepEq(items.filter(i => !/^Inclut : /.test(i.help)).map(i => i.code).sort(), [...OTHER.keys()].sort(), 'aides hors « Inclut : … »');
+  // F4.17 : flacons SANS réactif (les flacons avec réactif sont jugés en F4.13 ; plus de contradiction sur le rinçage)
+  assert(/sans réactif/.test(item('it-F4-17').help), 'F4.17 : flacons sans réactif');
+  assert(!/rin[cç]/i.test(item('it-F4-13').help), 'F4.13 : pas de consigne de rinçage dans l’aide');
+  // Tout code de critère cité dans une aide existe
+  const codes = new Set(allItems(G).map(i => i.code));
+  for (const it of items) for (const m of it.help.matchAll(/\bF\d+\.[0-9A-Z]+(?:\.\d+)?/g)) assert(codes.has(m[0]), `${it.code} : renvoi vers ${m[0]} inexistant`);
+});
+
+test('doublons : critères de synthèse hors note (noScore) et critères communs à la tournée (un constat, une cote)', () => {
+  const syn = allItems(G).filter(i => i.noScore);
+  deepEq(syn.map(i => i.code), ['F2.2.8', 'F4.27'], 'synthèses de F2.2.1–F2.2.7 et des mesures in situ');
+  assert(syn.every(i => i.kind === 'conformity' && i.responses.join() === 'C,P,NC,NA'), 'toujours cotés C / P / NC / N/A');
+  // Réserve de flacons et transport des flacons vides : faits de la tournée (véhicule), jugés une fois
+  for (const id of ['it-F4-14', 'it-F4-16']) eq(item(id).scope, 'tournee', id);
+  const E = expandGrid(G, [{ siteId: ATHANASE.id }, { siteId: ACAROUANY.id }], SITES);
+  assert(itemIndex(E).get('it-F4-16').shared && !itemIndex(E).get('it-F4-16@09271503'), 'F4.16 : une seule réponse pour la tournée');
+});
+
+test('doublons : numéros retirés jamais réutilisés, révision de la grille tracée en tête du fichier', async () => {
+  const src = await (await fetch(new URL('../../js/domain/grid-ct-2026.js', import.meta.url))).text();
+  const head = src.slice(0, src.indexOf('*/'));
+  const m = head.match(/^ \* NUMÉROS RETIRÉS :(.*)$/m);
+  assert(m, 'section « NUMÉROS RETIRÉS » en tête de grid-ct-2026.js');
+  const after = head.slice(head.indexOf(m[0]) + m[0].length);
+  const retired = m[1].trim() === 'aucun.' ? [] : [...after.matchAll(/^ \*   (F\d+\.[0-9A-Z.]+) → /gm)].map(x => x[1]);
+  const codes = new Set(allItems(G).map(i => i.code));
+  for (const c of retired) assert(!codes.has(c), `numéro retiré réutilisé : ${c}`);
+  // 1.2 : F8.A3 « Mailles utilisées » réuni à F8.A2 (fusion validée par l'OEG le 23/10/2026) ; les autres fusions par
+  // recadrage, noScore ou portée « tournée ».
+  deepEq(retired, ['F8.A3'], 'version 1.2 : numéros retirés');
+  assert(/^ \*   F8\.A3 → F8\.A2 \(1\.2\) : /m.test(head), 'critère qui reprend le numéro retiré et version');
+  assert(new RegExp(`^ \\*   ${G.version.replace('.', '\\.')} : `, 'm').test(head), `révision ${G.version} décrite en tête du fichier (RÉVISIONS)`);
+});
+
+test('doublons : zones de texte libres distinctes (encadrés, observations de la station)', () => {
+  const texts = [];
+  for (const sh of G.sheets) for (const b of sh.blocks || []) if (b.key !== 'conclusion') {
+    assert(b.placeholder, `F${sh.no} › ${b.title} : texte d’invite (placeholder)`);
+    texts.push([`F${sh.no} › ${b.key}`, fold(b.placeholder)]);
+  }
+  texts.push(['F1.R7', fold(item('it-F1-R7').placeholder)]);
+  eq(new Set(texts.map(t => t[1])).size, texts.length, 'chaque zone libre dit ce qu’elle attend');
+});
+
+test('mise à niveau 1.1 → 1.2 : grille enregistrée remplacée, instantané d’une tournée jamais modifié (empreinte inchangée)', async () => {
+  const { sha256Hex } = await import('../../js/core/util.js');
+  // Grille 1.1 telle qu'enregistrée sur une tablette en service (libellés « Heure début », F4.16 par station, sans noScore)
+  const old = structuredClone(G); old.version = '1.1';
+  const own = new Map(old.sections.flatMap(sec => sec.items.map(i => [i.id, i])));
+  own.get('it-F2-1.5').label = 'Heure début'; own.get('it-F2-5.2').label = 'Heure début';
+  delete own.get('it-F4-16').scope; delete own.get('it-F4-14').scope; delete own.get('it-F2-2.8').noScore; delete own.get('it-F4-27').noScore;
+  const audit = Object.freeze({ gridSnapshot: old, gridVersion: '1.1', gridSha256: await sha256Hex(canonicalJSON(old)) });
+  const before = canonicalJSON(audit.gridSnapshot);
+  const r = upgradeStoredGrid({ ...structuredClone(old), createdAt: '2026-10-10T08:00:00.000Z' }, G);
+  assert(r.replaced && r.from === '1.1' && r.to === '1.2', 'grille enregistrée 1.1 → 1.2');
+  eq(itemIndex(r.grid).get('it-F2-1.5').label, 'Début du contrôle');
+  eq(itemIndex(r.grid).get('it-F4-16').scope, 'tournee');
+  eq(canonicalJSON(audit.gridSnapshot), before, 'instantané de la tournée inchangé');
+  eq(await sha256Hex(canonicalJSON(audit.gridSnapshot)), audit.gridSha256, 'empreinte de la grille de la tournée inchangée');
+  // La tournée commencée en 1.1 garde ses critères par station (F4.16 répété) ; une nouvelle tournée suit la 1.2.
+  const E1 = expandGrid(old, [{ siteId: ATHANASE.id }], SITES), E2 = expandGrid(upToDateGrid(r.grid), [{ siteId: ATHANASE.id }], SITES);
+  assert(itemIndex(E1).get('it-F4-16@09271503') && !itemIndex(E2).get('it-F4-16@09271503'), 'portée propre à chaque grille');
 });

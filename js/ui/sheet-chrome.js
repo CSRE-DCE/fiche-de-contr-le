@@ -3,6 +3,13 @@
  * RGFG95), cartes de section à pastille numérotée, encadrés (observations, conclusion…), cases à
  * cocher carrées, silhouette de la Guyane avec le point de la station, pied de page (vagues, forêt).
  *
+ * Bandeau « Station » de la feuille 1 : réseaux de surveillance de la station (option networks : objets du
+ * référentiel « Réseaux », couleurs de js/domain/networks.js) sur une ligne à part.
+ * Note sur 20 (js/domain/grading.js) : badge « Majeur (×2) » d'un point majeur (majorBadge), encadré « Grille de
+ * notation » en pied de feuille (gradeBox), pastille de note des tableaux de synthèse (gradePill) et badge de note des
+ * listes — liste « Audits », cartes des stations de l'accueil (gradeTag) —, couleur de
+ * l'appréciation : vert « Satisfaisant », orange « À améliorer », rouge « Insuffisant », gris « non noté ».
+ *
  * Fonctions pures produisant du HTML (gabarits html`` de js/core/util.js), mises en forme par
  * css/sheet.css. Couleurs : thème de la feuille (js/ui/themes.js), posé par sheetFrame() ou par le
  * paramètre `theme` d'un composant (classe .th-<thème> + variables CSS --th-*).
@@ -12,10 +19,14 @@ import { THEMES, themeVars } from './themes.js';
 import { icon } from './icons.js';
 import { GUYANE, guyaneXY } from '../lib/guyane.js';
 import { utmToLatLon } from '../lib/geo.js';
+import { networkColors } from '../domain/networks.js';
+import { logoImg } from './logo.js';
+import { thresholdsText, frNumber, GRADE_STATES } from '../domain/grading.js';
 
 /** Adresse d'un fichier de l'application (résolue depuis ce module : fonctionne depuis index.html,
  * docs/charte.html ou un sous-chemin GitHub Pages). */
 export const assetURL = path => new URL('../../' + path, import.meta.url).href;
+/** Logo par défaut de l'OEG ; logo affiché (logo choisi en Administration, sinon celui-ci) : logoURL() de js/ui/logo.js. */
 export const LOGO_URL = assetURL('icons/logo-oeg-rond.png');
 
 /** Textes par défaut de l'en-tête (remplacés par grid.header). */
@@ -100,7 +111,8 @@ export function oegHeader({ grid = null, sheet = null, site = null, sheetCount =
   const kicker = sheet?.kicker && sheetTitle && !norm(sheet.kicker).includes(norm(sheetTitle)) && !norm(sheetTitle).includes(norm(sheet.kicker)) ? sheet.kicker : '';
   const tour = present(stationIndex) && Number(stationTotal) > 1 ? html`<span class="oh-st-tour">${icon('route', { size: 14 })}Station ${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : '';
   const sheetNo = no !== '' ? html`Feuille <b>${no}&nbsp;/&nbsp;${count}</b>` : '';
-  const logo = html`<img class="oh-logo" src="${LOGO_URL}" alt="Office de l’Eau de Guyane" width="96" height="96">`;
+  // Logo choisi en Administration (proportions conservées) ou logo rond de l'OEG.
+  const logo = logoImg({ cls: 'oh-logo', alt: h.org || 'Office de l’Eau de Guyane', width: 96, height: 96 });
   if (variant === 'compact') {
     return html`<header class="oeg-header compact">
       ${logo}
@@ -135,13 +147,16 @@ export function oegHeader({ grid = null, sheet = null, site = null, sheetCount =
  * Options supplémentaires : sheetNo / sheetCount (pastille « Feuille n / N », numéro affiché), tagline,
  * stationIndex / stationTotal (« Station 2 / 3 » d'une tournée, si plus d'une station). */
 export function stationBanner({ site, kicker = '', theme = 'ocean', photo = null, sheetNo = null, sheetCount = 9, tagline = 'Des rivières vivantes pour demain',
-  stationIndex = null, stationTotal = null } = {}) {
+  stationIndex = null, stationTotal = null, networks = [] } = {}) {
   const name = site?.name || 'Station';
   const tour = present(stationIndex) && Number(stationTotal) > 1;
+  // Réseaux de surveillance (feuille 1 seulement) : ligne à part sous « Station », qui passe à la ligne (téléphone).
+  const nets = (networks || []).filter(n => n?.code);
   return html`<div ${themed(theme, 'station-banner', [photo ? 'has-photo' : '', sheetNo ? 'has-sheet' : ''].filter(Boolean).join(' '))}>
     ${photo ? html`<div class="sb-photo" style="background-image:url(&quot;${cssURL(photo)}&quot;)" role="img" aria-label="Photographie de la station ${name}"></div>` : ''}
     <div class="sb-text">
       <span class="sb-k">Station${tour ? html`<span class="sb-tour">${icon('route', { size: 16 })}${stationIndex}&nbsp;/&nbsp;${stationTotal}</span>` : ''}</span>
+      ${nets.length ? html`<span class="sb-nets" role="list" aria-label="Réseaux de surveillance">${nets.map(n => html`<span class="sb-net" role="listitem" style="--net-dark:${networkColors(n).dark}" title="${n.label && n.label !== n.code ? `${n.code} – ${n.label}` : n.code}">${n.code}</span>`)}</span>` : ''}
       <span class="sb-name">${name}</span>
       ${swoosh('sb-swoosh')}
       ${kicker ? html`<span class="sb-kicker">${kicker}</span>` : ''}
@@ -235,6 +250,59 @@ export function statusLegend(codes = null) {
 /** Badge « Commun à la tournée » d'un critère partagé entre les stations (réponse unique). */
 export function sharedBadge(label = 'Commun à la tournée') {
   return html`<span class="shared-badge" title="Réponse unique pour toutes les stations de la tournée">${icon('route', { size: 14 })}${label}</span>`;
+}
+
+/* ---------- Note sur 20 ---------- */
+/** Badge « Majeur (×2) » d'un point majeur (compte double dans la note sur 20). */
+export function majorBadge(label = 'Majeur (×2)') {
+  return html`<span class="major-badge" title="Point majeur : compte double (× 2) dans la note sur 20">${icon('star', { size: 13 })}${label}</span>`;
+}
+/** Classe de couleur d'une appréciation (« lvl-good », « lvl-fair », « lvl-poor », « lvl-none »). */
+export const gradeLevelClass = g => `lvl-${g?.level || 'none'}`;
+/** Pastille de note des tableaux (« 15,6 », titre : appréciation) ; « non noté » en gris. */
+export function gradePill(g, { label = false } = {}) {
+  const graded = g && g.n10 !== null && g.n10 !== undefined;
+  return html`<span class="grade-pill ${gradeLevelClass(g)}" title="${graded ? `${g.text} / 20 — ${g.label}` : 'Non noté : aucun point évalué'}">${graded ? html`<b>${g.text}</b>${label ? html`<small>${g.label}</small>` : ''}` : 'non noté'}</span>`;
+}
+/**
+ * Badge de note des listes (liste « Audits », cartes des stations de l'accueil) : « 17,7 / 20 · Satisfaisant » aux
+ * couleurs de l'appréciation (note définitive : tournée signée) ; note provisoire en gris, bord pointillé, mention
+ * « provisoire » ; « calculée » / « recalculée » : tournée signée sans note figée / modifiée après la signature ;
+ * « non noté » discret. Le texte suffit sans la couleur. lg : listGrade (js/domain/grading.js) ; prefix : intitulé
+ * court visible (« Station ») ; sr : intitulé pour les lecteurs d'écran ; info-bulle : lg.title.
+ */
+export function gradeTag(lg, { prefix = '', sr = 'Note : ' } = {}) {
+  if (!lg) return '';
+  if (!lg.graded) return html`<span class="grade-none" title="${lg.title}" data-grade="non noté">non noté</span>`;
+  return html`<span class="grade-tag lvl-${lg.final ? lg.level : 'none'}${lg.final ? '' : ' is-prov'}" title="${lg.title}" data-grade="${lg.note}" data-state="${lg.state}">${prefix ? html`<span class="gt-k" aria-hidden="true">${prefix}</span> ` : ''}<span class="sr">${sr}</span><span class="gt-n"><b>${lg.note}</b>&nbsp;/&nbsp;20</span> · ${lg.label}${lg.mention ? html` · <span class="gt-m">${lg.mention}</span>` : ''}</span>`;
+}
+/**
+ * Encadré « Grille de notation » (pied de feuille, synthèse) : cotes C / P / NC / N/A, points évalués (dont points
+ * majeurs ×2), points pondérés obtenus / évalués, note /20 et appréciation colorée, règle de calcul et seuils.
+ * grade : note (gradeOf / resolveGrades) ; thresholds : seuils utilisés ; state : état de la note (GRADE_STATES :
+ * figee, recalculee, calculee, provisoire) ; id : identifiant de l'encadré ; scope : portée lisible (« de la feuille »).
+ */
+export function gradeBox({ grade: g = null, thresholds = null, state = '', id = '', scope = 'de la feuille', theme, title = 'Grille de notation' } = {}) {
+  const graded = g && g.n10 !== null && g.n10 !== undefined;
+  const cell = (cls, k, v, sub = '') => html`<div class="gb-c ${cls}"><span class="gb-k">${k}</span><span class="gb-n">${v}</span>${sub ? html`<small>${sub}</small>` : ''}</div>`;
+  const extra = [
+    g?.excluded ? `${g.excluded} point${g.excluded > 1 ? 's' : ''} de synthèse coté${g.excluded > 1 ? 's' : ''} hors note` : '',
+    g?.unanswered ? `${g.unanswered} point${g.unanswered > 1 ? 's' : ''} non renseigné${g.unanswered > 1 ? 's' : ''}${state === 'provisoire' ? ' : note provisoire' : ''}` : '',
+    state && GRADE_STATES[state] && state !== 'provisoire' ? `Note ${GRADE_STATES[state]}` : ''
+  ].filter(Boolean);
+  return html`<section ${themed(theme, 'block-card', `grade-box ${gradeLevelClass(g)}`)} ${id ? raw(`id="${id}"`) : ''} data-grade="${graded ? g.text : 'non noté'}" aria-label="${title} ${scope}">
+    <header class="bc-head"><span class="bc-ic">${icon('star')}</span><h3 class="bc-title">${title}</h3>${graded ? html`<span class="gb-head-note">${g.text}&nbsp;/&nbsp;20</span>` : ''}</header>
+    <div class="bc-body">
+      <div class="gb-cells">
+        ${cell('gb-cc', 'C', g?.C ?? 0)}${cell('gb-cp', 'P', g?.P ?? 0)}${cell('gb-cnc', 'NC', g?.NC ?? 0)}${cell('gb-cna', 'N/A', g?.NA ?? 0)}
+        ${cell('gb-ev', 'Évalués', g?.evaluated ?? 0, g?.majors ? `dont ${g.majors} majeur${g.majors > 1 ? 's' : ''} ×2` : '')}
+        ${cell('gb-pts', 'Points', graded ? html`${frNumber(g.points)}<small>&nbsp;/&nbsp;${frNumber(g.max)}</small>` : '—')}
+        <div class="gb-note"><span class="gb-k">Note /20</span><span class="gb-v">${graded ? g.text : 'non noté'}</span><span class="gb-lvl">${graded ? g.label : 'aucun point évalué'}</span></div>
+      </div>
+      <p class="gb-rule">C = 1 point · P = 0,5 · NC = 0 · N/A non compté · point majeur ×2 · point de synthèse hors note. Appréciation : ${thresholdsText(thresholds)}.</p>
+      ${extra.length ? html`<p class="gb-extra">${extra.join(' · ')}.</p>` : ''}
+    </div>
+  </section>`;
 }
 
 /** Sélecteur des stations d'une tournée : pastilles numérotées « 1 ATHANASE » avec avancement.

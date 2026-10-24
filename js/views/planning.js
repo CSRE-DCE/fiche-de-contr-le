@@ -1,22 +1,30 @@
 /* Planning des prestations : aujourd'hui, à venir, en retard, à planifier (date vide : programme RCS ESC BIO
  * 2026), non auditées ; liste ou calendrier. Chaque prestation renvoie à sa fiche de préparation et à la fiche
- * station ; une ou plusieurs prestations cochées démarrent une tournée de contrôle (#/nouvel-audit). */
+ * station ; une ou plusieurs prestations cochées démarrent une tournée de contrôle (#/nouvel-audit).
+ * Réseau de surveillance : badge du réseau du PROGRAMME de chaque prestation (celui de sa campagne : une prestation
+ * relève d'un seul réseau, même si sa station en a deux) ; filtre « Réseau » dans les Filtres repliés (?reseau=<code>,
+ * « aucun » : prestations saisies hors programme), campagnes regroupées par réseau. */
 import { html, localDate, addDays, fmtDate, normalize, sortBy, groupBy } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
 import { can, isTeamMode } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast } from '../ui/dom.js';
-import { pageTitle, prestationBadge, kindBadge, auditBadge, options, empty, siteName, tourStationsLabel } from '../ui/components.js';
+import { pageTitle, prestationBadge, kindBadge, auditBadge, options, empty, siteName, tourStationsLabel, networkBadge } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { PRESTATION_STATUS, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { isPrestationLate } from '../domain/summary.js';
 import { TYPE_STYLES } from '../ui/map.js';
 import { prestationType } from './station-sheet.js';
+import { isAuditController, controllerNamesText } from '../domain/permissions.js';
+import { NO_NETWORK, prestationNetwork, sortNetworkCodes } from '../domain/networks.js';
+import { currentNetworkIndex, currentNetworkOf } from '../app/networks.js';
 
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const longDate = d => { const x = new Date(d + 'T12:00:00'); return `${DAYS[x.getDay()]} ${x.getDate()} ${MONTHS[x.getMonth()]} ${x.getFullYear()}`; };
+/** Réseau du programme d'une prestation (code ; '' : saisie hors programme). */
+const presNetwork = p => prestationNetwork(p, p.campaignId ? store.get('campaign', p.campaignId) : null, currentNetworkIndex());
 
 /** Audits (tournées) non abandonnés couvrant une prestation : prestation principale ou l'une des prestations de la tournée. */
 export function auditsOf(prestationId) { return store.filter('audit', a => a.status !== 'abandonne' && (a.prestationId === prestationId || (a.prestationIds || []).includes(prestationId))).sort(byAuditDateDesc); }
@@ -41,6 +49,7 @@ function filterList(q) {
   else if (period === 'nonauditees') list = list.filter(p => !auditsOf(p.id).some(a => a.lock?.lockedAt) && !['annulee'].includes(p.status) && p.plannedDate && p.plannedDate <= today);
   if (q.prestataire) list = list.filter(p => p.providerId === q.prestataire);
   if (q.campagne) list = list.filter(p => p.campaignId === q.campagne);
+  if (q.reseau) list = list.filter(p => (presNetwork(p) || NO_NETWORK) === q.reseau);
   if (q.statut) list = list.filter(p => p.status === q.statut);
   if (q.q) { const t = normalize(q.q); list = list.filter(p => normalize(`${p.ref} ${siteName(p.siteId)} ${store.get('provider', p.providerId)?.name}`).includes(t)); }
   return sortBy(list, p => p.plannedDate || '9999', 'plannedTime', 'ref');
@@ -51,6 +60,7 @@ function card(p) {
   const audits = auditsOf(p.id), a = audits[0];
   const late = isLate(p);
   const type = prestationType(p);
+  const net = presNetwork(p);
   const stripe = late ? 'stripe-nc' : a?.lock?.lockedAt ? 'stripe-ok' : a ? 'stripe-info' : p.status === 'reportee' || !p.plannedDate ? 'stripe-warn' : '';
   const open = !CLOSED.includes(p.status) && !a?.lock?.lockedAt;
   return html`<div class="li pl-li ${stripe}${picked.has(p.id) ? ' is-picked' : ''}">
@@ -59,7 +69,7 @@ function card(p) {
       <div class="pl-when"><div class="strong" style="font-size:17px">${p.plannedTime || (p.plannedDate ? '—' : icon('calendar', { size: 22 }))}</div><div class="tiny muted">${!p.plannedDate ? 'à planifier' : p.dateIndicative ? 'indicatif' : fmtDate(p.plannedDate).slice(0, 5)}</div></div>
       <div class="li-main"><div class="li-title">${site?.name || 'Site ?'} <span class="tiny muted">${site?.code || ''}</span></div>
         <div class="li-sub">${prov?.name || '—'} · ${store.get('samplingType', p.samplingTypeId)?.label || 'Type non précisé'}</div>
-        <div class="row" style="gap:6px;margin-top:6px">${!p.plannedDate ? html`<span class="badge warn">À planifier</span>` : ''}${prestationBadge(p.status)}${type && TYPE_STYLES[type] ? html`<span class="type-badge t-${type}">${icon(TYPE_STYLES[type].icon, { size: 14 })}${TYPE_STYLES[type].label}</span>` : ''}${kindBadge(prov?.kind)}${late ? html`<span class="badge nc">En retard</span>` : ''}${a ? html`<span class="badge info">${a.number}</span>${auditBadge(a)}` : html`<span class="badge outline">Non auditée</span>`}</div>
+        <div class="row" style="gap:6px;margin-top:6px">${!p.plannedDate ? html`<span class="badge warn">À planifier</span>` : ''}${prestationBadge(p.status)}${type && TYPE_STYLES[type] ? html`<span class="type-badge t-${type}">${icon(TYPE_STYLES[type].icon, { size: 14 })}${TYPE_STYLES[type].label}</span>` : ''}${net ? networkBadge(currentNetworkOf(net)) : ''}${kindBadge(prov?.kind)}${late ? html`<span class="badge nc">En retard</span>` : ''}${a ? html`<span class="badge info">${a.number}</span>${auditBadge(a)}` : html`<span class="badge outline">Non auditée</span>`}</div>
       </div></a>
     <span class="pl-side">${site ? html`<a class="btn ghost sm" href="#/station/${encodeURIComponent(site.id)}" title="Fiche station">${icon('station', { size: 18 })}<span class="pl-lbl">Fiche station</span></a>` : ''}</span>
   </div>`;
@@ -105,22 +115,33 @@ export default {
       aplanifier: all.filter(p => !p.plannedDate && !CLOSED.includes(p.status)).length
     };
     for (const id of [...picked]) if (!store.get('prestation', id)) picked.delete(id);
-    const inProgress = store.filter('audit', a => a.status === 'en_cours' && a.auditorId === session.user.id);
+    // Tournées en cours dont l'agent connecté est contrôleur (binôme : aussi celles créées par un collègue).
+    const inProgress = store.filter('audit', a => a.status === 'en_cours' && isAuditController(a, session.user.id));
     const period = q.jour ? '' : (q.periode || 'semaine');
     const chips = [['jour', 'Aujourd’hui', counts.jour], ['semaine', '7 jours', counts.semaine], ['avenir', 'À venir'], ['aplanifier', 'À planifier', counts.aplanifier], ['retard', 'En retard', counts.retard], ['nonauditees', 'Non auditées', counts.nonauditees], ['toutes', 'Toutes']];
     const grouped = groupBy(list, p => p.plannedDate || '');
+    // Réseaux des programmes (filtre) et campagnes regroupées par réseau.
+    const idx = currentNetworkIndex();
+    const netCodes = sortNetworkCodes([...new Set(all.map(presNetwork).filter(Boolean)), ...(q.reseau && q.reseau !== NO_NETWORK ? [q.reseau] : [])], idx);
+    const netOptions = [...netCodes.map(c => { const n = currentNetworkOf(c); return { id: c, label: n.label && n.label !== n.code ? `${n.code} – ${n.label}` : n.code }; }),
+      ...(all.some(p => !presNetwork(p)) || q.reseau === NO_NETWORK ? [{ id: NO_NETWORK, label: 'Hors programme (sans réseau)' }] : [])];
+    const campaigns = store.all('campaign');
+    const campByNet = groupBy(sortBy(campaigns, 'label'), c => c.network || '');
+    const campaignSelect = html`<select data-change="qsel" data-k="campagne"><option value="" ${!q.campagne ? 'selected' : ''}>Toutes</option>${sortNetworkCodes([...campByNet.keys()].filter(Boolean), idx).map(c => html`<optgroup label="Réseau ${c}">${options(campByNet.get(c), q.campagne, { placeholder: null })}</optgroup>`)}${campByNet.has('') ? html`<optgroup label="Sans réseau">${options(campByNet.get(''), q.campagne, { placeholder: null })}</optgroup>` : ''}</select>`;
+    const active = q.prestataire || q.campagne || q.statut || q.q || q.reseau;
     return html`
       ${pageTitle('Planning des prestations', longDate(today), html`
         ${can('audit.create') ? html`<a class="btn primary" href="#/nouvel-audit"><span class="ic">${icon('plus')}</span>Nouvelle tournée</a><a class="btn accent" href="#/nouvel-audit?kind=inopine"><span class="ic">${icon('warning')}</span>Audit inopiné</a>` : ''}
-        <button class="btn ghost" data-act="prepare" title="Synchroniser et télécharger les documents pour le terrain"><span class="ic">🧳</span>Préparer le terrain</button>
+        <button class="btn ghost" data-act="prepare" title="${isTeamMode() ? 'Synchroniser et télécharger les documents pour le terrain' : 'Avant de partir : recevoir le fichier de l’autre tablette, précharger la carte'}"><span class="ic">🧳</span>Préparer le terrain</button>
         ${can('planning.manage') ? html`<button class="btn ghost" data-act="newPrestation"><span class="ic">＋</span>Prestation</button>` : ''}`)}
-      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
-      <div class="chips" style="margin-bottom:10px">${chips.map(([k, l, n]) => html`<button class="chip ${period === k ? 'sel' : ''}" data-act="q" data-k="periode" data-v="${k}">${l}${n !== undefined ? html`<span class="count">${n}</span>` : ''}</button>`)}
-        <button class="chip ${q.mode === 'calendrier' ? 'sel' : ''}" data-act="q" data-k="mode" data-v="${q.mode === 'calendrier' ? '' : 'calendrier'}">🗓️ Calendrier</button></div>
-      <details class="card" ${q.prestataire || q.campagne || q.statut || q.q ? 'open' : ''}><summary>Filtres${q.prestataire || q.campagne || q.statut || q.q ? ' (actifs)' : ''}</summary>
+      ${inProgress.length ? html`<div class="card" style="border-color:var(--sky)"><h2>▶ Tournées en cours — continuer</h2><div class="list">${inProgress.map(a => html`<a class="li stripe-info" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number} — ${tourStationsLabel(a)}</div><div class="li-sub">${store.get('provider', a.providerId)?.name || ''} · tournée du ${fmtDate(auditDate(a))} · ${controllerNamesText(a)}</div></div><span class="btn primary sm">Reprendre</span></a>`)}</div></div>` : ''}
+      <div class="chips" style="margin-bottom:10px" role="group" aria-label="Période">${chips.map(([k, l, n]) => html`<button class="chip ${period === k ? 'sel' : ''}" data-act="q" data-k="periode" data-v="${k}" aria-pressed="${String(period === k)}">${l}${n !== undefined ? html`<span class="count">${n}</span>` : ''}</button>`)}
+        <button class="chip ${q.mode === 'calendrier' ? 'sel' : ''}" data-act="q" data-k="mode" data-v="${q.mode === 'calendrier' ? '' : 'calendrier'}" aria-pressed="${String(q.mode === 'calendrier')}">🗓️ Calendrier</button></div>
+      <details class="card" ${active ? 'open' : ''}><summary>Filtres${active ? ' (actifs)' : ''}${q.reseau ? html` · ${q.reseau === NO_NETWORK ? 'hors programme' : networkBadge(currentNetworkOf(q.reseau))}` : ''}</summary>
         <div class="grid2" style="margin-top:10px">
           <div class="field"><label>Prestataire / partenaire / régie</label><select data-change="qsel" data-k="prestataire">${options(sortBy(store.all('provider'), 'name'), q.prestataire, { placeholder: 'Tous' })}</select></div>
-          <div class="field"><label>Campagne</label><select data-change="qsel" data-k="campagne">${options(sortBy(store.all('campaign'), 'label'), q.campagne, { placeholder: 'Toutes' })}</select></div>
+          <div class="field"><label>Réseau de surveillance (programme)</label><select data-change="qsel" data-k="reseau">${options(netOptions, q.reseau, { placeholder: 'Tous' })}</select></div>
+          <div class="field"><label>Campagne</label>${campaignSelect}</div>
           <div class="field"><label>Statut</label><select data-change="qsel" data-k="statut">${options(Object.entries(PRESTATION_STATUS).map(([id, s]) => ({ id, label: s.label })), q.statut, { placeholder: 'Tous' })}</select></div>
           <div class="field"><label>Recherche (site, référence)</label><input type="search" value="${q.q || ''}" data-change="qsel" data-k="q" placeholder="ex. Mahury"></div>
         </div>
@@ -152,9 +173,11 @@ export default {
       if (!list.length) return;
       const providers = new Set(list.map(p => p.providerId)), types = new Set(list.map(p => prestationType(p)));
       if (providers.size > 1) { toast('Une tournée contrôle un seul prestataire : sélectionnez des prestations du même prestataire.', 'warn', 5000); return; }
-      if (types.size > 1) { toast('Une tournée porte sur un seul type (biologie, cours d’eau ou eaux souterraines).', 'warn', 5000); return; }
+      // Biologie et chimie (cours d'eau) du même prestataire : une tournée mixte (opérations communes mutualisées) ; les
+      // eaux souterraines restent une tournée à part.
+      if (types.size > 1 && (types.has('eso') || ![...types].every(t => ['bio', 'ce'].includes(t)))) { toast('Une tournée porte sur la biologie et / ou la chimie des cours d’eau, ou sur les eaux souterraines : sélectionnez des prestations compatibles.', 'warn', 5000); return; }
       picked.clear();
-      navigate(`/nouvel-audit?prestations=${encodeURIComponent(list.map(p => p.id).join(','))}&type=${[...types][0] || ''}`);
+      navigate(`/nouvel-audit?prestations=${encodeURIComponent(list.map(p => p.id).join(','))}&type=${types.has('bio') ? 'bio' : [...types][0] || ''}`);
     },
     async newPrestation() { const { editPrestation } = await import('./prestation.js'); const p = await editPrestation(); if (p) navigate('/prestation/' + p.id); },
     async programme() {
@@ -165,7 +188,7 @@ export default {
     },
     async prepare() {
       const { runSync, prefetchMedia } = await import('../app/sync.js');
-      if (!isTeamMode()) { toast('Mode autonome : toutes les données sont déjà sur l’appareil. Pensez à précharger la carte (écran Carte).', '', 4500); return; }
+      if (!isTeamMode()) { toast('Toutes les données sont sur cette tablette. Avant de partir : si l’autre tablette a travaillé, « Recevoir un fichier » (accueil) ; préchargez la carte (écran Carte).', '', 6000); return; }
       if (!navigator.onLine) { toast('Hors connexion : la préparation nécessite le réseau.', 'warn'); return; }
       toast('Synchronisation et téléchargement des documents…');
       const r = await runSync({ reason: 'préparation du terrain' });

@@ -8,7 +8,7 @@ import { TARGETS, readSource, suggestMapping, previewImport, applyImport } from 
 import { toCSV } from '../formats/csv.js';
 
 let wiz = { target: 'prestation', source: null, mapping: {}, preview: null, selected: null, url: '', urlKind: 'ics' };
-const STATUS = { new: ['Nouveau', 'ok'], update: ['Modifié', 'info'], same: ['Inchangé', 'na'], error: ['Erreur', 'nc'] };
+const STATUS = { new: ['Nouveau', 'ok'], update: ['Modifié', 'info'], same: ['Inchangé', 'na'], merged: ['Cumulée', 'na'], error: ['Erreur', 'nc'] };
 
 function mappingTable() {
   const s = wiz.source, fields = TARGETS[wiz.target].fields;
@@ -82,7 +82,7 @@ export default {
     pick(el) { const i = Number(el.dataset.i); if (el.checked) wiz.selected.add(i); else wiz.selected.delete(i); },
     async apply() {
       const c = await applyImport(wiz.target, wiz.source, wiz.preview, wiz.selected);
-      toast(`Import terminé : ${c.new} nouveau(x), ${c.update} modifié(s)`, 'ok', 5000);
+      toast(`Import terminé : ${c.new} nouveau(x), ${c.update} modifié(s)${c.networks?.length ? ` ; réseau(x) ajouté(s) au référentiel : ${c.networks.join(', ')}` : ''}${c.tours ? ` ; informations des stations mises à jour dans ${c.tours} tournée(s) en cours` : ''}`, 'ok', 6000);
       wiz = { ...wiz, source: null, preview: null, mapping: {} };
       this.refresh();
     },

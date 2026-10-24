@@ -1,7 +1,9 @@
 /* Modules spécialisés de l'audit terrain : opérateurs et habilitations, équipements de mesure,
  * relevé GPS du point, traçabilité des échantillons, saisie des écarts — et éléments communs aux deux
  * affichages de l'audit (grilles historiques par sections, grilles « en feuilles ») : encadré d'alerte,
- * documents figés, étape « Signatures », recherche d'un critère dans la grille effective. */
+ * documents figés, étape « Signatures », recherche d'un critère dans la grille effective, « Annuler la tournée »
+ * (bouton, explication, bandeau), « Ajouter un opérateur » (fenêtre partagée avec la création de tournée) et
+ * préleveurs du prestataire de la feuille Organisation (F2). */
 import { html, raw, uuid, nowISO, localDate, localTime, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, sortBy, normalize } from '../core/util.js';
 import { store } from '../core/store.js';
 import { session } from '../core/session.js';
@@ -14,11 +16,39 @@ import { getPosition } from '../ui/gps.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
 import { EQUIPMENT_STATUS, QUALIFICATION_TYPES, DOC_TYPES, auditDate } from '../domain/model.js';
 import { allItems } from '../domain/grids.js';
-import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid } from '../app/audits.js';
+import { updateAudit, sampleIdFor, createDeviation, defaultDueDate, auditDeviations, effectiveGrid, tourControllers, cancelTourRefusal, isAuditController, canJoinAudit } from '../app/audits.js';
 import { refLabel } from '../app/documents.js';
+import * as OP from '../app/operators.js';
 import { orgSettings } from '../app/settings.js';
 
 /* ---------- Éléments communs aux deux affichages de l'audit ---------- */
+/* Annulation d'une tournée (« Annuler la tournée ») : bouton de l'en-tête et de l'onglet Infos (identification des
+ * grilles historiques), bandeau d'une tournée annulée ; action « abandon » des gestionnaires de js/views/audit.js. */
+/** Bouton « Annuler la tournée » si l'agent connecté peut l'annuler (cancelTourRefusal), sinon ''. */
+export function cancelTourButton(audit, { cls = 'btn danger-ghost', id = '' } = {}) {
+  if (cancelTourRefusal(audit, session.user)) return '';
+  return html`<button type="button" class="${cls}" data-act="abandon" ${id ? raw(`id="${id}"`) : ''}><span class="ic">${icon('close', { size: 18 })}</span>Annuler la tournée</button>`;
+}
+/**
+ * Bloc « Annuler la tournée » de l'onglet Infos : bouton, ou raison pour laquelle l'agent ne peut pas l'annuler
+ * (tournée signée et verrouillée, agent du binôme qui n'a pas rejoint la tournée, profil sans ce droit) ; rien
+ * pour une tournée déjà annulée (bandeau) ou un profil qui ne contrôle pas de tournées.
+ */
+export function cancelTourBlock(audit) {
+  if (!audit || audit.status === 'abandonne' || !session.user) return '';
+  const refusal = cancelTourRefusal(audit, session.user);
+  if (!refusal) return html`<div class="as-cancel-block">${cancelTourButton(audit, { id: 'tourCancel' })}<p class="note">Motif obligatoire. La tournée annulée disparaît des tournées en cours et des listes (filtre « Annulées » pour la retrouver) ; ses saisies sont conservées et ses prestations redeviennent à contrôler.</p></div>`;
+  // Explication réservée aux agents concernés : contrôleurs, encadrement, agent qui peut rejoindre la tournée.
+  if (!(isAuditController(audit, session.user.id) || can('audit.delete') || canJoinAudit(audit, session.user))) return '';
+  return html`<p class="note as-cancel-why" id="tourCancelWhy">${icon('info', { size: 16 })} ${refusal}</p>`;
+}
+/** Bandeau d'une tournée annulée : date, auteur et motif. */
+export function cancelledBanner(audit) {
+  if (audit?.status !== 'abandonne') return '';
+  const when = audit.cancelledAt ? ` le ${fmtDate(audit.cancelledAt)} à ${fmtTime(audit.cancelledAt)}` : '';
+  return html`<div class="banner na as-cancelled" id="tourCancelled">${icon('close', { size: 18 })}<span class="grow"><b>Tournée annulée</b>${when}${audit.cancelledByName ? ` par ${audit.cancelledByName}` : ''} — motif : « ${audit.abandonReason || 'non précisé'} ». Lecture seule ; les saisies sont conservées.</span></div>`;
+}
+
 /** Critère de la grille EFFECTIVE de l'audit (identifiant « it-F4-5@09271503 », identifiant d'origine ou code). */
 export function findItem(audit, id) {
   if (!audit || !id) return null;
@@ -72,6 +102,7 @@ export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/
   const errors = st.validation.filter(v => v.level === 'error'), warnings = st.validation.filter(v => v.level === 'warning');
   const sig = audit.signatures || {};
   const locked = !!audit.lock?.lockedAt;
+  const ctrls = tourControllers(audit);
   const sigBlock = role => {
     const sg = sig[role];
     if (!sg) return html`<p class="note">Non signé.</p>`;
@@ -88,8 +119,9 @@ export function signaturesStep(audit, st, editable, seal, { issueHref = e => `#/
       ${st.alerts.filter(a => a.level !== 'info').length ? html`<p class="note">${st.alerts.filter(a => a.level !== 'info').length} alerte(s) active(s) — voir ${sheets ? 'l’onglet « Infos »' : 'Identification'} ou les ${sheets ? 'feuilles' : 'sections'} concernées.</p>` : ''}
       ${editable && !locked ? html`<div class="btn-row" style="margin-top:10px">${audit.status === 'en_cours' ? html`<button class="btn primary" data-act="finish" ${errors.length ? raw('disabled') : ''}>⏹ Terminer l’audit (heure de fin)</button>` : html`<span class="badge warn">Terminé à ${fmtTime(audit.endedAt)}</span><button class="btn ghost sm" data-act="reopen">Rouvrir</button>`}</div>` : ''}
     </div>
-    <div class="card"><h2>Signature de l’auditeur</h2>${sigBlock('auditor')}
-      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px"><span class="ic">${icon('signature')}</span>Signer en tant qu’auditeur (${session.user.name})</button>` : ''}</div>
+    <div class="card"><h2>${sheets ? 'Signature du contrôleur OEG' : 'Signature de l’auditeur'}</h2>${sigBlock('auditor')}
+      ${sheets && !sig.auditor ? html`<p class="note">Contrôleur${ctrls.length > 1 ? 's' : ''} de la tournée : <b>${ctrls.map(x => x.name).join(', ')}</b>${ctrls.length > 1 ? ' — un seul d’entre eux signe, pour la tournée.' : '.'}</p>` : ''}
+      ${editable && !locked && audit.status === 'termine' ? html`<button class="btn primary lg block" data-act="sign-auditor" style="margin-top:8px"><span class="ic">${icon('signature')}</span>${sheets ? 'Signer en tant que contrôleur' : 'Signer en tant qu’auditeur'} (${session.user.name})</button>` : ''}</div>
     <div class="card"><h2>Signature du représentant du prestataire</h2>${sigBlock('provider')}
       ${editable && !locked && audit.status === 'termine' && sig.auditor ? html`<div class="grid2" style="margin-top:8px"><div class="field"><label for="repName">Nom du représentant</label><input id="repName" value="${sig.provider?.name || operatorName(st.operators[0]) || ''}"></div><div class="field"><label for="repFn">Fonction</label><input id="repFn" value="${sig.provider?.function || st.operators[0]?.function || ''}"></div></div>
         <div class="btn-row"><button class="btn primary lg" data-act="sign-provider"><span class="ic">${icon('signature')}</span>Faire signer le représentant</button><button class="btn ghost" data-act="refuse-provider">Refus / absence de signature</button></div>` : ''}
@@ -111,6 +143,82 @@ export function auditOperators(audit) {
 }
 
 /* ---------- Opérateurs ---------- */
+const FUNCTIONS = ['Préleveur', 'Préleveuse', 'Technicien', 'Technicienne', 'Hydrobiologiste', 'Chef d’équipe', 'Assistant(e)', 'Pilote de bateau'];
+/**
+ * « + Ajouter un opérateur » (création de tournée, feuille Organisation F2) : nom, prénom, initiales (proposées à partir
+ * du prénom et du nom), fonction ; rattaché au prestataire `providerId`. Jamais de doublon (js/app/operators.js) : une
+ * personne déjà connue chez ce prestataire est reprise, ou proposée (« Sélectionner … » / « Changer les initiales »).
+ * Retourne la fiche de l'opérateur (créée, complétée ou existante) ou null si l'agent renonce.
+ */
+export async function openOperatorForm(providerId, { context = '' } = {}) {
+  const provider = store.get('provider', providerId);
+  if (!provider) { toast('Choisissez d’abord le prestataire contrôlé.', 'err'); return null; }
+  let manualIni = false, pending = null;
+  const m = openModal({
+    title: 'Ajouter un opérateur',
+    body: html`<form id="opf" autocomplete="off"><p class="note">Préleveur de <b>${provider.name}</b> : il est rattaché à ce prestataire et sélectionné aussitôt pour la tournée.</p>
+      <div class="grid2">
+        ${field('Nom', html`<input name="lastName" required autocapitalize="words" data-input="op-name">`, { required: true })}
+        ${field('Prénom', html`<input name="firstName" required autocapitalize="words" data-input="op-name">`, { required: true })}
+        ${field('Initiales', html`<input name="initials" required maxlength="4" autocapitalize="characters" spellcheck="false" data-input="op-ini">`, { required: true, hint: 'Celles des fiches terrain du prestataire (uniques chez ce prestataire).' })}
+        ${field('Fonction', html`<input name="fn" list="opFunctions" placeholder="Préleveur, technicienne…" autocapitalize="sentences"><datalist id="opFunctions">${FUNCTIONS.map(f => html`<option value="${f}">`)}</datalist>`)}
+      </div>
+      <div id="opPropose"></div><p class="hint" id="opErr" style="color:var(--nc)"></p></form>`,
+    actions: [{ label: 'Annuler' }, { label: 'Ajouter l’opérateur', cls: 'primary', act: 'ok', id: 'opOk' }],
+    handlers: {
+      'op-name'() {
+        const f = this.root.querySelector('#opf');
+        if (!manualIni) f.querySelector('[name=initials]').value = OP.suggestInitials(f.querySelector('[name=firstName]').value, f.querySelector('[name=lastName]').value);
+        this.root.querySelector('#opPropose').innerHTML = ''; pending = null;
+      },
+      'op-ini'(el) { manualIni = !!el.value; this.root.querySelector('#opPropose').innerHTML = ''; pending = null; },
+      async ok() {
+        const f = this.root.querySelector('#opf'), err = this.root.querySelector('#opErr');
+        err.textContent = '';
+        let prep;
+        try { prep = OP.planNewOperator(providerId, formValues(f)); } catch (e) { err.textContent = e.message; return; }
+        if (prep.plan.action === 'propose') {
+          pending = prep;
+          this.root.querySelector('#opPropose').innerHTML = String(html`<div class="banner warn op-propose" id="opProposeBox"><span class="grow">${prep.plan.reason} Pas de doublon : sélectionnez l’opérateur existant ou changez les initiales.</span>
+            <div class="btn-row"><button type="button" class="btn primary sm" data-act="op-use" id="opUse">Sélectionner ${OP.operatorDisplay(prep.plan.operator)}</button><button type="button" class="btn ghost sm" data-act="op-change">Changer les initiales</button></div></div>`);
+          return;
+        }
+        try { this.close({ op: await OP.saveNewOperator(prep, { context }), plan: prep.plan }); } catch (e) { err.textContent = e.message; }
+      },
+      async 'op-use'() {
+        if (!pending) return;
+        try { this.close({ op: await OP.saveNewOperator(pending, { context, accept: true }), plan: pending.plan }); } catch (e) { this.root.querySelector('#opErr').textContent = e.message; }
+      },
+      'op-change'() { const i = this.root.querySelector('[name=initials]'); manualIni = true; i.focus(); i.select(); }
+    }
+  });
+  const r = await m.result;
+  if (!r?.op) return null;
+  const name = OP.operatorDisplay(r.op);
+  toast(r.plan.action === 'create' ? `Opérateur ${name} ajouté à ${provider.name} et sélectionné`
+    : r.plan.action === 'complete' ? `Fiche de l’opérateur ${r.op.code} complétée : ${[r.op.firstName, r.op.lastName].join(' ')}, sans doublon — sélectionné(e)`
+    : `${name} était déjà enregistré(e) chez ${provider.name} : sélectionné(e), sans doublon`, 'ok', 5000);
+  return r.op;
+}
+/**
+ * Feuille Organisation (F2) d'une tournée en feuilles : « Préleveurs du prestataire » — opérateurs du prestataire
+ * contrôlé (cochés : présents pour la tournée), « + Ajouter un opérateur ». Hors impression (la fiche papier garde ses
+ * champs « Identification des prestataires »).
+ */
+export function tourOperatorsCard(audit, { editable = false } = {}) {
+  const provider = store.get('provider', audit.providerId);
+  const chosen = audit.operatorIds || [];
+  const list = provider ? OP.providerOperators(provider.id, { include: chosen }) : [];
+  const extra = chosen.filter(id => !list.some(o => o.id === id)).map(id => store.get('operator', id) || { id, code: '', lastName: audit.operatorNames?.[id] || id, frozen: true });
+  const all = [...list, ...extra];
+  const allowAdd = editable && OP.canAddOperator();
+  return html`<section class="card as-ops no-print" id="tourOperators"><h2>${icon('people', { size: 20 })} Préleveurs du prestataire${provider ? html` <small>${provider.name}</small>` : ''}</h2>
+    ${all.length ? html`<div class="checks as-ops-list">${all.map(o => { const on = chosen.includes(o.id); return html`<label class="check ${on ? 'sel' : ''}"><input type="checkbox" value="${o.id}" data-change="tour-op" ${on ? 'checked' : ''} ${editable ? '' : raw('disabled')}><span class="as-op-ini">${o.code || '?'}</span><span class="as-op-txt"><b>${OP.operatorDisplay(o) || o.lastName}</b>${o.function ? html`<small>${o.function}</small>` : ''}</span></label>`; })}</div>`
+      : html`<p class="note">Aucun opérateur enregistré pour ce prestataire.</p>`}
+    ${allowAdd && provider ? html`<button type="button" class="btn ghost" data-act="op-new" id="opNewTour"><span class="ic">${icon('plus')}</span>Ajouter un opérateur</button>` : ''}
+    <p class="note">Cochez les préleveurs présents pour la tournée. Un préleveur absent de la liste : « Ajouter un opérateur » (nom, prénom, initiales, fonction) — il est rattaché à ${provider?.name || 'ce prestataire'} et sélectionné aussitôt, sans doublon.</p></section>`;
+}
+
 export function operatorsModule(audit, editable) {
   const date = auditDate(audit);
   const ops = auditOperators(audit);
@@ -122,7 +230,7 @@ export function operatorsModule(audit, editable) {
         <div class="li-sub">${(o.qualifications || []).map(q => `${QUALIFICATION_TYPES[q.type] || q.type} : ${q.label}${q.ref ? ' (' + q.ref + ')' : ''}${q.validUntil ? ' → ' + fmtDate(q.validUntil) : ''}`).join(' ; ') || 'Aucune habilitation enregistrée'}</div>
         ${st.ok ? badge('Habilité à la date de l’audit', 'ok') : badge('Non habilité : ' + st.message, 'nc')}
         ${thumbs(ph)}
-        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'operator', id: o.id }, { auditId: audit.id, label: 'Justificatif', gallery: false })}<button class="btn ghost sm" data-act="op-remove" data-id="${o.id}">Retirer</button></div>` : ''}
+        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'operator', id: o.id }, { auditId: audit.id, label: 'Photographier le justificatif' })}<button class="btn ghost sm" data-act="op-remove" data-id="${o.id}">Retirer</button></div>` : ''}
       </div></div>`; })}</div>` : html`<p class="note">Aucun opérateur enregistré pour cet audit.</p>`}
     ${editable ? html`<div class="btn-row" style="margin-top:10px">
       ${candidates.length ? html`<select data-change="op-add" style="flex:1;min-width:200px"><option value="">＋ Ajouter un opérateur du prestataire…</option>${candidates.map(o => html`<option value="${o.id}">${operatorName(o)}</option>`)}</select>` : ''}
@@ -173,7 +281,7 @@ export function equipmentModule(audit, editable) {
         <div class="li-sub">Vérification : ${fmtDate(e.checkDate) || '—'} · Étalonnage : ${fmtDate(e.calibrationDate) || (e.calibrationRequired ? 'requis, non renseigné' : 'non applicable')} · Validité : ${fmtDate(e.validUntil) || '—'} · Certificat : ${e.certificateAvailable === true ? 'disponible' : e.certificateAvailable === false ? 'non disponible' : '—'}</div>
         <div class="row" style="gap:6px;margin-top:6px">${st.ok ? badge('Valide', 'ok') : badge(st.reasons.join(' ; '), st.level === 'critique' ? 'nc' : 'warn')}${e.conformity ? badge(e.conformity === 'C' ? 'Jugé conforme' : e.conformity === 'NC' ? 'Jugé non conforme' : 'NA', e.conformity === 'C' ? 'ok' : e.conformity === 'NC' ? 'nc' : 'na') : ''}</div>
         ${thumbs(ph)}
-        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'equipment', id: e.id }, { auditId: audit.id, label: 'Photo étiquette', gallery: false })}<button class="btn ghost sm" data-act="eq-edit" data-id="${e.id}">Modifier</button><button class="btn ghost sm" data-act="eq-remove" data-id="${e.id}">Retirer</button></div>` : ''}
+        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'equipment', id: e.id }, { auditId: audit.id, label: 'Photographier l’étiquette' })}<button class="btn ghost sm" data-act="eq-edit" data-id="${e.id}">Modifier</button><button class="btn ghost sm" data-act="eq-remove" data-id="${e.id}">Retirer</button></div>` : ''}
       </div></div>`; })}</div>` : html`<p class="note">Aucun équipement de mesure enregistré.</p>`}
     ${editable ? html`<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="eq-add"><span class="ic">＋</span>Équipement</button><button class="btn ghost" data-act="eq-scan"><span class="ic">▦</span>Scanner l’étiquette</button></div>` : ''}
   </div>`;
@@ -300,7 +408,7 @@ export function samplesModule(audit, editable) {
         <div class="li-sub">${fmtDate(s.date)} ${s.time || ''} · ${store.get('matrix', s.matrixId)?.label || ''} · ${s.container || ''}${s.preservative ? ' · ' + s.preservative : ''}${s.volume ? ` · ${s.volume} ${s.volumeUnit || 'mL'}` : ''}${s.temperature !== '' && s.temperature !== null && s.temperature !== undefined ? ` · ${s.temperature} °C` : ''}</div>
         <div class="li-sub">${operatorName(s.operatorId)}${s.conservation ? ' · ' + s.conservation : ''}${s.observations ? ' · ' + s.observations : ''}</div>
         ${thumbs(ph)}
-        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'sample', id: s.id }, { auditId: audit.id, label: 'Photo étiquette', gallery: false, file: false })}<button class="btn ghost sm" data-act="smp-edit" data-id="${s.id}">Modifier</button><button class="btn ghost sm" data-act="smp-remove" data-id="${s.id}">Retirer</button></div>` : ''}
+        ${editable ? html`<div class="item-tools">${evidenceButtons({ type: 'sample', id: s.id }, { auditId: audit.id, label: 'Photographier l’étiquette', file: false })}<button class="btn ghost sm" data-act="smp-edit" data-id="${s.id}">Modifier</button><button class="btn ghost sm" data-act="smp-remove" data-id="${s.id}">Retirer</button></div>` : ''}
       </div></div>`; })}</div>` : html`<p class="note">Aucun échantillon enregistré.</p>`}
     ${editable ? html`<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="smp-add"><span class="ic">＋</span>Échantillon</button><button class="btn ghost" data-act="smp-scan"><span class="ic">▦</span>Scanner une étiquette</button></div>` : ''}
   </div>`;

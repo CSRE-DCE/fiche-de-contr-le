@@ -3,12 +3,19 @@ import { load, run } from './harness.js';
 
 export const FILES = [
   './core.test.js',
+  './coords.test.js',
   './domain.test.js',
   './formats.test.js',
   './grid-ct-2026.test.js',
+  './grading.test.js',
+  './links.test.js',
+  './networks.test.js',
   './pdf-sheets.test.js',
+  './perimetre.test.js',
   './github.test.js',
-  './attendus.test.js'
+  './attendus.test.js',
+  './exchange.test.js',
+  './demandes.test.js'
 ];
 
 export async function runAll({ files = FILES, onResult } = {}) {

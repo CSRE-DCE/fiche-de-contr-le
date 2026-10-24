@@ -1,5 +1,7 @@
-/* Structure de l'application : en-tête aux couleurs OEG (logo rond, réseau, synchronisation,
- * utilisateur), navigation latérale (tablette paysage / ordinateur), barre de navigation basse
+/* Structure de l'application : en-tête aux couleurs OEG (logo rond, réseau, synchronisation — mode autonome :
+ * modifications à envoyer à l'autre tablette, « n à envoyer » —,
+ * utilisateur, « Changer d'agent » — tablette partagée : saisie enregistrée puis écran « Qui utilise la
+ * tablette ? », la tournée en cours restant sur la tablette pour l'agent suivant), navigation latérale (tablette paysage / ordinateur), barre de navigation basse
  * (téléphone : Stations, Planning, Audits, Écarts, Menu), boutons Urgence et Observation toujours
  * accessibles. Pictogrammes : js/ui/icons.js. */
 import { html, localDate } from '../core/util.js';
@@ -9,11 +11,14 @@ import { ROLES, can, isTeamMode } from '../core/auth.js';
 import { bindActions } from '../ui/dom.js';
 import { navigate } from '../ui/router.js';
 import { syncState, onSyncState, runSync } from '../app/sync.js';
+import { exchangeState, onExchangeState, watchExchange } from '../app/exchange.js';
 import { orgSettings } from '../app/settings.js';
 import { OPEN_DEVIATION } from '../domain/model.js';
 import { icon } from '../ui/icons.js';
+import { logoImg } from '../ui/logo.js';
 
-// ic : nom de pictogramme (js/ui/icons.js) ; bottom : présent dans la barre basse du téléphone.
+// ic : nom de pictogramme (js/ui/icons.js) ; bottom : présent dans la barre basse du téléphone. Une entrée par écran :
+// « Historique et comparaison » est une vue de l'écran Audits (puce « Historique et comparaison », #/audits?vue=historique).
 const NAV = [
   { key: 'home', href: '#/', ic: 'station', label: 'Stations', bottom: true, group: 'Terrain' },
   { key: 'planning', href: '#/planning', ic: 'calendar', label: 'Planning', bottom: true, group: 'Terrain' },
@@ -23,7 +28,6 @@ const NAV = [
   { key: 'carte', href: '#/carte', ic: 'map', label: 'Carte', group: 'Terrain' },
   { key: 'dashboard', href: '#/tableau-de-bord', ic: 'chart', label: 'Tableau de bord', group: 'Suivi' },
   { key: 'prestataires', href: '#/prestataires', ic: 'building', label: 'Prestataires', group: 'Suivi' },
-  { key: 'historique', href: '#/audits?vue=historique', ic: 'history', label: 'Historique et comparaison', group: 'Suivi' },
   { key: 'documents', href: '#/documents', ic: 'book', label: 'Documents', group: 'Gestion' },
   { key: 'attendus', href: '#/attendus', ic: 'check-circle', label: 'Attendus des prestataires', group: 'Gestion' },
   { key: 'grilles', href: '#/grilles', ic: 'puzzle', label: 'Grilles d’audit', group: 'Gestion' },
@@ -39,7 +43,11 @@ const NAV = [
 const WIDE = [/^\/$/, /^\/station\//, /^\/audit\//, /^\/carte/];
 let unbinds = [];
 
-export function navItems() { return NAV.filter(n => !n.mobileOnly && (!n.perm || can(n.perm))); }
+/** Entrées de navigation permises ; « Synchronisation » s'appelle « Échanges entre tablettes » en mode autonome. */
+export function navItems() {
+  return NAV.filter(n => !n.mobileOnly && (!n.perm || can(n.perm)))
+    .map(n => n.key === 'sync' && !isTeamMode() ? { ...n, label: 'Échanges entre tablettes' } : n);
+}
 
 export function renderShell(root, { lock }) {
   unbinds.forEach(u => u()); unbinds = [];
@@ -47,11 +55,11 @@ export function renderShell(root, { lock }) {
   const groups = [...new Set(navItems().map(n => n.group))];
   root.innerHTML = String(html`
     <header class="app-top" id="appTop">
-      <img class="logo" src="icons/logo-oeg-rond.png" alt="Office de l’Eau de Guyane" width="46" height="46">
+      ${logoImg({ cls: 'logo', alt: org.orgName || 'Office de l’Eau de Guyane', width: 46, height: 46 })}
       <div class="titles"><h1>Fiches de contrôle terrain</h1><small>${org.orgName || 'Office de l’Eau de Guyane'}</small></div>
       <button class="top-pill" data-act="shell-sync" id="netPill" title="État de la connexion et de la synchronisation"><span class="dot"></span><span class="lbl" id="netLbl">…</span></button>
       <button class="top-pill pill-account" data-act="shell-account" title="Mon compte">${icon('user', { size: 20 })}<span class="lbl">${session.user.name.split(' ')[0]}</span></button>
-      <button class="top-pill" data-act="shell-lock" title="Verrouiller la session" aria-label="Verrouiller la session">${icon('lock', { size: 20 })}</button>
+      <button class="top-pill pill-switch" data-act="shell-lock" title="Changer d’agent : enregistre la saisie en cours et revient à l’écran « Qui utilise la tablette ? » (la tournée reste sur la tablette)" aria-label="Changer d’agent">${icon('people', { size: 20 })}<span class="lbl">Changer d’agent</span></button>
     </header>
     <div class="app-shell">
       <nav class="rail" id="rail" aria-label="Navigation principale">
@@ -77,6 +85,7 @@ export function renderShell(root, { lock }) {
   };
   for (const id of ['appTop', 'fabs']) unbinds.push(bindActions(document.getElementById(id), handlers));
   unbinds.push(onSyncState(updateNet));
+  if (!isTeamMode()) { unbinds.push(onExchangeState(updateNet)); watchExchange(); }
   unbinds.push(store.subscribe(type => { if (type === 'deviation' || type === '*') updateBadges(); }));
   window.addEventListener('online', updateNet); window.addEventListener('offline', updateNet);
   updateNet(); updateBadges();
@@ -89,7 +98,14 @@ function updateNet() {
   pill.classList.toggle('offline', !online);
   pill.classList.toggle('pending', online && isTeamMode() && syncState.pending > 0);
   let text = online ? 'En ligne' : 'Hors connexion';
-  if (!isTeamMode()) text = online ? 'Mode autonome' : 'Hors connexion';
+  if (!isTeamMode()) {
+    // Mode autonome : la connexion est sans objet ; ce qui compte, c'est ce qui reste à envoyer à l'autre tablette.
+    const n = exchangeState.pending;
+    pill.classList.toggle('pending', n > 0);
+    lbl.textContent = [online ? '' : 'Hors connexion', n ? `${n} à envoyer` : online ? 'Mode autonome' : ''].filter(Boolean).join(' · ');
+    pill.title = n ? `Échanges entre tablettes : ${n} modification${n > 1 ? 's' : ''} à envoyer à l’autre tablette (${exchangeState.label})` : 'Échanges entre tablettes : rien à envoyer';
+    return;
+  }
   if (syncState.running) text = 'Synchronisation…';
   else if (syncState.pending && isTeamMode()) text += ` · ${syncState.pending} en attente`;
   if (syncState.needsLogin) text = 'Reconnexion requise';

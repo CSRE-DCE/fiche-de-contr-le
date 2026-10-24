@@ -10,7 +10,7 @@ import { auditDeviations } from '../app/audits.js';
 const CHANGE = { amelioration: ['Amélioration', 'ok', '▲'], degradation: ['Dégradation', 'nc', '▼'], modifie: ['Modifié', 'warn', '≠'], identique: ['Identique', 'na', '='], nouveau: ['Nouveau critère', 'info', '+'], retire: ['Critère retiré', 'na', '−'] };
 
 export default {
-  nav: 'historique', title: 'Comparaison',
+  nav: 'audits', title: 'Comparaison',
   async render(params, q) {
     const a = store.get('audit', q.a), b = store.get('audit', q.b);
     const all = store.all('audit').filter(x => x.status !== 'abandonne').sort(byAuditDateDesc);

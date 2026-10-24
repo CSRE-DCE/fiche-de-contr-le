@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Génère docs/ATTENDUS-PRESTATAIRES.md depuis data/attendus-ct-2026.json (source unique des « attendus des
 prestataires » du contrôle terrain 2026 : ce que le prestataire doit faire ou présenter pour chaque point de contrôle
-de la grille CT-2026, comment le contrôleur le vérifie, comment choisir C / P / NC / N/A, liste de préparation).
+de la grille CT-2026, comment le contrôleur le vérifie, comment choisir C / P / NC / N/A, note sur 20 et points majeurs,
+liste de préparation).
 
-Python standard uniquement (aucune dépendance). Les libellés, numéros, sections, types de tournée et portée
-(« commun à la tournée ») des critères sont recopiés de js/domain/grid-ct-2026.js dans le JSON ; leur identité avec
-la grille est vérifiée par tests/unit/attendus.test.js.
+Python standard uniquement (aucune dépendance). Les libellés, numéros, sections, types de tournée, portée
+(« commun à la tournée ») et points majeurs (« majeur ») des critères sont recopiés de js/domain/grid-ct-2026.js
+dans le JSON ; leur identité avec la grille est vérifiée par tests/unit/attendus.test.js.
 
 Utilisation (depuis la racine du dépôt) :
     python tools/attendus_md.py            → écrit docs/ATTENDUS-PRESTATAIRES.md
@@ -76,7 +77,7 @@ def render(data):
     # Sommaire
     w('## Sommaire')
     w('')
-    w('- [Échelle de cotation C / P / NC / N/A](#echelle)')
+    w('- [Échelle de cotation C / P / NC / N/A et note sur 20](#echelle)')
     w('- [Liste de préparation de la tournée](#preparation)')
     for no, fe in feuilles.items():
         n = sum(1 for c in criteres.values() if str(c['feuille']) == no and not c.get('valeur'))
@@ -87,7 +88,7 @@ def render(data):
     # Échelle
     w('<a id="echelle"></a>')
     w('')
-    w('## Échelle de cotation C / P / NC / N/A')
+    w('## Échelle de cotation C / P / NC / N/A et note sur 20')
     w('')
     w('| Cote | Signification |')
     w('|:----:|---|')
@@ -97,6 +98,9 @@ def render(data):
     w('Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute la tournée (une réponse partagée par '
       'toutes les stations). Les mentions *À préciser* signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.')
     w('')
+    if data.get('notation'):
+        w(f"**Note sur 20.** {md_escape(data['notation'])}")
+        w('')
 
     # Préparation
     w('<a id="preparation"></a>')
@@ -163,6 +167,8 @@ def render(data):
                 w(f'### {section}')
                 w('')
             badges = []
+            if c.get('majeur'):
+                badges.append('Point majeur (compte double dans la note)')
             if c.get('tournee') and fe.get('portee') != 'tournee':
                 badges.append('Commun à la tournée')
             if len(c.get('types', [])) < len(TYPES):

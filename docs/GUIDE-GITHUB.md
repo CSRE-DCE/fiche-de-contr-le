@@ -17,11 +17,10 @@ Les libellés des boutons de GitHub sont donnés **en anglais, tels qu’ils app
 9. [Avant chaque envoi : la version de l’application](#9-avant-chaque-envoi--la-version-de-lapplication)
 10. [Activer GitHub Pages](#10-activer-github-pages)
 11. [Consulter l’onglet Actions (vérifications)](#11-consulter-longlet-actions-vérifications)
-12. [Créer le dépôt privé de données](#12-créer-le-dépôt-privé-de-données)
-13. [Créer un jeton d’accès « fine-grained »](#13-créer-un-jeton-daccès--fine-grained-)
-14. [Inviter un collègue](#14-inviter-un-collègue)
-15. [Bonnes pratiques](#15-bonnes-pratiques)
-16. [En cas de problème](#16-en-cas-de-problème)
+12. [Archiver des rapports dans le dépôt privé (facultatif)](#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)
+13. [Inviter un collègue](#13-inviter-un-collègue)
+14. [Bonnes pratiques](#14-bonnes-pratiques)
+15. [En cas de problème](#15-en-cas-de-problème)
 
 ---
 
@@ -37,10 +36,12 @@ Les libellés des boutons de GitHub sont donnés **en anglais, tels qu’ils app
 | **Fetch / Pull** (récupérer / tirer) | récupérer sur son ordinateur les modifications faites par les autres |
 | **Public / Private** (public / privé) | visible par tous sur Internet / visible seulement par les personnes invitées |
 
-Deux dépôts sont utilisés :
+Deux dépôts existent :
 
 - **`CSRE-DCE/fiche-de-contr-le`** — PUBLIC : le code de l’application, publié sur <https://csre-dce.github.io/fiche-de-contr-le/>. **Aucune donnée ici.**
-- **`CSRE-DCE/fiche-de-controle-donnees`** (nom proposé) — PRIVÉ : les données partagées par les appareils en mode équipe.
+- **`CSRE-DCE/fiche-de-controle-donn-es`** — PRIVÉ (GitHub a remplacé le « é » de « données » par « - ») : **l’application ne s’en sert plus** ; il peut servir d’archive manuelle des rapports PDF ([section 12](#12-archiver-des-rapports-dans-le-dépôt-privé-facultatif)).
+
+Les données de contrôle restent chiffrées sur les tablettes, qui se les échangent **par fichier**, directement de l’une à l’autre (Quick Share, Bluetooth, e-mail, Teams, clé USB) : GitHub n’intervient pas, et **les agents de terrain n’ont pas besoin de compte GitHub**. Ce guide concerne les personnes qui publient l’application ou alimentent l’archive privée.
 
 ---
 
@@ -59,7 +60,7 @@ Sur <https://github.com>, cliquez sur **Sign in** (Se connecter), saisissez votr
 
 ### Rejoindre l’organisation CSRE-DCE
 
-Demandez à un administrateur de vous inviter (voir [Inviter un collègue](#14-inviter-un-collègue)). Vous recevez un courriel : cliquez sur **View invitation** (Voir l’invitation) puis **Accept invitation** (Accepter l’invitation) — ou **Join CSRE-DCE** (Rejoindre CSRE-DCE) pour une invitation à l’organisation. Les invitations en attente apparaissent aussi sur <https://github.com/notifications>.
+Demandez à un administrateur de vous inviter (voir [Inviter un collègue](#13-inviter-un-collègue)). Vous recevez un courriel : cliquez sur **View invitation** (Voir l’invitation) puis **Accept invitation** (Accepter l’invitation) — ou **Join CSRE-DCE** (Rejoindre CSRE-DCE) pour une invitation à l’organisation. Les invitations en attente apparaissent aussi sur <https://github.com/notifications>.
 
 ---
 
@@ -78,7 +79,7 @@ C’est la méthode la plus simple, sans rien installer.
 
 Limites du site : 25 Mo par fichier et 100 fichiers par envoi. Au-delà, utilisez GitHub Desktop ou VS Code.
 
-> Rappel : pas de photos de personnes, de jeux de données d’audit, de PDF de contrôles ni de jeton dans ce dépôt public.
+> Rappel : pas de photos de personnes, de jeux de données d’audit, de fichiers d’échange entre tablettes, de PDF de contrôles ni de mot de passe dans ce dépôt public.
 
 ---
 
@@ -202,7 +203,7 @@ C’est ce changement qui fait renouveler le cache hors connexion des tablettes.
 4. **Branch** (Branche) : **main**, dossier **/ (root)** (racine) › **Save** (Enregistrer).
 5. Patientez quelques minutes puis rechargez la page : le message « Your site is live at https://csre-dce.github.io/fiche-de-contr-le/ » (Votre site est en ligne à…) apparaît, avec le bouton **Visit site** (Voir le site).
 
-Ensuite, chaque envoi sur `main` republie automatiquement le site (1 à 10 minutes ; suivi dans l’onglet **Actions**, travail « pages build and deployment »). Avec un compte GitHub gratuit, GitHub Pages exige un dépôt public — c’est le cas du dépôt de l’application, jamais du dépôt de données.
+Ensuite, chaque envoi sur `main` republie automatiquement le site (1 à 10 minutes ; suivi dans l’onglet **Actions**, travail « pages build and deployment »). Avec un compte GitHub gratuit, GitHub Pages exige un dépôt public — c’est le cas du dépôt de l’application, jamais du dépôt privé d’archive.
 
 ---
 
@@ -222,48 +223,24 @@ La même coche ou croix apparaît à côté de chaque validation dans la liste d
 
 ---
 
-## 12. Créer le dépôt privé de données
+## 12. Archiver des rapports dans le dépôt privé (facultatif)
 
-À faire une seule fois, par l’administrateur de l’équipe (voir aussi le README, section « Synchroniser plusieurs appareils »).
+Le dépôt privé **`CSRE-DCE/fiche-de-controle-donn-es`** n’est **plus utilisé par l’application** : aucune tablette ne s’y connecte. Si vous le souhaitez, il sert d’**archive manuelle**, alimentée par un administrateur depuis un ordinateur ; sinon, il peut simplement rester tel quel.
 
-1. En haut à droite de GitHub : **+** › **New repository** (Nouveau dépôt).
-2. **Owner** (Propriétaire) : `CSRE-DCE`. **Repository name** (Nom du dépôt) : `fiche-de-controle-donnees`.
-3. **Description** : par exemple « Données des fiches de contrôle terrain (privé) ».
-4. Visibilité : **Private** (Privé) — impératif.
-5. Laissez le dépôt vide, ou activez **Add a README file** (Ajouter un fichier README).
-6. Cliquez sur **Create repository** (Créer le dépôt).
-7. Invitez les membres de l’équipe ([section 14](#14-inviter-un-collègue)) avec le rôle **Write**.
+1. Sur la tablette, produisez le document : rapport d’audit signé (audit › Signatures › « Rapport d’audit détaillé (PDF) » ou « Fiches de contrôle (PDF) »), puis faites-le passer sur l’ordinateur (e-mail, Teams, clé USB). Pour un fichier d’échange `.oegct`, archivez **une copie du fichier réellement envoyé à l’autre tablette** (pièce jointe de l’e-mail, copie de la clé USB) : un envoi fait seulement pour l’archive serait noté « envoyé » et l’autre tablette ne recevrait pas ces modifications.
+2. Ouvrez <https://github.com/CSRE-DCE/fiche-de-controle-donn-es> et placez-vous dans le dossier voulu, par exemple `rapports/2026/` (pour créer un dossier : [section 5](#5-créer-un-dossier)).
+3. **Add file** (Ajouter un fichier) › **Upload files** (Téléverser des fichiers) › glissez-déposez les fichiers › message, par exemple « Rapports de la tournée AUD-2026-000123 » › **Commit changes** (Valider les modifications), comme à la [section 3](#3-ajouter-des-fichiers-par-le-site) (25 Mo au plus par fichier sur le site ; au-delà, GitHub Desktop).
 
-Vérification : la page du dépôt affiche le badge **Private**. Ne le passez jamais en public (**Settings › General › Danger Zone › Change repository visibility**). L’application refuse d’ailleurs un dépôt de données public.
+À retenir :
 
-Le premier appareil configuré avec « Rejoindre une équipe » initialise ce dépôt (dossier `donnees/` : `config/`, `entites/`, `journal/`, `medias/`).
-
----
-
-## 13. Créer un jeton d’accès « fine-grained »
-
-Chaque utilisateur de l’application en mode équipe crée **son propre jeton**, limité au dépôt de données.
-
-1. Cliquez sur votre photo de profil (en haut à droite) › **Settings** (Paramètres).
-2. Tout en bas du menu de gauche : **Developer settings** (Paramètres de développeur).
-3. **Personal access tokens** (Jetons d’accès personnels) › **Fine-grained tokens** (Jetons à granularité fine).
-4. **Generate new token** (Générer un nouveau jeton).
-5. Remplissez :
-   - **Token name** (Nom du jeton) : par exemple « Tablette contrôle OEG 2 » ;
-   - **Resource owner** (Propriétaire de la ressource) : **CSRE-DCE** ;
-   - **Expiration** : par exemple 90 jours (le jeton se renouvelle depuis l’écran Synchronisation › « Renouveler le jeton ») ;
-   - **Repository access** (Accès aux dépôts) : **Only select repositories** (Seulement certains dépôts) › choisissez **`CSRE-DCE/fiche-de-controle-donnees`** uniquement ;
-   - **Permissions** › **Repository permissions** (Permissions sur le dépôt) › **Contents** (Contenu) : **Read and write** (Lecture et écriture). « Metadata : Read-only » (Métadonnées : lecture seule) s’ajoute automatiquement. **Ne cochez aucune autre permission.** (Selon la version de l’interface, on ajoute la permission par le bouton **Add permissions**, Ajouter des permissions.)
-6. Cliquez sur **Generate token** (Générer le jeton).
-7. **Copiez immédiatement** le jeton (il commence par `github_pat_`) : GitHub ne l’affichera plus. Collez-le directement dans l’application (champ « Jeton d’accès « fine-grained » ») : il y est conservé chiffré.
-
-Si l’organisation **CSRE-DCE** n’apparaît pas comme « Resource owner », ou si le jeton reste « en attente » : un propriétaire de l’organisation doit autoriser les jetons fine-grained (**organisation › Settings › Personal access tokens › Settings**) et, si une approbation est exigée, approuver la demande (**Pending requests**, Demandes en attente).
-
-**Renouveler** : même page › le jeton › **Regenerate token** (Régénérer le jeton), puis collez le nouveau jeton dans l’application. **Révoquer** (appareil perdu, départ d’un agent) : même page › **Delete** (Supprimer).
+- le dépôt reste **privé** (badge **Private** sur sa page) : ne le passez jamais en public ; n’y invitez que les personnes qui en ont besoin ([section 13](#13-inviter-un-collègue)) ;
+- les rapports PDF y sont lisibles par toutes les personnes invitées ; les fichiers `.oegct` restent chiffrés : pour s’en servir (« Recevoir un fichier » sur une tablette — un fichier ancien n’écrase jamais une saisie plus récente —, ou mise en service d’une tablette à partir d’un fichier « Tout envoyer »), il faut le mot de passe d’échange en vigueur à leur date ;
+- **aucun mot de passe** dans ce dépôt (ni ceux des agents, ni le mot de passe d’échange) ;
+- **jamais de données dans le dépôt public de l’application** (`CSRE-DCE/fiche-de-contr-le`) : ni rapport, ni fichier d’échange, ni paquet de données.
 
 ---
 
-## 14. Inviter un collègue
+## 13. Inviter un collègue
 
 Il faut être administrateur du dépôt.
 
@@ -272,22 +249,21 @@ Il faut être administrateur du dépôt.
 3. Recherchez le nom d’utilisateur GitHub ou l’adresse électronique du collègue.
 4. Choisissez le rôle :
    - dépôt de l’application : **Write** (écriture) pour les personnes qui le modifient, **Read** (lecture) sinon ;
-   - dépôt de données : **Write** pour chaque utilisateur de l’application (l’application doit pouvoir écrire, y compris pour un profil « Consultation » : les profils sont appliqués par l’application).
+   - dépôt privé d’archive : **Write** pour les administrateurs qui y déposent des rapports, **Read** pour les personnes qui les consultent.
 5. Cliquez sur **Add … to this repository** (Ajouter … à ce dépôt). Le collègue accepte l’invitation reçue par courriel.
 
-Dans l’application, l’administrateur déclare ensuite le login GitHub du collègue et son profil : **Administration › Membres de l’équipe › « ＋ Membre »**.
+Les agents de terrain n’ont jamais besoin de GitHub : ils sont ajoutés sur chaque tablette dans l’application, **Administration › Agents de cette tablette › « ＋ Ajouter un agent »** (ou « Ajouter sur cette tablette » s’ils existent déjà sur l’autre tablette).
 
 Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 
 ---
 
-## 15. Bonnes pratiques
+## 14. Bonnes pratiques
 
-- **Jamais de données personnelles ni de données de contrôle dans le dépôt public** : pas d’audits, de paquets de données exportés, de PDF de tournées, de signatures, de photos de personnes, de listes de noms ou de numéros de téléphone.
-- **Jamais de jeton** (`github_pat_…`) dans un fichier, un message de validation, un courriel ou une conversation. Si un jeton a été publié par erreur : supprimez-le immédiatement sur GitHub (**Developer settings › Fine-grained tokens › Delete**) puis créez-en un autre ; supprimer le fichier ne suffit pas, l’historique le conserve.
-- Le dépôt de données reste **privé** ; un jeton par personne, limité à ce dépôt et à « Contents », avec une expiration courte.
-- Appareil perdu : désactivez-le dans l’application (**Administration › Appareils de l’équipe › « Désactiver (perdu) »**) **et** supprimez le jeton correspondant sur GitHub.
-- Activez la double authentification sur tous les comptes.
+- **Jamais de données personnelles ni de données de contrôle dans le dépôt public** : pas d’audits, de fichiers d’échange entre tablettes (`OEG-echange_….oegct`), de paquets de données exportés, de PDF de tournées, de signatures, de photos de personnes, de listes de noms ou de numéros de téléphone. Les tablettes de l’OEG échangent leurs données par fichier, directement de l’une à l’autre (Quick Share, Bluetooth, e-mail, Teams, clé USB) : GitHub n’intervient pas.
+- **Jamais de mot de passe** dans un fichier, un message de validation, un courriel ou une conversation : ni ceux des agents, ni le mot de passe d’échange, ni celui d’un compte GitHub. Un secret publié par erreur doit être changé aussitôt : supprimer le fichier ne suffit pas, l’historique le conserve.
+- Le dépôt d’archive `CSRE-DCE/fiche-de-controle-donn-es` reste **privé**, avec le moins de personnes invitées possible.
+- Activez la double authentification sur tous les comptes GitHub qui ont accès aux dépôts (administrateur et suppléant).
 - Les fiches d’évaluation des Agences de l’eau / Aquascop et autres documents de tiers ne doivent pas être déposés dans le dépôt public.
 - Un message de validation par modification, clair et en français (« Correction du libellé F4.12 », « Ajout des photos de la station X »).
 - **Incrémentez la version** à chaque modification de l’application et vérifiez l’onglet **Actions** après chaque envoi.
@@ -295,7 +271,7 @@ Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 
 ---
 
-## 16. En cas de problème
+## 15. En cas de problème
 
 | Situation | Que faire ? |
 |---|---|
@@ -303,6 +279,6 @@ Pour retirer un accès : même page › **Remove** (Retirer) à côté du nom.
 | Conflit lors d’un **Pull** (le même fichier a été modifié des deux côtés) | GitHub Desktop liste les fichiers en conflit : ouvrez-les (bouton **Open in Visual Studio Code**), choisissez pour chaque bloc **Accept Current Change** / **Accept Incoming Change** (Garder ma modification / Garder la modification reçue), enregistrez, puis **Continue merge** / **Commit merge** (Valider la fusion). |
 | Le site publié ne change pas | Vérifiez l’onglet **Actions** (publication terminée ?) puis rechargez la page ; dans l’application : **Mon compte › « Rechercher une mise à jour »**. Avez-vous incrémenté `version.js` ? |
 | Croix rouge dans **Actions** | Ouvrez l’exécution, lisez le message d’erreur ([section 11](#11-consulter-longlet-actions-vérifications)), corrigez, renvoyez. |
-| L’application indique « Jeton GitHub refusé (invalide, expiré ou révoqué) » | Créez ou régénérez le jeton ([section 13](#13-créer-un-jeton-daccès--fine-grained-)), puis Synchronisation › « Renouveler le jeton ». |
-| L’application indique « Accès refusé par GitHub » ou « Introuvable sur GitHub » | Vérifiez le nom du dépôt (`CSRE-DCE/fiche-de-controle-donnees`), que vous y êtes invité avec le rôle **Write**, et que le jeton vise ce dépôt avec « Contents : Read and write ». |
-| L’application indique que le dépôt de données est public | Repassez-le en privé (**Settings › General › Danger Zone › Change repository visibility**) et prévenez l’administrateur. |
+| Un agent n’apparaît pas à l’écran « Qui utilise la tablette ? » | Un administrateur l’ajoute : Administration › Agents de cette tablette › « ＋ Ajouter un agent », ou « Ajouter sur cette tablette » s’il existe déjà sur l’autre tablette (même profil, après réception d’un fichier de celle-ci : Échanges entre tablettes › « Recevoir un fichier »). |
+| Un fichier d’échange ne s’ouvre pas (« autre mot de passe d’échange ») | Le mot de passe d’échange n’est pas le même sur les deux tablettes : saisissez celui de la tablette qui a envoyé le fichier (demandez-le à un administrateur), puis harmonisez-le (Administration › Échanges entre tablettes). Voir le README, section « Deux tablettes pour quatre agents ». |
+| Le dépôt privé d’archive affiche « 404 » (page introuvable) | Il est privé : demandez à un administrateur de vous inviter ([section 13](#13-inviter-un-collègue)), acceptez l’invitation, puis reconnectez-vous. |

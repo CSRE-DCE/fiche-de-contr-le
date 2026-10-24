@@ -1,12 +1,26 @@
 /* Tableau de bord qualité : indicateurs descriptifs et traçables (chaque chiffre ouvre la liste des
- * enregistrements qui le composent). Aucun score agrégé. */
+ * enregistrements qui le composent). NOTES SUR 20 des tournées signées de la période (js/domain/grading.js) : moyenne
+ * générale, moyenne par prestataire et par réseau (réseau du programme des prestations de la tournée, à défaut celui
+ * de ses stations ; une tournée sur deux réseaux compte dans chacun) ; note de chaque tournée figée à sa signature
+ * (calculée pour une tournée signée avant la notation) ; chaque moyenne ouvre la liste des tournées notées.
+ * Couverture par réseau de surveillance : stations contrôlées (tournée signée sur la période) sur le nombre de stations
+ * de chaque réseau ; une station sur deux réseaux compte dans chacun, le total « Sites contrôlés » compte les stations
+ * distinctes. Avancement par campagne (réseau de la campagne) : une ligne ouvre le planning de la campagne. */
 import { html, fmtDate, localDate, addDays, sortBy, groupBy } from '../core/util.js';
 import { store } from '../core/store.js';
 import { navigate } from '../ui/router.js';
 import { openModal } from '../ui/dom.js';
-import { pageTitle, siteName, providerName, auditBadge, critBadge, deviationBadge, prestationBadge, options, tourStationsLabel, auditSiteIds } from '../ui/components.js';
+import { pageTitle, siteName, providerName, auditBadge, critBadge, deviationBadge, prestationBadge, options, tourStationsLabel, auditSiteIds, networkBadge } from '../ui/components.js';
+import { NO_NETWORK, groupSitesByNetwork, networkColors, sortNetworkCodes } from '../domain/networks.js';
+import { currentNetworkIndex, currentNetworkOf } from '../app/networks.js';
 import { OPEN_DEVIATION, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { isOverdue, recurringDeviations } from '../domain/summary.js';
+import { averageGrades, gradeThresholds, thresholdsText, frNumber } from '../domain/grading.js';
+import { stationPrestationIds } from '../domain/grids.js';
+import { prestationNetwork } from '../domain/networks.js';
+import { tourGrades, tourTypesOf } from '../app/audits.js';
+import { orgSettings } from '../app/settings.js';
+import { gradePill } from '../ui/sheet-chrome.js';
 import { auditsOf, isLate } from './planning.js';
 
 function period(q) {
@@ -38,14 +52,67 @@ function compute(q) {
     recurrents: recurringDeviations(allDevs),
     prestataires: [...new Set(signed.map(a => a.providerId))],
     sites: [...new Set(signed.flatMap(auditSiteIds))],
-    campagnes: [...new Set(signed.map(a => a.campaignId).filter(Boolean))]
+    campagnes: [...new Set(signed.map(a => a.campaignId).filter(Boolean))],
+    // Tournées signées notées (grilles en feuilles) : note de la tournée et réseaux.
+    notes: signed.map(a => ({ a, g: tourGrades(a)?.tour || null })).filter(x => x.g && x.g.n10 !== null).map(x => ({ ...x, networks: tourNetworks(x.a) }))
   };
+}
+
+/**
+ * Réseaux d'une tournée (moyennes par réseau) : réseaux des programmes (campagnes) des prestations de ses stations ;
+ * à défaut (tournée sans prestation), réseaux de ses stations correspondant aux types contrôlés (réseau à types de
+ * tournée associés : l'un d'eux ; réseau sans type associé, comme BIO : tournée de biologie), sinon tous ses réseaux.
+ * Codes distincts triés.
+ */
+function tourNetworks(a) {
+  const idx = currentNetworkIndex();
+  const ids = (a.stations || []).length ? a.stations.flatMap(stationPrestationIds) : [a.prestationId].filter(Boolean);
+  const fromPrograms = ids.map(id => store.get('prestation', id)).filter(Boolean).map(p => prestationNetwork(p, store.get('campaign', p.campaignId), idx)).filter(Boolean);
+  let codes = fromPrograms;
+  if (!codes.length) {
+    const all = auditSiteIds(a).flatMap(id => store.get('site', id)?.networks || []), types = tourTypesOf(a);
+    const fits = c => { const t = currentNetworkOf(c).auditTypes || []; return t.length ? t.some(x => types.includes(x)) : types.includes('bio'); };
+    codes = all.filter(fits).length ? all.filter(fits) : all;
+  }
+  return sortNetworkCodes([...new Set(codes)], idx);
+}
+
+/** Carte « Notes sur 20 des tournées signées » : moyenne générale, par prestataire (et par réseau), par réseau. */
+function gradesCard(d) {
+  const th = gradeThresholds(orgSettings());
+  const m = averageGrades(d.notes.map(x => ({ providerId: x.a.providerId, networks: x.networks, n10: x.g.n10 })), th);
+  const range = x => (x.count > 1 ? `${frNumber(x.min)} – ${frNumber(x.max)}` : '—');
+  const netChip = (x, prov = '') => html`<button type="button" class="dash-gnet" data-act="list" data-k="notes" data-net="${x.code}" ${prov ? html`data-prov="${prov}"` : ''} title="${x.count} tournée(s) notée(s)">${networkBadge(currentNetworkOf(x.code))}${gradePill(x)}<small>(${x.count})</small></button>`;
+  const nets = sortNetworkCodes(m.byNetwork.map(x => x.code), currentNetworkIndex()).map(c => m.byNetwork.find(x => x.code === c));
+  return html`<div class="card" id="dashGrades"><h2>Notes sur 20 des tournées signées</h2>
+    ${m.all.count ? html`<p class="dash-gall"><button type="button" class="dash-gnet" data-act="list" data-k="notes">Moyenne générale ${gradePill(m.all, { label: true })}<small>${m.all.count} tournée${m.all.count > 1 ? 's' : ''} notée${m.all.count > 1 ? 's' : ''}${m.all.count > 1 ? ` · de ${frNumber(m.all.min)} à ${frNumber(m.all.max)}` : ''}</small></button></p>
+      <div class="table-wrap"><table class="tbl dash-grades"><thead><tr><th scope="col">Prestataire</th><th scope="col">Tournées notées</th><th scope="col">Moyenne /20</th><th scope="col">Min – max</th><th scope="col">Par réseau</th></tr></thead><tbody>
+        ${m.byProvider.map(x => html`<tr data-prov="${x.providerId}"><th scope="row"><button type="button" class="linkish" data-act="list" data-k="notes" data-prov="${x.providerId}">${providerName(x.providerId)}</button></th><td>${x.count}</td><td>${gradePill(x, { label: true })}</td><td>${range(x)}</td><td><div class="dash-gnets">${sortNetworkCodes(x.networks.map(n => n.code), currentNetworkIndex()).map(c => netChip(x.networks.find(n => n.code === c), x.providerId))}</div></td></tr>`)}
+      </tbody></table></div>
+      <h3>Par réseau</h3><div class="dash-gnets">${nets.map(x => netChip(x))}</div>`
+      : html`<p class="note">Aucune tournée signée et notée sur la période.</p>`}
+    <p class="note">Note de chaque tournée : celle figée à sa signature (avec les seuils de ce moment) ; tournée signée avant la mise en place de la notation : note calculée. Moyennes au dixième, appréciation selon les seuils actuels (${thresholdsText(th)}). Réseau d’une tournée : celui du programme de ses prestations ; une tournée sur deux réseaux compte dans chacun.</p></div>`;
 }
 
 function bars(rows, { color = 'var(--sky)', empty = 'Aucune donnée' } = {}) {
   if (!rows.length) return html`<p class="note">${empty}</p>`;
   const max = Math.max(1, ...rows.map(r => r.value));
   return html`<div class="bars" role="list">${rows.map(r => html`<div class="bar-row" role="listitem" title="${r.label} : ${r.value}${r.detail ? ' — ' + r.detail : ''}"><span class="bl">${r.label}</span><span class="bt"><span style="width:${Math.max(r.value ? 2 : 0, r.value / max * 100)}%;background:${r.color || color}"></span></span><span class="bn">${r.value}</span></div>`)}</div>`;
+}
+
+/**
+ * Stations contrôlées par réseau (sites des tournées signées de la période) : une ligne par réseau, barre = part des
+ * stations du réseau contrôlées ; une station sur deux réseaux compte dans chacun (total distinct à part).
+ */
+function networkCoverage(d) {
+  const idx = currentNetworkIndex(), done = new Set(d.sites);
+  const { groups, distinct } = groupSitesByNetwork(store.all('site'), idx);
+  const rows = groups.map(g => ({ g, total: g.sites.length, n: g.sites.filter(s => done.has(s.id)).length }));
+  if (!rows.length) return html`<p class="note">Aucune station au référentiel.</p>`;
+  return html`<div class="bars is-cov">${rows.map(({ g, total, n }) => html`<button type="button" class="bar-row" data-act="list" data-k="sites" data-net="${g.code}" title="${g.network.label} : ${n} station(s) contrôlée(s) sur ${total}">
+      <span class="bl">${g.code === NO_NETWORK ? 'Sans réseau' : html`${networkBadge(g.network)}<span class="bar-sub">${g.network.label !== g.network.code ? g.network.label : ''}</span>`}</span>
+      <span class="bt"><span style="width:${Math.max(n ? 2 : 0, n / Math.max(1, total) * 100)}%;background:${networkColors(g.network).main}"></span></span><span class="bn">${n}&nbsp;/&nbsp;${total}</span></button>`)}</div>
+    <p class="note">${d.sites.length} station${d.sites.length > 1 ? 's' : ''} contrôlée${d.sites.length > 1 ? 's' : ''} sur ${distinct} (stations distinctes) ; une station sur deux réseaux compte dans chacun.</p>`;
 }
 
 export default {
@@ -56,7 +123,8 @@ export default {
     const kpi = (k, label, n, cls = '', sub = '') => html`<button class="kpi ${cls}" data-act="list" data-k="${k}"><span class="k">${label}</span><span class="v">${n}</span>${sub ? html`<span class="tiny muted">${sub}</span>` : ''}</button>`;
     const byProvider = [...groupBy(d.signed, a => a.providerId).entries()].map(([id, l]) => ({ label: providerName(id), value: l.length })).sort((a, b) => b.value - a.value).slice(0, 10);
     const openByProvider = [...groupBy(d.ouverts, x => x.providerId).entries()].map(([id, l]) => ({ label: providerName(id), value: l.length })).sort((a, b) => b.value - a.value).slice(0, 10);
-    const campaigns = sortBy(store.all('campaign').filter(c => store.count('prestation', p => p.campaignId === c.id)), 'start').map(c => {
+    const netRank = new Map(sortNetworkCodes(store.all('campaign').map(c => c.network).filter(Boolean), currentNetworkIndex()).map((c, i) => [c, i]));
+    const campaigns = sortBy(store.all('campaign').filter(c => store.count('prestation', p => p.campaignId === c.id)), c => netRank.get(c.network) ?? 999, 'start').map(c => {
       const ps = store.filter('prestation', p => p.campaignId === c.id);
       const audited = ps.filter(p => auditsOf(p.id).some(a => a.lock?.lockedAt)).length;
       return { c, total: ps.length, audited, late: ps.filter(p => isLate(p)).length };
@@ -89,10 +157,12 @@ export default {
         <div class="card"><h2>Écarts ouverts par criticité</h2>${bars(crits.map(c => ({ label: c.label, value: d.ouverts.filter(x => x.criticalityCode === c.code).length, color: c.color })))}</div>
         <div class="card"><h2>Écarts ouverts par prestataire</h2>${bars(openByProvider, { empty: 'Aucun écart ouvert' })}</div>
         <div class="card"><h2>Audits signés par prestataire</h2>${bars(byProvider, { empty: 'Aucun audit signé sur la période' })}</div>
+        <div class="card"><h2>Stations contrôlées par réseau</h2>${networkCoverage(d)}</div>
         <div class="card"><h2>Exigences le plus souvent en écart</h2>${bars([...groupBy(d.devs, x => x.itemCode || x.typeCode || '—').entries()].map(([k, l]) => ({ label: `${k} — ${l[0].requirement || ''}`, value: l.length })).sort((a, b) => b.value - a.value).slice(0, 8), { empty: 'Aucun écart sur la période' })}</div>
       </div>
-      <div class="card"><h2>Avancement par campagne</h2>${campaigns.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Campagne</th><th>Période</th><th>Prestations</th><th>Auditées</th><th>Taux de contrôle</th><th>En retard</th></tr></thead><tbody>
-        ${campaigns.map(x => html`<tr class="click" data-act="goto" data-href="#/?campagne=${x.c.id}&periode=toutes"><td>${x.c.label}</td><td>${fmtDate(x.c.start)} → ${fmtDate(x.c.end)}</td><td>${x.total}</td><td>${x.audited}</td><td>${x.total ? Math.round(x.audited * 100 / x.total) : 0} %</td><td>${x.late}</td></tr>`)}</tbody></table></div>` : html`<p class="note">Aucune campagne avec prestations.</p>`}</div>`;
+      ${gradesCard(d)}
+      <div class="card"><h2>Avancement par campagne</h2>${campaigns.length ? html`<div class="table-wrap"><table class="tbl"><thead><tr><th>Campagne</th><th>Réseau</th><th>Période</th><th>Prestations</th><th>Auditées</th><th>Taux de contrôle</th><th>En retard</th></tr></thead><tbody>
+        ${campaigns.map(x => html`<tr class="click" data-act="goto" data-href="#/planning?campagne=${encodeURIComponent(x.c.id)}&periode=toutes" title="Planning de la campagne"><td>${x.c.label}</td><td>${x.c.network ? networkBadge(currentNetworkOf(x.c.network)) : '—'}</td><td>${fmtDate(x.c.start)} → ${fmtDate(x.c.end)}</td><td>${x.total}</td><td>${x.audited}</td><td>${x.total ? Math.round(x.audited * 100 / x.total) : 0} %</td><td>${x.late}</td></tr>`)}</tbody></table></div>` : html`<p class="note">Aucune campagne avec prestations.</p>`}</div>`;
   },
   handlers: {
     period(el) { navigate('/tableau-de-bord?periode=' + el.dataset.v, { replace: true }); },
@@ -100,16 +170,28 @@ export default {
     goto(el) { location.hash = el.dataset.href; },
     list(el) {
       const d = compute(this.query), k = el.dataset.k;
-      const TITLES = { programmes: 'Audits programmés', realises: 'Audits réalisés (signés)', enCours: 'Audits en cours', enRetard: 'Audits en retard', nonAuditees: 'Prestations non auditées', ouverts: 'Écarts ouverts', retard: 'Écarts en retard', recurrents: 'Écarts récurrents', devs: 'Écarts de la période', prestataires: 'Prestataires contrôlés', sites: 'Sites contrôlés', campagnes: 'Campagnes contrôlées' };
+      const TITLES = { programmes: 'Audits programmés', realises: 'Audits réalisés (signés)', enCours: 'Audits en cours', enRetard: 'Audits en retard', nonAuditees: 'Prestations non auditées', ouverts: 'Écarts ouverts', retard: 'Écarts en retard', recurrents: 'Écarts récurrents', devs: 'Écarts de la période', prestataires: 'Prestataires contrôlés', sites: 'Sites contrôlés', campagnes: 'Campagnes contrôlées', notes: 'Tournées signées notées' };
       let rows;
       if (['programmes', 'enRetard', 'nonAuditees'].includes(k)) rows = sortBy(d[k], 'plannedDate').map(p => html`<a class="li" href="#/prestation/${p.id}"><div class="li-main"><div class="li-title">${siteName(p.siteId)}</div><div class="li-sub">${fmtDate(p.plannedDate)}${p.dateIndicative ? ' (indicative)' : ''} · ${providerName(p.providerId)} · ${p.ref}</div></div>${prestationBadge(p.status)}</a>`);
       else if (['realises', 'enCours'].includes(k)) rows = [...d[k]].sort(byAuditDateDesc).map(a => html`<a class="li" href="#/audit/${a.id}"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${tourStationsLabel(a)} · ${providerName(a.providerId)}</div></div>${auditBadge(a)}</a>`);
       else if (['ouverts', 'retard', 'devs'].includes(k)) rows = d[k].map(x => html`<a class="li" href="#/ecart/${x.id}"><div class="li-main"><div class="li-title">${x.number}</div><div class="li-sub">${x.requirement} · ${providerName(x.providerId)}</div></div>${critBadge(x.criticalityCode)}${deviationBadge(x.status)}</a>`);
       else if (k === 'recurrents') rows = d.recurrents.map(r => html`<a class="li" href="#/ecarts?prestataire=${r.providerId}&filtre=tous"><div class="li-main"><div class="li-title">${r.requirement}</div><div class="li-sub">${providerName(r.providerId)} · ${r.audits.length} audits · ${r.count} écarts</div></div></a>`);
+      else if (k === 'notes') {
+        // Tournées notées d'un prestataire et / ou d'un réseau (note de la tournée, la meilleure en dernier).
+        const prov = el.dataset.prov || '', net = el.dataset.net || '';
+        rows = d.notes.filter(x => (!prov || x.a.providerId === prov) && (!net || x.networks.includes(net))).sort((x, y) => x.g.n10 - y.g.n10)
+          .map(({ a, g }) => html`<a class="li" href="#/audit/${a.id}/synthese"><div class="li-main"><div class="li-title">${a.number}</div><div class="li-sub">${fmtDate(auditDate(a))} · ${tourStationsLabel(a)} · ${providerName(a.providerId)}</div></div>${gradePill(g, { label: true })}</a>`);
+      }
       else if (k === 'prestataires') rows = d.prestataires.map(id => html`<a class="li" href="#/prestataire/${id}"><div class="li-main"><div class="li-title">${providerName(id)}</div></div></a>`);
-      else if (k === 'sites') rows = d.sites.map(id => html`<a class="li" href="#/audits?site=${id}"><div class="li-main"><div class="li-title">${siteName(id)}</div></div></a>`);
+      else if (k === 'sites') {
+        // Couverture par réseau : sites contrôlés du réseau choisi (une station sur deux réseaux figure dans chacun).
+        const net = el.dataset.net || '', of = id => store.get('site', id)?.networks || [];
+        rows = d.sites.filter(id => !net || (net === NO_NETWORK ? !of(id).length : of(id).includes(net))).map(id => html`<a class="li" href="#/audits?site=${id}"><div class="li-main"><div class="li-title">${siteName(id)}</div></div></a>`);
+      }
       else rows = d.campagnes.map(id => html`<div class="li"><div class="li-main"><div class="li-title">${store.get('campaign', id)?.label}</div></div></div>`);
-      const m = openModal({ title: `${TITLES[k]} (${rows.length})`, wide: true, body: rows.length ? html`<div class="list">${rows}</div>` : html`<p class="note">Aucun enregistrement.</p>`, actions: [{ label: 'Fermer', cls: 'primary' }] });
+      const net = el.dataset.net;
+      const title = TITLES[k] + (k === 'notes' && el.dataset.prov ? ` · ${providerName(el.dataset.prov)}` : '') + (net ? ` · ${net === NO_NETWORK ? 'sans réseau' : 'réseau ' + net}` : '');
+      const m = openModal({ title: `${title} (${rows.length})`, wide: true, body: rows.length ? html`<div class="list">${rows}</div>` : html`<p class="note">Aucun enregistrement.</p>`, actions: [{ label: 'Fermer', cls: 'primary' }] });
       m.root.addEventListener('click', e => { if (e.target.closest('a[href^="#/"]')) m.close(); });
     }
   }

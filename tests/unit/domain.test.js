@@ -2,10 +2,12 @@
  * (js/domain/default-grids.js) : logique conditionnelle, avancement et complétude, sélection des grilles,
  * alertes (jamais de non-conformité automatique), habilitations et équipements, synthèse factuelle, écarts
  * récurrents, comparaison de deux audits, fusion à trois versions, normalisation des imports, référentiel initial
- * (data/referentiel-oeg.json lu par fetch), droits par profil. Portage de tests/audit-unit.mjs (fiches-oeg) :
+ * (data/referentiel-oeg.json lu par fetch), droits par profil, contrôleurs OEG d'une tournée (binôme : droit de saisie,
+ * compatibilité des audits sans contrôleurs, « Rejoindre la tournée », noms pré-remplis). Portage de tests/audit-unit.mjs (fiches-oeg) :
  * la partie serveur Node (audit-api) n'a pas d'équivalent ici (synchronisation GitHub : github.test.js). */
 import { test, assert, eq, deepEq } from './harness.js';
-import { evalCondition, itemIndex, visibleStructure, progress, validateResponses, validateGrid, rankGrids, allItems, conditionErrors } from '../../js/domain/grids.js';
+import { evalCondition, itemIndex, visibleStructure, progress, validateResponses, validateGrid, rankGrids, allItems, conditionErrors, expandGrid, prefillResponses } from '../../js/domain/grids.js';
+import { GRID_CT_2026 } from '../../js/domain/grid-ct-2026.js';
 import { computeAlerts, operatorStatus, equipmentStatus, qualificationValid } from '../../js/domain/rules.js';
 import { auditSummary, recurringDeviations, isOverdue, prestationDueDate, isPrestationLate } from '../../js/domain/summary.js';
 import { auditDate, byAuditDateDesc, TOUR_DATE_ITEM } from '../../js/domain/model.js';
@@ -14,7 +16,10 @@ import { mergeEntity, stripMeta, IMMUTABLE_TYPES } from '../../js/domain/merge.j
 import { GRID_GENERAL, GRID_RAPIDE, DEFAULT_GRIDS } from '../../js/domain/default-grids.js';
 import { baseReferential, oegReferential, oegProgramme, demoData, parseSessionMonth } from '../../js/domain/seed.js';
 import { parseDate, parseTime, parseNumber, parseBool, guessMapping, resolveRef } from '../../js/domain/normalize.js';
-import { canWrite, roleCan, ROLES, writePermission } from '../../js/domain/permissions.js';
+import {
+  canWrite, roleCan, ROLES, writePermission, auditControllerIds, auditControllers, controllerNamesText, isAuditController, canEditAuditAs, canJoinAudit,
+  agentInitials, agentFullName, suggestUsername
+} from '../../js/domain/permissions.js';
 
 /** Référentiel des fiches terrain OEG (même source que l'application : js/app/bootstrap.js). */
 let dataPromise = null;
@@ -114,12 +119,13 @@ test('habilitations et équipements', () => {
 });
 
 /* ---------- Synthèse, écarts, comparaison ---------- */
-test('synthèse factuelle sans score, écarts récurrents, retards', () => {
+test('synthèse factuelle (grille historique : décomptes, non notée), écarts récurrents, retards', () => {
   const crit = baseReferential().criticality;
   const s = auditSummary({ audit: { responses: { 'it-R01': R('C'), 'it-R03': R('NC', { comment: 'x' }), 'it-R04': R('NA') } }, grid: GRID_RAPIDE, deviations: [{ criticalityCode: 'MAJ' }], criticalities: crit });
   eq(s.counts.C, 1); eq(s.counts.NC, 1); eq(s.counts.NA, 1);
   eq(s.byCriticality.find(c => c.code === 'MAJ').count, 1);
-  assert(!('score' in s), 'aucun score');
+  assert(!('score' in s), 'note dans « grade » (grading.js), jamais « score »');
+  eq(s.grade, null, 'grille historique (par sections) : pas de note sur 20');
   eq(s.ncItems.length, 1); eq(s.ncItems[0].code, 'R03'); eq(s.ncItems[0].comment, 'x');
   const rec = recurringDeviations([{ providerId: 'p', itemCode: 'Q04', auditId: 'a1', status: 'clos' }, { providerId: 'p', itemCode: 'Q04', auditId: 'a2', status: 'ouvert' }, { providerId: 'p', itemCode: 'Q05', auditId: 'a2', status: 'ouvert' }]);
   eq(rec.length, 1); eq(rec[0].open, 1);
@@ -207,6 +213,82 @@ test('droits par profil', () => {
   eq(roleCan('auditeur', 'inconnu'), false);
   eq(writePermission('inconnu'), null);
   deepEq(Object.keys(ROLES), ['admin', 'rq', 'superviseur', 'auditeur', 'consultation']);
+});
+
+/* ---------- Tournée en binôme : contrôleurs OEG ---------- */
+const ALICE = { id: 'u-alice', name: 'A. Dupont', role: 'auditeur' };
+const BRUNO = { id: 'u-bruno', name: 'B. Martin', role: 'auditeur' };
+const CHLOE = { id: 'u-chloe', name: 'C. Petit', role: 'auditeur' };
+const binome = (extra = {}) => ({ id: 'a1', status: 'en_cours', auditorId: ALICE.id, auditorName: ALICE.name, controllerIds: [ALICE.id, BRUNO.id], controllerNames: { [ALICE.id]: ALICE.name, [BRUNO.id]: BRUNO.name }, ...extra });
+
+test('binôme : tout contrôleur de la tournée peut saisir, un agent hors binôme non (sauf encadrement)', () => {
+  const a = binome();
+  deepEq(auditControllerIds(a), [ALICE.id, BRUNO.id]);
+  eq(isAuditController(a, BRUNO.id), true); eq(isAuditController(a, CHLOE.id), false); eq(isAuditController(a, null), false);
+  eq(canEditAuditAs(a, ALICE), true, 'créatrice');
+  eq(canEditAuditAs(a, BRUNO), true, 'second contrôleur du binôme');
+  eq(canEditAuditAs(a, CHLOE), false, 'auditeur hors binôme');
+  eq(canEditAuditAs(a, { id: 'u-sup', role: 'superviseur' }), true, 'encadrement (audit.editOthers)');
+  eq(canEditAuditAs(a, { id: 'u-adm', role: 'admin' }), true);
+  eq(canEditAuditAs(binome({ controllerIds: [ALICE.id, 'u-cons'] }), { id: 'u-cons', role: 'consultation' }), false, 'profil sans droit d’audit, même désigné');
+  eq(canEditAuditAs(binome({ lock: { lockedAt: '2026-10-11T10:00:00Z' } }), BRUNO), false, 'tournée verrouillée : lecture seule (modification motivée à part)');
+  eq(canEditAuditAs(a, null), false); eq(canEditAuditAs(null, ALICE), false);
+  // Doublons ou identifiants vides ignorés
+  deepEq(auditControllerIds(binome({ controllerIds: [ALICE.id, '', BRUNO.id, ALICE.id] })), [ALICE.id, BRUNO.id]);
+});
+
+test('binôme : compatibilité — un audit sans controllerIds a pour contrôleur son auteur', () => {
+  const old = { id: 'a0', status: 'en_cours', auditorId: ALICE.id, auditorName: ALICE.name };
+  deepEq(auditControllerIds(old), [ALICE.id]);
+  deepEq(auditControllerIds({ ...old, controllerIds: [] }), [ALICE.id], 'liste vide : auteur');
+  deepEq(auditControllers(old), [{ id: ALICE.id, name: ALICE.name }]);
+  eq(controllerNamesText(old), 'A. Dupont');
+  eq(canEditAuditAs(old, ALICE), true); eq(canEditAuditAs(old, BRUNO), false);
+  eq(canJoinAudit(old, BRUNO), true);
+  deepEq(auditControllerIds({}), []); eq(controllerNamesText(null), '');
+});
+
+test('binôme : noms des contrôleurs (« A. Dupont, B. Martin ») et pré-remplissage Agent(s) OEG / Contrôleur OEG', () => {
+  const a = binome();
+  eq(controllerNamesText(a), 'A. Dupont, B. Martin');
+  // Nom figé dans la tournée prioritaire ; à défaut profils connus ; à défaut nom de l'auteur.
+  const noNames = binome({ controllerNames: undefined });
+  eq(controllerNamesText(noNames, { [BRUNO.id]: 'Bruno Martin' }), 'A. Dupont, Bruno Martin');
+  eq(controllerNamesText(a, { [BRUNO.id]: 'Autre nom' }), 'A. Dupont, B. Martin', 'nom enregistré dans la tournée');
+  deepEq(auditControllers(binome({ controllerIds: [ALICE.id, 'u-inconnu'] })).map(c => c.name), ['A. Dupont', ''], 'agent inconnu : nom vide (ignoré dans le texte)');
+  eq(controllerNamesText(binome({ controllerIds: [ALICE.id, 'u-inconnu'] })), 'A. Dupont');
+  // Pré-remplissage de la grille CT-2026 avec les noms de tous les contrôleurs
+  const site = { id: 'site-09271503', code: '09271503', name: 'Athanase', bassin: 'Approuague', x: 356714, y: 465112 };
+  const E = expandGrid(GRID_CT_2026, [{ siteId: site.id }], { [site.id]: site });
+  const r = prefillResponses(E, { site, auditor: { name: controllerNamesText(a) }, date: '2026-10-11', auditType: 'bio', stations: [{ key: '09271503', site }] });
+  eq(r['it-F2-1.1']?.value, 'A. Dupont, B. Martin', 'F2 1.1 Agent(s) OEG');
+  eq(r['it-F1-R3@09271503']?.value, 'A. Dupont, B. Martin', 'F1 R3 Contrôleur OEG (repères de la station)');
+  eq(r['it-F2-1.1'].prefilled, true);
+});
+
+test('binôme : « Rejoindre la tournée » proposé aux seuls agents autorisés hors binôme, avant la signature', () => {
+  const a = binome();
+  eq(canJoinAudit(a, CHLOE), true);
+  eq(canJoinAudit(a, BRUNO), false, 'déjà contrôleur');
+  eq(canJoinAudit(a, { id: 'u-sup', role: 'superviseur' }), true, 'encadrement : peut aussi devenir contrôleur');
+  eq(canJoinAudit(a, { id: 'u-cons', role: 'consultation' }), false, 'profil Consultation');
+  eq(canJoinAudit(binome({ signatures: { auditor: { at: '2026-10-11T10:00:00Z' } } }), CHLOE), false, 'déjà signée par un contrôleur');
+  eq(canJoinAudit(binome({ lock: { lockedAt: '2026-10-11T10:00:00Z' } }), CHLOE), false, 'verrouillée');
+  eq(canJoinAudit(binome({ status: 'abandonne' }), CHLOE), false, 'abandonnée');
+  eq(canJoinAudit(a, null), false);
+});
+
+test('agents : initiales, nom affiché et identifiant proposé (« Ajouter un agent »)', () => {
+  eq(agentInitials({ firstName: 'Chloé', lastName: 'Petit' }), 'CP');
+  eq(agentInitials({ firstName: 'Élodie', lastName: 'Ébène' }), 'EE', 'sans accents');
+  eq(agentInitials({ initials: 'bma', firstName: 'Bruno', lastName: 'Martin' }), 'BMA', 'initiales du profil prioritaires');
+  eq(agentInitials({ name: 'Alice Dupont' }), 'AD', 'profil antérieur : deux premiers mots du nom');
+  eq(agentInitials({ name: 'Jean-Marc' }), 'JM');
+  eq(agentInitials({ username: 'admin' }), 'A'); eq(agentInitials(null), '?');
+  eq(agentFullName(' Bruno ', 'Martin '), 'Bruno Martin'); eq(agentFullName('', 'Martin'), 'Martin');
+  eq(suggestUsername('Chloé', 'Petit'), 'cpetit');
+  eq(suggestUsername('Jean-Marc', 'De La Tour'), 'jdelatour');
+  eq(suggestUsername('Ève', ''), 'e'); eq(suggestUsername('', ''), '');
 });
 
 /* ---------- Date d'un audit (date de la tournée) ---------- */

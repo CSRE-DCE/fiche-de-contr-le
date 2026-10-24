@@ -2,28 +2,38 @@
  * Rubriques : 1 identification, 2 contexte, 3 prestataire, 4 opérateur(s), 5 site et point,
  * 6 prestation, 7 documents applicables, 8 grille de contrôle, 9 réponses, 10 observations,
  * 11 photographies, 12 preuves, 13 écarts, 14 actions demandées, 15 signatures,
- * 16 historique des modifications — précédées d'une synthèse factuelle (sans score global).
+ * 16 historique des modifications — précédées d'une synthèse : note sur 20 de la tournée (figée à la signature,
+ * recalculée, calculée ou provisoire ; js/domain/grading.js), décomptes et notes par station et par feuille.
  * Tant que l'audit n'est pas signé et verrouillé, le rapport porte la mention « RAPPORT PROVISOIRE ».
  * Habillage OEG (charte des fiches de contrôle) : polices Barlow incorporées, logo rond, pied de page à vagues
  * (js/app/sheets-pdf.js, chargé à la demande ; repli Helvetica sans décor s'il est indisponible). Échelle
  * C / P / NC / N/A ; tournée de plusieurs stations : stations, décomptes par station et par feuille, critères
- * « communs à la tournée » listés une seule fois.
+ * « communs à la tournée » listés une seule fois. Réseaux de surveillance des stations (« BIO – Biologie… ») et
+ * réseau du programme de la prestation (référentiel « Réseaux »). Tournée mixte (biologie + chimie du même
+ * prestataire) : type de tournée joint et périmètre contrôlé à chaque station (identification, décomptes par station).
  */
 import { PDFDocument } from '../formats/pdf.js';
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes } from '../core/media.js';
-import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO, localDate } from '../core/util.js';
-import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate } from '../domain/model.js';
-import { isAnswerable, allItems, isSheetGrid } from '../domain/grids.js';
+import { sha256Hex, fmtDate, fmtDateTime, fmtTime, haversine, fmtDistance, nowISO } from '../core/util.js';
+import { RESPONSES, PROVIDER_KINDS, PRESTATION_STATUS, DOC_TYPES, DEVIATION_STATUS, ACTION_STATUS, CONTROL_LEVELS, responseText, QUALIFICATION_TYPES, EQUIPMENT_STATUS, auditDate, auditKindLabel, auditTimeTexts } from '../domain/model.js';
+import { isAnswerable, allItems, isSheetGrid, partsText } from '../domain/grids.js';
 import { operatorStatus, equipmentStatus } from '../domain/rules.js';
-import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace } from './audits.js';
+import { auditState, auditContentHash, verifyAuditSeal, auditMedia, effectiveGrid, deviationPlace, tourControllers, entriesByAgent } from './audits.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
+import { thresholdsText, frNumber, GRADE_STATES } from '../domain/grading.js';
 import { refLabel } from './documents.js';
 import { orgSettings } from './settings.js';
+import { siteNetworks, siteNetworksText, prestationNetworkOf } from './networks.js';
 import { toJPEG } from '../ui/capture.js';
+import { logoBytes } from '../ui/logo.js';
 
 const COLORS = { C: '#1b7a43', P: '#b45309', NC: '#b3261e', NA: '#55636a', NO: '#8a5a00', NV: '#5d3f99' };
+/** Couleurs des appréciations de la note sur 20. */
+const LEVEL_COLORS = { good: '#1b7a43', fair: '#a35a00', poor: '#b3261e' };
+/** Cellule « Note /20 » : « 15,6 » coloré selon l'appréciation, « non noté » en gris. */
+const noteText = g => (g && g.n10 !== null && g.n10 !== undefined ? { text: g.text, color: LEVEL_COLORS[g.level] || '#55636a', font: 'bold' } : { text: 'non noté', color: '#55636a' });
 /** Palette OEG des titres et tableaux (js/ui/themes.js, thème « océan »). */
 const OEG_STYLE = { heading: '#0d3577', rule: '#1a9fd9', tableHead: '#0d3577', tableHeadText: '#ffffff', zebra: '#f3fafd', border: '#cfe3f1', labelColor: '#0d3577', labelFill: '#e6f6fd', text: '#14284b' };
 
@@ -35,11 +45,11 @@ async function branding(doc) {
     return { logo: await mod.oegLogo(doc), footer: mod.drawOegFooter, cond: doc.hasFont('condensed') ? 'condensed' : 'bold' };
   } catch (e) { return null; }
 }
+/** Logo (choisi en Administration, sinon celui de l'OEG) en JPEG : en-tête de repli sans le module des fiches. */
 async function logoJPEG() {
   try {
-    const res = await fetch(new URL('../../icons/logo-oeg-rond.png', import.meta.url));
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    return await toJPEG(bytes, 'image/png', 400);
+    const bytes = await logoBytes();
+    return bytes ? await toJPEG(bytes, 'image/png', 400) : null;
   } catch (e) { return null; }
 }
 async function imageFor(m, maxSide = 1400) {
@@ -73,8 +83,10 @@ export async function buildAuditReport(auditId) {
   const sheetGrid = isSheetGrid(st.grid);
   // Date de l'audit = date de la tournée (la même que celle des écrans et des fiches de contrôle PDF).
   const date = auditDate(audit);
-  const entryDay = audit.startedAt ? localDate(new Date(audit.startedAt)) : '';
-  const doc = new PDFDocument({ title, author: audit.auditorName, subject: `Audit terrain de prestation de prélèvement — ${stations.length ? stations.map(x => x.name).join(', ') : site?.name || ''}`, keywords: `audit;prélèvement;${audit.number}` });
+  // Contrôleurs OEG de la tournée (binôme) : partout où figure le contrôleur OEG.
+  const controllers = tourControllers(audit);
+  const controllersText = controllers.map(c => c.name).filter(Boolean).join(', ') || audit.auditorName || '';
+  const doc = new PDFDocument({ title, author: controllersText, subject: `Audit terrain de prestation de prélèvement — ${stations.length ? stations.map(x => x.name).join(', ') : site?.name || ''}`, keywords: `audit;prélèvement;${audit.number}` });
   const brand = await branding(doc);
   const generatedAt = nowISO();
   if (brand) {
@@ -124,18 +136,33 @@ export async function buildAuditReport(auditId) {
     columns: [{ label: 'Critères contrôlés', width: 70 }, { label: 'Conformes', width: 60 }, { label: 'Perfectibles', width: 62 }, { label: 'Non conformes', width: 66 }, { label: 'Non applicables', width: 66 }, { label: 'Non observés', width: 62 }, { label: 'Non vérifiables', width: 66 }, { label: 'Écarts', width: 59 }],
     rows: [[String(s.counts.controlled), { text: String(s.counts.C), color: COLORS.C, font: 'bold' }, { text: String(s.counts.P || 0), color: COLORS.P, font: 'bold' }, { text: String(s.counts.NC), color: COLORS.NC, font: 'bold' }, String(s.counts.NA), String(s.counts.NO), String(s.counts.NV), { text: String(s.deviationsCount), font: 'bold' }]]
   });
-  if (sheetGrid && stations.length) {
-    // Décomptes de la tournée par station et par feuille (chaque critère compté une seule fois).
-    const ss = stationSummary({ audit, grid: st.grid, ctx: st.ctx });
-    const cnt = c => [{ text: String(c.C), color: COLORS.C, font: c.C ? 'bold' : 'regular' }, { text: String(c.P), color: COLORS.P, font: c.P ? 'bold' : 'regular' }, { text: String(c.NC), color: COLORS.NC, font: c.NC ? 'bold' : 'regular' }, String(c.NA), String(c.unanswered), String(c.total)];
-    const cols = l => [{ label: l, width: 181 }, ...['C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total'].map(x => ({ label: x, width: 55 }))];
-    doc.heading('Décomptes par station (C / P / NC / N/A)', { level: 3 });
-    doc.table({ columns: cols('Station'), rows: [...ss.stations.map(x => [`${x.index + 1}. ${x.name} (${x.code})`, ...cnt(x)]), ...(ss.tournee.total ? [['Commun à la tournée', ...cnt(ss.tournee)]] : []), [{ text: 'Ensemble de la tournée', font: 'bold' }, ...cnt(ss.global)]], fontSize: 8 });
-    doc.heading('Décomptes et conclusions par feuille', { level: 3 });
+  // Note sur 20 de la tournée (grilles en feuilles) : chaque point une fois, points majeurs ×2, synthèses hors note.
+  const tg = sheetGrid ? s.grading : null;
+  const noteOf = g => (g && g.n10 !== null && g.n10 !== undefined ? { text: `${g.text} — ${g.label}`, color: LEVEL_COLORS[g.level], font: 'bold' } : { text: 'non noté', color: '#55636a' });
+  if (tg?.tour) {
+    const g = tg.tour;
+    doc.heading('Note de la tournée (sur 20)', { level: 3 });
     doc.table({
-      columns: [{ label: 'Feuille', width: 150 }, { label: 'Station', width: 76 }, ...['C', 'P', 'NC', 'N/A', 'Non rens.'].map(x => ({ label: x, width: 38 })), { label: 'Conclusion', width: 95 }],
-      rows: sheetSummary({ audit, grid: st.grid, ctx: st.ctx }).map(x => [`${x.index}. ${x.title}`, x.station?.name || 'Tournée', String(x.C), String(x.P), String(x.NC), String(x.NA), String(x.unanswered), x.conclusionLabel || '—']), fontSize: 7.6
+      columns: [{ label: 'Note /20', width: 110 }, { label: 'Points obtenus / évalués', width: 100 }, { label: 'Points évalués', width: 130 }, { label: 'Note', width: 171 }],
+      rows: [[noteOf(g), g.n10 !== null ? `${frNumber(g.points)} / ${frNumber(g.max)}` : '—', `${g.evaluated}${g.majors ? ` (dont ${g.majors} majeur(s) ×2)` : ''}${g.excluded ? ` ; ${g.excluded} de synthèse hors note` : ''}`,
+        `${GRADE_STATES[tg.state] || ''}${tg.state === 'recalculee' && tg.signedTour ? ` — à la signature : ${tg.signedTour.text} / 20` : ''}${tg.state === 'figee' && tg.record?.at ? ` le ${fmtDateTime(tg.record.at)}` : ''}`]], fontSize: 8.4
     });
+    doc.paragraph(`Note = points pondérés obtenus ÷ points pondérés évalués × 20 (C = 1 point, P = 0,5, NC = 0 ; N/A et points non renseignés non comptés ; points majeurs comptés double ; points de synthèse cotés mais hors note). Appréciation : ${thresholdsText(tg.thresholds, { words: true })}. Un point commun à la tournée ou une opération mutualisée n’est compté qu’une fois.`, { size: 7.5, color: '#4f5f67' });
+  }
+  if (sheetGrid && stations.length) {
+    // Décomptes et notes de la tournée par station et par feuille (chaque critère compté une seule fois).
+    const ss = s.stations || stationSummary({ audit, grid: st.grid, ctx: st.ctx });
+    const cnt = c => [{ text: String(c.C), color: COLORS.C, font: c.C ? 'bold' : 'regular' }, { text: String(c.P), color: COLORS.P, font: c.P ? 'bold' : 'regular' }, { text: String(c.NC), color: COLORS.NC, font: c.NC ? 'bold' : 'regular' }, String(c.NA), String(c.unanswered), String(c.total), noteText(c.grade)];
+    const cols = l => [{ label: l, width: 165 }, ...['C', 'P', 'NC', 'N/A'].map(x => ({ label: x, width: 46 })), { label: 'Non renseignés', width: 52 }, { label: 'Total', width: 46 }, { label: 'Note /20', width: 64 }];
+    doc.heading('Décomptes et notes par station (C / P / NC / N/A, note sur 20)', { level: 3 });
+    const perim = key => (st.mixed ? ` — ${partsText(st.baseGrid, stations.find(y => y.key === key)?.perimeter || [])}` : '');
+    doc.table({ columns: cols('Station'), rows: [...ss.stations.map(x => [`${x.index + 1}. ${x.name} (${x.code})${perim(x.key)}`, ...cnt(x)]), ...(ss.tournee.total ? [['Commun à la tournée', ...cnt(ss.tournee)]] : []), [{ text: 'Ensemble de la tournée', font: 'bold' }, ...cnt(ss.global)]], fontSize: 8 });
+    doc.heading('Décomptes, notes et conclusions par feuille', { level: 3 });
+    doc.table({
+      columns: [{ label: 'Feuille', width: 140 }, { label: 'Station', width: 70 }, ...['C', 'P', 'NC', 'N/A', 'Non rens.'].map(x => ({ label: x, width: 34 })), { label: 'Note /20', width: 50 }, { label: 'Conclusion', width: 81 }],
+      rows: (s.sheets.length ? s.sheets : sheetSummary({ audit, grid: st.grid, ctx: st.ctx })).map(x => [`${x.index}. ${x.title}`, x.station?.name || 'Tournée', String(x.C), String(x.P), String(x.NC), String(x.NA), String(x.unanswered), noteText(x.grade), x.conclusionLabel || '—']), fontSize: 7.6
+    });
+    doc.paragraph('Note d’une feuille : points affichés dans la feuille (points communs à la tournée compris) ; note d’une station : ses points propres ; « Commun à la tournée » : feuille de tournée et points communs.', { size: 7.2, color: '#6e7b82', font: 'italic' });
   }
   doc.paragraph('Répartition des écarts par niveau de criticité : ' + (s.byCriticality.map(c => `${c.label} : ${c.count}`).join(' · ') || 'aucun'), { size: 9 });
   if (s.frequentRequirements.length) doc.paragraph('Exigences les plus fréquemment non conformes : ' + s.frequentRequirements.map(f => `${f.requirement} (${f.count})`).join(' ; '), { size: 9 });
@@ -143,14 +170,20 @@ export async function buildAuditReport(auditId) {
   doc.heading('Points de vigilance', { level: 3 }); doc.bullets(audit.conclusions?.vigilance ? [audit.conclusions.vigilance, ...s.vigilance] : (s.vigilance.length ? s.vigilance : ['—']), { size: 9 });
   if (audit.conclusions?.comment) { doc.heading('Commentaire et bilan de l’auditeur', { level: 3 }); doc.paragraph(audit.conclusions.comment); }
   if (audit.conclusions?.preconisations) { doc.heading('Autres préconisations', { level: 3 }); doc.paragraph(audit.conclusions.preconisations); }
-  doc.paragraph('Aucun score global n’est calculé : les constats sont présentés de façon factuelle et traçable.', { size: 7.5, color: '#6e7b82', font: 'italic' });
+  doc.paragraph(sheetGrid ? 'Les constats sont présentés de façon factuelle et traçable ; la note sur 20 résume les cotes C / P / NC selon le barème validé par l’OEG, sans jamais remplacer les conclusions du contrôleur.' : 'Grille historique (par sections) : constats présentés de façon factuelle et traçable, sans note sur 20.', { size: 7.5, color: '#6e7b82', font: 'italic' });
 
   // 1. Identification
   doc.heading('1. Identification de l’audit');
   doc.keyValues([
-    ['Numéro d’audit', audit.number], ['Type d’audit', audit.kind === 'inopine' ? 'Audit inopiné (non planifié)' : 'Audit planifié'],
-    ['Date', fmtDate(date)], ['Heure de début', `${fmtTime(audit.startedAt)}${entryDay && entryDay !== date ? ` (saisie démarrée le ${fmtDate(entryDay)})` : ''}`], ['Heure de fin', audit.endedAt ? fmtTime(audit.endedAt) : 'non clôturé'],
-    ['Auditeur', `${audit.auditorName} (${audit.auditorRole || ''})`], ['Appareil utilisé', `${audit.device?.name || ''} — ${audit.device?.id || ''}`],
+    ['Numéro d’audit', audit.number], ['Type d’audit', auditKindLabel(audit.kind, { long: true })],
+    // Tournée mixte : types contrôlés et périmètre de chaque station (une tournée d'un seul type : rapport inchangé).
+    ...(st.mixed ? [['Type de tournée', `${st.header?.typeLabel || ''} (tournée mixte)`], ['Périmètre contrôlé', stations.map(x => `${x.name} : ${partsText(st.baseGrid, x.perimeter)}`).join(' ; ')]] : []),
+    // Heures rapprochées de la feuille Organisation (« Début / Fin du contrôle », F2.1.5 / 1.6), comme l'onglet Infos.
+    ['Date', fmtDate(date)], ['Heure de début', auditTimeTexts(audit, { open: 'non clôturé' }).start], ['Heure de fin', auditTimeTexts(audit, { open: 'non clôturé' }).end],
+    [controllers.length > 1 ? 'Contrôleurs OEG' : 'Contrôleur OEG (auditeur)', controllersText],
+    ['Tournée créée par', `${audit.auditorName} (${audit.auditorRole || ''})`],
+    ...(controllers.length > 1 || (audit.controllerLog || []).length ? [['Saisies par agent', entriesByAgent(audit).map(r => `${r.name} : ${r.responses} réponse(s)`).join(' ; ')]] : []),
+    ['Appareil utilisé', `${audit.device?.name || ''} — ${audit.device?.id || ''}`],
     ['Version de l’application', audit.appVersion], ['Grille d’audit', `${audit.gridSnapshot?.name} — ${audit.gridCode} v${audit.gridVersion}`],
     ['Version du protocole', audit.protocolVersion || 'non renseignée'], ['Version du CCTP', audit.cctpVersion || 'non renseignée'],
     ['Statut', audit.lock?.lockedAt ? `Signé et verrouillé le ${fmtDateTime(audit.lock.lockedAt)}` : (audit.status === 'termine' ? 'Terminé, en attente de signature' : 'En cours')],
@@ -195,14 +228,14 @@ export async function buildAuditReport(auditId) {
   // 5. Site et point
   doc.heading(multi ? '5. Stations de la tournée et point de prélèvement' : '5. Site et point de prélèvement');
   if (multi) doc.table({
-    columns: [{ label: 'N°', width: 24 }, { label: 'Station', width: 140 }, { label: 'Code', width: 90 }, { label: 'Commune / bassin', width: 127 }, { label: 'Prestation programmée', width: 130 }],
-    rows: stations.map(x => [String(x.index + 1), x.name, `${x.code} (${x.codeType === 'BSS' ? 'BSS' : 'SANDRE'})`, [x.site?.commune, x.site?.bassin].filter(Boolean).join(' / '), x.prestation ? `${x.prestation.ref || ''}${x.prestation.plannedDate ? ' — ' + fmtDate(x.prestation.plannedDate) : ''}` : '—']),
+    columns: [{ label: 'N°', width: 24 }, { label: 'Station', width: 120 }, { label: 'Code', width: 90 }, { label: 'Réseaux', width: 60 }, { label: 'Commune / bassin', width: 107 }, { label: 'Prestation programmée', width: 130 }],
+    rows: stations.map(x => [String(x.index + 1), x.name, `${x.code} (${x.codeType === 'BSS' ? 'BSS' : 'SANDRE'})`, x.site ? siteNetworks(x.site).map(n => n.code).join(' · ') : '', [x.site?.commune, x.site?.bassin].filter(Boolean).join(' / '), x.prestation ? `${x.prestation.ref || ''}${x.prestation.plannedDate ? ' — ' + fmtDate(x.prestation.plannedDate) : ''}` : '—']),
     fontSize: 8
   });
   const lastGps = (audit.gps || []).slice(-1)[0];
   const threshold = Number(point?.gpsThreshold) || Number(org.gpsThresholdM) || 100;
   doc.keyValues([
-    ['Site', site ? `${site.name} (${site.code})` : ''], ['Réseau(x)', (site?.networks || []).join(', ')], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')],
+    ['Site', site ? `${site.name} (${site.code})` : ''], ['Réseau(x)', site ? siteNetworksText(site) : ''], ['Nature', site?.kind], ['Commune / bassin', [site?.commune, site?.bassin].filter(Boolean).join(' / ')],
     ['Masse d’eau', site?.masseEau], ['Point', point ? `${point.code} — ${point.name}` : ''],
     ['Coordonnées attendues (WGS84)', point?.lat ? `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}` : 'non renseignées'],
     ['Dernier relevé GPS', lastGps ? `${lastGps.lat.toFixed(6)}, ${lastGps.lon.toFixed(6)} ±${Math.round(lastGps.accuracy || 0)} m le ${fmtDateTime(lastGps.at)}${lastGps.source === 'manuel' ? ' (saisie manuelle)' : ''}` : 'aucun'],
@@ -212,7 +245,8 @@ export async function buildAuditReport(auditId) {
   // 6. Prestation
   doc.heading('6. Prestation');
   if (prestation) {
-    doc.keyValues([['Référence', prestation.ref], ['Statut', PRESTATION_STATUS[prestation.status]?.label || prestation.status], ['Équipe', prestation.team], ['Opérateurs programmés', (prestation.operatorIds || []).map(id => opName(store.get('operator', id))).join(', ')]]);
+    const pnet = prestationNetworkOf(prestation);
+    doc.keyValues([['Référence', prestation.ref], ['Réseau (programme)', pnet ? (pnet.label && pnet.label !== pnet.code ? `${pnet.code} – ${pnet.label}` : pnet.code) : ''], ['Statut', PRESTATION_STATUS[prestation.status]?.label || prestation.status], ['Équipe', prestation.team], ['Opérateurs programmés', (prestation.operatorIds || []).map(id => opName(store.get('operator', id))).join(', ')]]);
     if ((prestation.statusHistory || []).length) doc.table({ columns: [{ label: 'Date', width: 90 }, { label: 'Par', width: 100 }, { label: 'Évènement', width: 321 }], rows: prestation.statusHistory.map(h => [fmtDateTime(h.at), h.by || '', h.label || (h.to ? `${PRESTATION_STATUS[h.from]?.label || h.from || ''} → ${PRESTATION_STATUS[h.to]?.label || h.to}` : '') + (h.reason ? ` — ${h.reason}` : '')]) });
   } else doc.paragraph('Audit inopiné sans prestation programmée associée.');
 
@@ -313,7 +347,7 @@ export async function buildAuditReport(auditId) {
   doc.heading('15. Signatures');
   for (const role of ['auditor', 'provider']) {
     const sg = audit.signatures?.[role];
-    doc.paragraph(role === 'auditor' ? 'Auditeur' : 'Représentant du prestataire', { font: 'bold', size: 10, color: '#003d7a', gap: 1 });
+    doc.paragraph(role === 'auditor' ? (controllers.length > 1 ? `Contrôleur OEG (pour les contrôleurs de la tournée : ${controllersText})` : 'Auditeur') : 'Représentant du prestataire', { font: 'bold', size: 10, color: '#003d7a', gap: 1 });
     if (!sg) { doc.paragraph('Non signé.', { color: '#b3261e' }); continue; }
     if (sg.refused) doc.paragraph(`${sg.name || 'Représentant'} — refus ou impossibilité de signer, consigné le ${fmtDateTime(sg.at)}. Motif : ${sg.comment || 'non précisé'}`);
     else {
@@ -336,7 +370,7 @@ export async function buildAuditReport(auditId) {
     });
   }
   const trail = store.filter('trail', t => t.entityId === audit.id || (t.entityType === 'deviation' && devs.some(d => d.id === t.entityId))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Abandon' };
+  const ACTIONS = { create: 'Création', update: 'Modification', amend: 'Modification après signature', sign: 'Signature', lock: 'Verrouillage', finish: 'Clôture', reopen: 'Réouverture', report: 'Génération de rapport', delete: 'Suppression', abandon: 'Annulation de la tournée', 'controller-add': 'Contrôleur ajouté', 'controller-remove': 'Contrôleur retiré' };
   doc.table({
     columns: [{ label: 'Date et heure', width: 78 }, { label: 'Utilisateur', width: 85 }, { label: 'Appareil', width: 70 }, { label: 'Action', width: 90 }, { label: 'Détail', width: 188 }],
     rows: trail.slice(-250).map(t => [fmtDateTime(t.at), t.userName || '', t.deviceName || '', `${ACTIONS[t.action] || t.action}${t.entityType === 'deviation' ? ' (écart ' + t.entityLabel + ')' : ''}`, `${t.reason ? 'Motif : ' + t.reason + '\n' : ''}${t.changeCount ? t.changeCount + ' champ(s) : ' + (t.changes || []).slice(0, 4).map(c => c.path).join(', ') : ''}`]), fontSize: 7.2

@@ -5,7 +5,8 @@
  * pré-rempli, l'auditeur garde la décision finale.
  *
  * Grilles en feuilles : règles `item.alerts` appliquées à la valeur saisie (`input` numérique, ou champ
- * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps) aux
+ * d'un objet via `rule.field`), écart des coordonnées X / Y saisies (critères `fields` gps, toujours en RGFG95 /
+ * UTM 22N : une saisie en UTM 21N est comparée après conversion, js/domain/coords.js) aux
  * coordonnées théoriques de LA station du critère (tournée : `stationSites[clé]`), ancienneté des calibrations
  * des sondes (module « instruments », donnée de tournée : une alerte par appareil). Une alerte liée à un critère
  * de station porte `stationKey`.
@@ -14,6 +15,7 @@ import { allItems, itemIndex, responseValue, visibleStructure, isAnswered, isAns
 import { itemInput, auditDate as dateOfAudit } from './model.js';
 import { haversine, fmtDistance, fmtDate, daysBetween } from '../core/util.js';
 import { ecartGPS } from '../lib/geo.js';
+import { originText } from './coords.js';
 
 const LEVEL_RANK = { critique: 3, attention: 2, info: 1 };
 
@@ -102,7 +104,8 @@ export function calibrationStatus(calibration, auditDate, maxDays = 30) {
 /**
  * Calcule les alertes d'un audit (grille EFFECTIVE pour une tournée).
  * input : {audit, grid, ctx, point, site, prestation, operators, settings, today, mediaCounts, includeMissing,
- *          stationSites?: {[clé de station]: site}, prestations?: [{prestation, station}] (toutes celles de la tournée)}
+ *          stationSites?: {[clé de station]: site}, prestations?: [{prestation, station, samplingTypeId?}] (toutes celles de la
+ *          tournée ; samplingTypeId : type de prélèvement attendu d'une prestation d'une autre partie d'une station mixte)}
  */
 export function computeAlerts(input) {
   const { audit, grid, ctx = {}, point, site = null, prestation, operators = [], settings = {}, mediaCounts = {}, stationSites = {} } = input;
@@ -173,13 +176,16 @@ export function computeAlerts(input) {
 
   // 5. Prestation différente de celle programmée (tournée : chaque prestation comparée à SA station)
   const prestationList = input.prestations?.length ? input.prestations : prestation ? [{ prestation, station: { siteId: audit.siteId, pointId: audit.pointId, key: null } }] : [];
-  for (const { prestation, station } of prestationList) {
+  for (const { prestation, station, samplingTypeId } of prestationList) {
     if (!prestation) continue;
     const diffs = [];
+    // Type de prélèvement attendu : celui de la tournée ; prestation d'une autre partie d'une station mixte (ex. chimie
+    // d'une tournée biologie + chimie) : celui de sa partie (samplingTypeId).
+    const stype = samplingTypeId !== undefined ? samplingTypeId : audit.samplingTypeId;
     if (station?.siteId && prestation.siteId && station.siteId !== prestation.siteId) diffs.push('site différent');
     if (station?.pointId && (prestation.pointIds || []).length && !prestation.pointIds.includes(station.pointId)) diffs.push('point de prélèvement différent');
     if (audit.providerId && prestation.providerId && audit.providerId !== prestation.providerId) diffs.push('prestataire différent');
-    if (audit.samplingTypeId && prestation.samplingTypeId && audit.samplingTypeId !== prestation.samplingTypeId) diffs.push('type de prélèvement différent');
+    if (stype && prestation.samplingTypeId && stype !== prestation.samplingTypeId) diffs.push('type de prélèvement différent');
     const planned = (prestation.operatorIds || []);
     const present = (audit.operatorIds || []);
     if (planned.length && present.length && !present.some(id => planned.includes(id))) diffs.push('aucun des opérateurs programmés n’est présent');
@@ -227,11 +233,12 @@ export function computeAlerts(input) {
       const site = itSite;
       const d = xyDistance(r.value, site);
       const threshold = Number(grid?.settings?.gpsThresholdM) || Number(settings.gpsThresholdM) || 100;
+      const origin = originText(r.value);   // saisie en UTM 21N : x / y comparés sont ceux convertis en UTM 22N
       if (d !== null && d > threshold) add({
         code: 'GPS_XY_FAR', level: 'attention', sectionId: it.sectionId, itemId: it.id, sheet: it.sheet, stationKey: stationKeyOf(it), key: 'GPS_XY_FAR:' + it.id,
         title: 'Coordonnées éloignées de la station',
-        message: `${it.label} : position X ${r.value.x} / Y ${r.value.y} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
-        deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
+        message: `${it.label} : position X ${r.value.x} / Y ${r.value.y}${origin ? ` (${origin})` : ''} à ${fmtDistance(d)} des coordonnées théoriques de la station ${site.name || site.code || ''} (X ${site.x} / Y ${site.y}), au-delà du seuil de ${fmtDistance(threshold)}. Vérifier le point de prélèvement et la saisie.`,
+        deviation: { requirement: 'Prélèvement réalisé sur la station programmée', description: `${it.label} : coordonnées relevées (X ${r.value.x} / Y ${r.value.y}${origin ? ` RGFG95 / UTM 22N, ${origin}` : ''}) à ${fmtDistance(d)} des coordonnées théoriques de la station (X ${site.x} / Y ${site.y}).`, typeCode: 'LOCALISATION', refs: it.refs }
       });
     }
     // Version du protocole présentée ≠ version applicable

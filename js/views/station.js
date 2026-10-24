@@ -2,19 +2,23 @@
  * docs/maquettes/feuille-1-station.webp) et les actions de terrain : démarrer une tournée avec cette station
  * (type de tournée déduit), reprendre une tournée non signée qui la contient, fiches vierges et fiche station
  * en PDF (module js/app/sheets-pdf.js, chargé à la demande), modification de la station (droit ref.manage),
- * prestations programmées et historique des tournées de la station. Variante de fiche au choix si la station
- * relève de plusieurs types de tournée (?type=bio|ce|eso). */
+ * prestations programmées (réseau du programme de chaque prestation) et historique des tournées de la station.
+ * Réseaux de surveillance de la station en badges (lien : stations du réseau à l'accueil). Variante de fiche au
+ * choix si la station relève de plusieurs types de tournée (?type=bio|ce|eso) ; station BIO + Chimie : variante
+ * « Biologie + Chimie » (?parties=bio,ce : fiches vierges d'une tournée mixte, opérations communes une seule fois). */
 import { html, fmtDate } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { navigate } from '../ui/router.js';
 import { toast, downloadBlob } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { empty, auditBadge, badge } from '../ui/components.js';
+import { empty, auditBadge, badge, networkBadge, networkBadges } from '../ui/components.js';
+import { siteNetworks, prestationNetworkOf } from '../app/networks.js';
 import { auditDate } from '../domain/model.js';
 import { TYPE_STYLES } from '../ui/map.js';
-import { gridType, inferAuditType, providerHeaderName } from '../domain/grids.js';
-import { stationSheet, mountStationSheet, unmountStationSheet, stationHandlers, siteTypes, primaryType, stationAudits, stationStatus, openPrestations, plannedLabel, prestationType, ctGrid, typeBadges } from './station-sheet.js';
+import { gridType, inferAuditType, providerHeaderName, normalizeParts, partsText } from '../domain/grids.js';
+import { controllerNamesText } from '../domain/permissions.js';
+import { stationSheet, mountStationSheet, unmountStationSheet, stationHandlers, siteTypes, primaryType, stationAudits, stationStatus, openPrestations, plannedLabel, prestationType, ctGrid, typeBadges, possibleParts } from './station-sheet.js';
 
 /** Module de génération des fiches PDF (écrit séparément) ; null avec un message clair s'il est absent. */
 async function sheetsPdf() {
@@ -41,13 +45,21 @@ function variantType(site, q) {
   return types.includes(t) ? t : primaryType(site);
 }
 
+/** Variante « plusieurs parties » (?parties=bio,ce) : parties possibles de la station, au moins deux ; sinon null. */
+function variantParts(site, q) {
+  const grid = ctGrid();
+  const list = normalizeParts(grid, String(q.parties || '').split(',').filter(Boolean));
+  return list && list.length > 1 && list.every(k => possibleParts(site, grid).includes(k)) ? list : null;
+}
+
 function prestationRow(p, site) {
   const prov = store.get('provider', p.providerId);
   const type = prestationType(p);
+  const net = prestationNetworkOf(p);
   return html`<div class="li stp-pres${p.plannedDate ? '' : ' is-unplanned'}">
     <a class="li-main" href="#/prestation/${p.id}"><div class="li-title">${p.ref}</div>
       <div class="li-sub">${providerHeaderName(prov) || '—'} · ${store.get('campaign', p.campaignId)?.label || 'hors campagne'}</div>
-      <div class="row" style="gap:6px;margin-top:6px">${p.plannedDate ? badge(plannedLabel(p), 'info') : badge('À planifier', 'warn')}${type && TYPE_STYLES[type] ? html`<span class="type-badge t-${type}">${icon(TYPE_STYLES[type].icon, { size: 15 })}${TYPE_STYLES[type].label}</span>` : ''}</div></a>
+      <div class="row" style="gap:6px;margin-top:6px">${p.plannedDate ? badge(plannedLabel(p), 'info') : badge('À planifier', 'warn')}${type && TYPE_STYLES[type] ? html`<span class="type-badge t-${type}">${icon(TYPE_STYLES[type].icon, { size: 15 })}${TYPE_STYLES[type].label}</span>` : ''}${net ? networkBadge(net) : ''}</div></a>
     ${can('audit.create') ? html`<a class="btn ghost sm" href="#/nouvel-audit?site=${encodeURIComponent(site.id)}&prestation=${encodeURIComponent(p.id)}&type=${type}">${icon('plus', { size: 18 })}Tournée</a>` : ''}
   </div>`;
 }
@@ -59,7 +71,7 @@ function auditRow(a) {
   return html`<a class="li ${a.lock?.lockedAt ? 'stripe-ok' : 'stripe-perf'}" href="#/audit/${a.id}">
     <span class="li-ic">${icon('route')}</span>
     <div class="li-main"><div class="li-title">${a.number}${n > 1 ? html` <span class="tiny muted">· tournée de ${n} stations</span>` : ''}</div>
-      <div class="li-sub">${fmtDate(auditDate(a))} · ${providerHeaderName(prov) || '—'}${t ? ` · ${t.label}` : ''} · ${a.auditorName || ''}</div></div>
+      <div class="li-sub">${fmtDate(auditDate(a))} · ${providerHeaderName(prov) || '—'}${t ? ` · ${t.label}` : ''} · ${controllerNamesText(a)}</div></div>
     <span class="li-side">${auditBadge(a)}</span></a>`;
 }
 
@@ -69,7 +81,9 @@ export default {
     const site = store.get('site', id);
     if (!site) return html`<a class="back" href="#/">‹ Stations</a><div class="card">${empty(icon('station', { size: 44 }), 'Station introuvable sur cet appareil.')}</div>`;
     const types = siteTypes(site);
-    const type = variantType(site, q);
+    const parts = variantParts(site, q);
+    const type = parts ? parts[0] : variantType(site, q);
+    const multi = possibleParts(site, ctGrid());
     const audits = stationAudits(site.id);
     const status = stationStatus(site.id, { audits });
     const open = audits.filter(a => !a.lock?.lockedAt && ['en_cours', 'termine'].includes(a.status));
@@ -78,7 +92,7 @@ export default {
     return html`
       <div class="stp-top">
         <a class="back" href="#/">‹ Stations</a>
-        <div class="stp-meta">${typeBadges(site)}${badge(status.label, status.cls)}</div>
+        <div class="stp-meta">${typeBadges(site)}${networkBadges(siteNetworks(site), { href: n => '#/?' + new URLSearchParams({ type: '', reseau: n.code }) })}${badge(status.label, status.cls)}</div>
       </div>
       <div class="stp-actions">
         ${open.map(a => html`<a class="btn primary lg" href="#/audit/${a.id}"><span class="ic">${icon('route')}</span>Reprendre la tournée ${a.number}</a>`)}
@@ -89,8 +103,8 @@ export default {
         <a class="btn ghost" href="#/carte?site=${encodeURIComponent(site.id)}"><span class="ic">${icon('map')}</span>Carte</a>
         ${can('ref.manage') ? html`<a class="btn ghost" href="#/station/${encodeURIComponent(site.id)}/modifier"><span class="ic">${icon('edit')}</span>Modifier la station</a>` : ''}
       </div>
-      ${types.length > 1 ? html`<div class="chips stp-variants" role="group" aria-label="Variante de la fiche">${types.map(t => html`<button class="chip ${t === type ? 'sel' : ''}" data-act="variant" data-type="${t}" aria-pressed="${t === type}">${icon(TYPE_STYLES[t].icon)}${TYPE_STYLES[t].long}</button>`)}</div>` : ''}
-      ${stationSheet({ site, editable: can('ref.manage'), auditType: type, variant: 'page' })}
+      ${types.length > 1 ? html`<div class="chips stp-variants" role="group" aria-label="Variante de la fiche">${types.map(t => html`<button class="chip ${t === type && !parts ? 'sel' : ''}" data-act="variant" data-type="${t}" aria-pressed="${String(t === type && !parts)}">${icon(TYPE_STYLES[t].icon)}${TYPE_STYLES[t].long}</button>`)}${multi.length > 1 ? html`<button class="chip ${parts ? 'sel' : ''}" data-act="variant" data-type="${multi[0]}" data-parts="${multi.join(',')}" aria-pressed="${String(!!parts)}" title="Station contrôlée pour plusieurs parties dans une même tournée (même prestataire) : opérations communes une seule fois">${icon('route')}${partsText(ctGrid(), multi)}</button>` : ''}</div>` : ''}
+      ${stationSheet({ site, editable: can('ref.manage'), auditType: type, variant: 'page', parts })}
       <div class="stp-grid">
         <section class="card"><h2>${icon('calendar', { size: 22 })} Prestations programmées</h2>
           ${prestations.length ? html`<div class="list">${prestations.map(p => prestationRow(p, site))}</div>` : html`<p class="note">Aucune prestation programmée ouverte pour cette station. Une tournée peut être créée librement (« Démarrer une tournée »).</p>`}</section>
@@ -102,15 +116,16 @@ export default {
   unmount() { unmountStationSheet(); },
   handlers: {
     ...stationHandlers,
-    variant(el) { navigate(`/station/${encodeURIComponent(this.params.id)}?type=${el.dataset.type}`, { replace: true }); },
+    variant(el) { navigate(`/station/${encodeURIComponent(this.params.id)}?type=${el.dataset.type}${el.dataset.parts ? `&parties=${el.dataset.parts}` : ''}`, { replace: true }); },
     async blankPdf() {
       const site = store.get('site', this.params.id);
       const mod = await sheetsPdf();
       if (!mod) return;
       if (typeof mod.generateBlankSheetsPdf !== 'function') { toast('Fiches vierges : fonction indisponible dans cette version.', 'warn'); return; }
       toast('Préparation des fiches vierges…', '', 2000);
-      const auditType = variantType(site, this.query);
-      await savePdf(await mod.generateBlankSheetsPdf({ auditType, siteId: site.id }), `fiches-vierges_${auditType}_${site.code}.pdf`);
+      const parts = variantParts(site, this.query);
+      const auditType = parts ? parts[0] : variantType(site, this.query);
+      await savePdf(await mod.generateBlankSheetsPdf({ auditType, siteId: site.id, ...(parts ? { parts } : {}) }), `fiches-vierges_${parts ? parts.join('-') : auditType}_${site.code}.pdf`);
     },
     async stationPdf() {
       const site = store.get('site', this.params.id);

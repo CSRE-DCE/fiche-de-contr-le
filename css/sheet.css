@@ -47,6 +47,8 @@
 .oeg-header{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"logo titles tagline station" "title title title title";
   align-items:center;column-gap:clamp(10px,1.6vw,26px);row-gap:6px;color:var(--oeg-navy);position:relative}
 .oeg-header .oh-logo{grid-area:logo;width:clamp(64px,7.4vw,112px);height:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 2px 8px #0d357733;background:#0d3577}
+/* Logo choisi en Administration : proportions conservées sur fond blanc (js/ui/logo.js). */
+.oeg-header .oh-logo.is-custom{border-radius:12px;background:#fff;object-fit:contain;padding:3px;box-sizing:border-box}
 .oh-titles{grid-area:titles;text-align:center;min-width:0}
 .oh-org{font-family:var(--f-cond);font-weight:800;text-transform:uppercase;font-size:clamp(22px,2.6vw,40px);line-height:1;letter-spacing:.005em;color:var(--oeg-navy)}
 .oh-title{font-weight:500;font-size:clamp(13.5px,1.35vw,21px);color:var(--oeg-navy);margin-top:4px;line-height:1.2}
@@ -129,6 +131,9 @@
 .sb-k{display:inline-flex;align-items:center;gap:12px;font-weight:500;font-size:clamp(20px,2.5vw,36px);line-height:1;color:var(--th-dark)}
 .sb-tour{display:inline-flex;align-items:center;gap:4px;border-radius:999px;background:var(--th-main);color:#fff;font-size:clamp(12px,1vw,15px);font-weight:700;padding:3px 10px 3px 8px}
 .sb-tour .ico{width:1.1em;height:1.1em}
+/* Réseaux de surveillance de la station (feuille 1) : ligne à part sous « Station », retour à la ligne autorisé */
+.sb-nets{display:flex;flex-wrap:wrap;gap:4px 6px;margin:6px 0 2px;max-width:100%}
+.sb-net{border-radius:999px;background:var(--net-dark,#3d4954);color:#fff;font-weight:700;font-size:clamp(12px,1vw,15px);line-height:1.3;padding:2px 11px;letter-spacing:.02em;white-space:nowrap}
 .sb-name{font-family:var(--f-black);font-weight:900;text-transform:uppercase;font-size:clamp(36px,6.4vw,96px);line-height:.95;letter-spacing:-.02em;color:var(--oeg-navy);
   max-width:100%;overflow-wrap:anywhere}
 .sb-swoosh{width:clamp(56px,6vw,96px);height:clamp(10px,1.2vw,16px);margin:4px 0 6px;background-color:var(--th-accent)}
@@ -379,6 +384,40 @@
 .shared-badge{display:inline-flex;align-items:center;gap:4px;vertical-align:middle;white-space:nowrap;border-radius:999px;padding:2px 9px 2px 6px;margin:0 4px;
   font-family:var(--f-text);font-size:11.5px;font-weight:700;letter-spacing:.01em;line-height:1.35;color:#0b4f9c;background:#e8f3fc;border:1px dashed #6fb1e2}
 .shared-badge .ico{width:14px;height:14px;color:var(--oeg-sky)}
+
+/* ---------- Note sur 20 : badge « Majeur (×2) », encadré « Grille de notation », pastille de note ---------- */
+.major-badge{display:inline-flex;align-items:center;gap:3px;vertical-align:middle;white-space:nowrap;border-radius:999px;padding:1px 8px 1px 5px;margin:0 4px;
+  font-family:var(--f-text);font-size:11px;font-weight:800;letter-spacing:.01em;line-height:1.35;color:#6b3600;background:#fff1d6;border:1px solid #e3b062}
+.major-badge .ico{width:13px;height:13px;color:#b45f00}
+.lvl-good{--gb-main:#1b7a43;--gb-bg:#e8f5ec;--gb-line:#9fd1b1}.lvl-fair{--gb-main:#a35a00;--gb-bg:#fff4e2;--gb-line:#f3c27a}
+.lvl-poor{--gb-main:#c62828;--gb-bg:#fdecea;--gb-line:#efb4ae}.lvl-none{--gb-main:#5f6b7a;--gb-bg:#eef1f4;--gb-line:#c3cad3}
+.grade-box .bc-head{flex-wrap:wrap}
+.gb-head-note{margin-left:auto;flex:none;border-radius:999px;padding:1px 12px;background:var(--gb-main);color:#fff;font-family:var(--f-cond);font-weight:800;font-size:19px;line-height:1.35;font-variant-numeric:tabular-nums}
+.gb-cells{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) minmax(0,1.8fr);gap:6px;align-items:stretch}
+.gb-c,.gb-note{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:58px;padding:4px 6px;border-radius:10px;border:1.5px solid #dde5ec;background:#f8fafc;text-align:center;line-height:1.15}
+.gb-k{font-family:var(--f-cond);font-weight:700;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:var(--oeg-muted)}
+.gb-n{font-family:var(--f-cond);font-weight:800;font-size:22px;color:var(--oeg-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gb-n small{font-size:14px;color:var(--oeg-muted)}
+.gb-c>small{font-size:11.5px;font-weight:600;color:var(--oeg-muted)}
+.gb-cc .gb-n{color:var(--st-c)}.gb-cp .gb-n{color:var(--st-p-ink)}.gb-cnc .gb-n{color:var(--st-nc)}.gb-cna .gb-n{color:var(--st-na)}
+.gb-note{border-color:var(--gb-line);background:var(--gb-bg)}
+.gb-note .gb-v{font-family:var(--f-black);font-weight:900;font-size:28px;line-height:1.05;color:var(--gb-main);font-variant-numeric:tabular-nums}
+.gb-note .gb-lvl{font-weight:800;font-size:13.5px;color:var(--gb-main)}
+.gb-rule,.gb-extra{margin:6px 2px 0;font-size:12.5px;line-height:1.35;color:var(--oeg-muted)}
+.gb-extra{font-weight:600;color:var(--oeg-ink)}
+@media(max-width:820px){.gb-cells{grid-template-columns:repeat(4,minmax(0,1fr))}.gb-ev,.gb-pts{grid-column:span 2}.gb-note{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;gap:4px 12px;min-height:48px}}
+.grade-pill{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap;border-radius:999px;padding:1px 10px;font-weight:600;font-size:12.5px;line-height:1.4;font-variant-numeric:tabular-nums;
+  color:var(--gb-main,#5f6b7a);background:var(--gb-bg,#eef1f4);border:1px solid var(--gb-line,#c3cad3)}
+.grade-pill b{font-family:var(--f-cond);font-weight:800;font-size:15px}
+/* Badge de note des listes (liste « Audits », cartes des stations de l'accueil) : gradeTag */
+.grade-tag{display:inline-block;max-width:100%;padding:1px 10px;border-radius:999px;font-size:12.5px;font-weight:700;line-height:1.45;overflow-wrap:anywhere;
+  color:var(--gb-main);background:var(--gb-bg);border:1px solid var(--gb-line)}
+.grade-tag b{font-family:var(--f-cond);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+.grade-tag .gt-n{white-space:nowrap}
+.grade-tag .gt-k{font-weight:600;color:var(--muted)}
+.grade-tag.is-prov{border-style:dashed;font-weight:600}
+.grade-tag .gt-m{font-style:italic}
+.grade-none{font-size:12.5px;font-style:italic;color:var(--muted)}
 .tour-stations{display:flex;align-items:stretch;gap:8px;padding:6px;border-radius:16px;background:#fff;border:1.5px solid #d3e3f0;box-shadow:0 1px 3px #0d35770d;font-family:var(--f-text)}
 .ts-label{flex:none;display:flex;align-items:center;gap:8px;padding:0 10px 0 6px;color:var(--oeg-navy);font-family:var(--f-cond);font-weight:800;font-size:17px;text-transform:uppercase;letter-spacing:.02em;line-height:1.05;border-right:1.5px solid #d3e3f0}
 .ts-label .ico{width:22px;height:22px;color:var(--oeg-sky)}
@@ -447,6 +486,8 @@ body.sun .st-rc-btn.p:not(.sel){color:#7a4100}
 body.sun .tour-stations,body.sun .ts-pill{border-color:#40535a}
 body.sun .ts-meta,body.sun .ts-label small{color:#26363d}
 body.sun .shared-badge{border-style:solid;border-color:#0b4f9c;color:#002a55}
+body.sun .major-badge{border-color:#6b3600;color:#3d1f00}
+body.sun :is(.gb-c,.gb-note){border-color:#40535a}body.sun :is(.gb-k,.gb-rule,.gb-c>small){color:#26363d}
 body.sun .oh-sub,body.sun .is-k,body.sun .st-rc-short{color:#000}
 
 /* ---------- Impression : une feuille par page A4 ---------- */
@@ -467,7 +508,7 @@ body.sun .oh-sub,body.sun .is-k,body.sun .st-rc-short{color:#000}
   .oh-st-k{font-size:11pt}.oh-st-name{font-size:21pt}.oh-st-sheet{font-size:10pt;margin-top:-8px}
   .oh-sheet-title h2{font-size:16pt}
   .station-banner{min-height:34mm;padding:3mm 6mm}
-  .sb-k{font-size:15pt}.sb-name{font-size:38pt}.sb-kicker{font-size:7.5pt}.sb-tag{font-size:7pt}
+  .sb-net{font-size:8pt;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sb-k{font-size:15pt}.sb-name{font-size:38pt}.sb-kicker{font-size:7.5pt}.sb-tag{font-size:7pt}
   .station-banner .guyane-inset svg{width:20mm}
   .info-strip{padding:1.6mm 4mm}
   .is-ic{width:9.5mm}.is-k{font-size:8.5pt}.is-v{font-size:12.5pt}.is-xy{font-size:9.5pt}
@@ -489,6 +530,10 @@ body.sun .oh-sub,body.sun .is-k,body.sun .st-rc-short{color:#000}
   .st-choice>:is(button,label){min-height:0;padding:0 1px}
   .st-gps,.st-rc-tools,.no-print,.tour-stations,.ts-add{display:none!important}
   .shared-badge{font-size:6.5pt;padding:0 3px;border-style:solid}
+  .major-badge{font-size:6.5pt;padding:0 3px}
+  :is(.gb-c,.gb-note){min-height:0;padding:.8mm 1mm;border-radius:2mm}
+  .gb-k{font-size:7pt}.gb-n{font-size:12pt}.gb-n small,.gb-c>small{font-size:7pt}.gb-note .gb-v{font-size:16pt}.gb-note .gb-lvl{font-size:8pt}.gb-head-note{font-size:11pt}
+  .gb-rule,.gb-extra{font-size:7pt;margin-top:1mm}
   .oeg-header.band{padding:2.4mm 4mm}
   .sheet>.oeg-header.band:first-child{margin:0;border-radius:3mm}
   .st-only-narrow{display:none!important}

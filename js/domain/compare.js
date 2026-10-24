@@ -1,6 +1,8 @@
 /* Comparaison de deux audits successifs (critère par critère, appariés par code). Fichier pur.
  * Les valeurs sont comparées sous leur forme lisible (formatValue) : une valeur objet (« fields ») est
- * comparée champ par champ, sans tenir compte des métadonnées techniques (lat / lon / précision du relevé GPS).
+ * comparée champ par champ, sans tenir compte des métadonnées techniques (lat / lon / précision du relevé GPS) ni de
+ * l'unité définie par la grille (turbidité notée en FNU avant la grille CT-2026 1.1, en NTU depuis : mêmes valeurs
+ * = « identique ») ; l'affichage avant / après garde l'unité de chaque tournée.
  * Tournées (grille effective) : un critère de station est apparié par son code d'origine ET la station
  * (« F4.5 @ site-09271503 »), quel que soit son rang dans la tournée ; un critère partagé n'est compté qu'une fois.
  * `siteId` (facultatif) limite la comparaison des critères de station à une station (historique d'une station). */
@@ -23,7 +25,7 @@ export function compareAudits(older, newer, { deviationsOld = [], deviationsNew 
     let change;
     if (!a) change = 'nouveau';
     else if (!b) change = 'retire';
-    else if ((ra?.status || null) === (rb?.status || null) && formatValue(a, ra?.value) === formatValue(b, rb?.value)) change = 'identique';
+    else if ((ra?.status || null) === (rb?.status || null) && formatValue(a, ra?.value, { unit: false }) === formatValue(b, rb?.value, { unit: false })) change = 'identique';
     else if (a.kind === 'conformity' && ra?.status && rb?.status) change = RANK[rb.status] > RANK[ra.status] ? 'amelioration' : RANK[rb.status] < RANK[ra.status] ? 'degradation' : 'modifie';
     else change = 'modifie';
     const it = b || a;

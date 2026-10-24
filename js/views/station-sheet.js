@@ -1,6 +1,6 @@
 /* Fiche station (feuille 1 des fiches de contrôle terrain), fidèle aux maquettes
  * docs/maquettes/feuille-1-station.webp et sa variante : en-tête OEG, bandeau « Station / NOM » (photo RD en
- * fond), bandeau d'information (Code SANDRE ou Code BSS), « Localisation cartographique » (carte Leaflet : étoile
+ * fond ; réseaux de surveillance de la station sur une ligne à part), bandeau d'information (Code SANDRE ou Code BSS), « Localisation cartographique » (carte Leaflet : étoile
  * de la station, points de prélèvement du site et relevés GPS de la tournée pour cette station, légende, échelle,
  * nord, encart Guyane ; repli hors connexion), « Photographies de la station » (RD / RG / AM / AV), « Accès /
  * Localisation », « Difficultés / points d’attention », « Compartiments à contrôler », point d'eau souterraine
@@ -12,20 +12,27 @@
  *           unmountStationSheet()                      — libère les cartes (à appeler au démontage de la vue) ;
  *   actions : stationHandlers (clés préfixées « st- ») à fusionner dans les handlers de la vue.
  * Exporte aussi les aides « station » partagées par les écrans (types de tournée, statut de contrôle, tournées
- * de la station, prestations ouvertes, grille CT-2026). */
+ * de la station, prestations ouvertes, grille CT-2026) et le choix du PÉRIMÈTRE contrôlé à une station (cases
+ * « Biologie », « Chimie » proposées selon ses réseaux et ses prestations programmées : partChoices, defaultParts,
+ * partPrestationIds, perimeterChecks). */
 import { html, raw, fmtDate, normalize, sortBy, haversine, fmtDistance } from '../core/util.js';
 import { store } from '../core/store.js';
 import { can } from '../core/auth.js';
 import { saveMedia, mediaURL } from '../core/media.js';
 import { toast } from '../ui/dom.js';
+import { mediaInputs } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines, assetURL, siteLatLon } from '../ui/sheet-chrome.js';
 import { createMap, tilesUsable, watchTiles, kindIcon, kindSVG, SAMPLING_KINDS, TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
-import { headerOf, resolveSheet, sheetOf, gridType, gridTypes, defaultAuditType, typeCompartments, normalizeCompartments, allItems, itemIndex, evalCondition, parseItemId, stationKeyOf, providerHeaderName } from '../domain/grids.js';
+import { upToDateGrid } from '../domain/default-grids.js';
+import { auditTypesOf } from '../domain/networks.js';
+import { currentNetworkIndex, siteNetworks } from '../app/networks.js';
+import { headerOf, resolveSheet, sheetOf, gridType, gridTypes, defaultAuditType, typeCompartments, normalizeCompartments, allItems, itemIndex, evalCondition, parseItemId, stationKeyOf, providerHeaderName, partLabel, partsText, stationCompartmentKeys, normalizeParts } from '../domain/grids.js';
 import { itemInput, auditDate, byAuditDateDesc } from '../domain/model.js';
 import { effectiveGrid, auditTypeOf } from '../app/audits.js';
 import { utmToLatLon, latLonToUtm } from '../lib/geo.js';
+import { originText } from '../domain/coords.js';
 
 export const CT_GRID = 'grid-ct-2026-v1';
 /** Créneaux photographiques fixes de la fiche station. */
@@ -33,17 +40,21 @@ export const SLOTS = [['RD', 'Rive droite'], ['RG', 'Rive gauche'], ['AM', 'Amon
 const SLOT_LONG = Object.fromEntries(SLOTS);
 
 /* ---------- Aides « station » partagées (accueil, fiche, carte, création de tournée) ---------- */
-/** Grille CT-2026 publiée sur l'appareil (à défaut : la grille de référence embarquée). */
-export function ctGrid() { return store.get('grid', CT_GRID) || GRID_CT_2026; }
+/** Grille CT-2026 publiée sur l'appareil, lue d'après la version livrée avec l'application si elle n'est pas encore
+ * mise à niveau (turbidité en NTU…) ; à défaut : la grille de référence embarquée. */
+export function ctGrid() { return upToDateGrid(store.get('grid', CT_GRID)) || GRID_CT_2026; }
 
-/** Types de tournée d'une station (bio, ce, eso), dans l'ordre d'affichage ; déduits si le site n'est pas encore enrichi. */
+/**
+ * Types de tournée d'une station (bio, ce, eso), dans l'ordre d'affichage ; déduits si le site n'est pas encore enrichi :
+ * listes biologiques et types associés à ses réseaux (référentiel « Réseaux », repli sur les réseaux par défaut), plus
+ * eaux souterraines pour un code BSS ou une matrice ESO.
+ */
 export function siteTypes(site) {
   if (!site) return [];
   let t = Array.isArray(site.types) && site.types.length ? site.types : [];
   if (!t.length) {
-    if ((site.bioLists || []).length) t.push('bio');
-    if ((site.networks || []).some(n => ['Chimie', 'RCO', 'EL'].includes(n))) t.push('ce');
-    if (site.codeType === 'BSS' || (site.networks || []).includes('ESO') || site.matrixId === 'mat-ESO') t.push('eso');
+    t = auditTypesOf(site, currentNetworkIndex());
+    if (site.codeType === 'BSS' || site.matrixId === 'mat-ESO') t = [...t, 'eso'];
   }
   return TYPE_ORDER.filter(k => t.includes(k));
 }
@@ -84,16 +95,73 @@ export function prestationType(p, grid = ctGrid()) {
   if (p?.matrixId === 'mat-ESO' || p?.samplingTypeId === 'stype-ESO') return 'eso';
   return gridTypes(grid).some(t => t.key === 'ce') ? 'ce' : '';
 }
+/* ---------- Périmètre contrôlé à une station (biologie seule, chimie seule ou les deux) ---------- */
+/** Parties possibles d'une station : ses types de tournée connus de la grille (BIO + Chimie : bio et ce). */
+export function possibleParts(site, grid = ctGrid()) {
+  const known = new Set(gridTypes(grid).map(t => t.key));
+  return siteTypes(site).filter(t => known.has(t));
+}
+/**
+ * Choix proposés pour le périmètre d'une station : [{key, label, own (prestation programmée ouverte du prestataire de la
+ * tournée pour cette partie), others ([{prestation, provider}] : prestations d'autres prestataires — contrôle dans une
+ * tournée distincte), checked}]. `parts` : parties cochées (défaut : defaultParts).
+ */
+export function partChoices(site, { grid = ctGrid(), providerId = '', type = '', parts = null } = {}) {
+  const list = possibleParts(site, grid);
+  if (type && !list.includes(type) && gridType(grid, type)) list.unshift(type);
+  const on = new Set(parts || defaultParts(site, { grid, providerId, type }));
+  return list.map(k => {
+    const open = openPrestations(site.id, { type: k });
+    const own = providerId ? open.find(p => p.providerId === providerId) || null : null;
+    const others = open.filter(p => p.providerId !== providerId).map(p => ({ prestation: p, provider: store.get('provider', p.providerId) || null }));
+    return { key: k, label: partLabel(grid, k), own, others, checked: on.has(k) };
+  });
+}
+/**
+ * Parties cochées par défaut : le type de la tournée, plus chaque autre partie de la station pour laquelle le MÊME
+ * prestataire a une prestation programmée ouverte (opérations mutualisées dans une seule tournée) ; une partie
+ * programmée pour un autre prestataire n'est pas cochée (tournée indépendante).
+ */
+export function defaultParts(site, { grid = ctGrid(), providerId = '', type = '' } = {}) {
+  const list = possibleParts(site, grid);
+  const out = list.filter(k => k === type || (providerId && openPrestations(site.id, { providerId, type: k }).length));
+  return normalizeParts(grid, out.length ? out : [type || list[0]].filter(Boolean)) || [];
+}
+/** Prestations programmées du prestataire rattachées aux parties cochées : {type: prestationId}. */
+export function partPrestationIds(site, parts, { grid = ctGrid(), providerId = '' } = {}) {
+  const out = {};
+  for (const k of parts || []) { const p = providerId ? openPrestations(site.id, { providerId, type: k })[0] : null; if (p) out[k] = p.id; }
+  return out;
+}
+/**
+ * Cases du périmètre contrôlé à une station (création de tournée, ajout d'une station, onglet Infos) : une case par
+ * partie possible (au moins une cochée : la dernière ne se décoche pas), prestation programmée de chaque partie.
+ * opts : {act (data-change), attrs (attributs supplémentaires), name, compact (sans les prestations)}.
+ */
+export function perimeterChecks(choices, { act = 'setPart', attrs = '', name = '', compact = false } = {}) {
+  const n = choices.filter(c => c.checked).length;
+  const pres = c => c.own ? html`<small class="pm-pres">${icon('calendar', { size: 13 })}${c.own.ref} · ${plannedLabel(c.own)}</small>`
+    : c.others.length ? html`<small class="pm-pres is-other">${c.checked ? 'Hors programme du prestataire (programmée pour ' : 'Programmée pour '}${c.others.map(o => providerHeaderName(o.provider) || '?').filter((v, i, a) => a.indexOf(v) === i).join(', ')}${c.checked ? ')' : ' : tournée distincte'}</small>`
+      : html`<small class="pm-pres is-none">Hors programme</small>`;
+  return html`<div class="pm-checks" role="group" aria-label="Parties contrôlées à cette station">${choices.map(c => html`<label class="check pm-check t-${c.key}${c.checked ? ' sel' : ''}"><input type="checkbox" value="${c.key}" data-change="${act}" ${raw(attrs)} ${name ? raw(`name="${name}"`) : ''} ${c.checked ? 'checked' : ''} ${c.checked && n === 1 ? raw('disabled title="Au moins une partie est contrôlée"') : ''}><span class="pm-txt"><b>${c.label}</b>${compact ? '' : pres(c)}</span></label>`)}</div>`;
+}
+
 /** Libellé de date d'une prestation : « 01/09/2026 », « 01/09/2026 (indicative) » ou « À planifier ». */
 export function plannedLabel(p) {
   if (!p?.plannedDate) return 'À planifier';
   return fmtDate(p.plannedDate) + (p.dateIndicative ? ' (indicative)' : '');
 }
-/** Recherche plein texte d'une station (nom, code, bassin, commune, cours d'eau). */
+/** Texte de recherche d'une station (normalisé) : nom, code, bassin, commune, cours d'eau, masse d'eau, nature,
+ * aquifère, réseaux de surveillance (codes et libellés : « chimie », « RCO », « eaux littorales »). */
+export function siteSearchText(site) {
+  const s = site || {};
+  return normalize([s.name, s.code, s.bassin, s.commune, s.riverName, s.masseEau, s.nature, s.aquifere, ...siteNetworks(s).flatMap(n => [n.code, n.label])].filter(Boolean).join(' '));
+}
+/** Recherche plein texte d'une station (nom, code, bassin, commune, cours d'eau, réseaux). */
 export function siteMatches(site, query) {
   const t = normalize(query);
   if (!t) return true;
-  return normalize([site.name, site.code, site.bassin, site.commune, site.riverName, site.masseEau, site.nature].filter(Boolean).join(' ')).includes(t);
+  return siteSearchText(site).includes(t);
 }
 
 /* ---------- Composition de la feuille ---------- */
@@ -178,6 +246,7 @@ function mapCard(site, audit, { bio = true } = {}) {
       <div class="ss-map-fb">
         <b>${ll ? 'Fond de carte indisponible hors connexion' : 'Coordonnées de la station à renseigner'}</b>
         ${xy ? html`<span class="ss-fb-k">RGFG95 / UTM 22N</span><span class="ss-fb-v"><span>X&nbsp;: ${fmtXY(xy.x)}</span> <span>Y&nbsp;: ${fmtXY(xy.y)}</span></span>` : ''}
+        ${xy && originText(site) ? html`<span class="ss-fb-k ss-fb-origin">${originText(site)}</span>` : ''}
         ${ll ? html`<span class="ss-fb-k">WGS84</span><span class="ss-fb-v">${fmtLL(ll[0])}° · ${fmtLL(ll[1])}°</span>` : ''}
         ${near.length ? html`<ul>${near.map(p => html`<li>${raw(kindSVG(p.kind, 14))}${p.label} — à ${fmtDistance(p.d)} de la station</li>`)}</ul>` : ''}
       </div>
@@ -190,10 +259,11 @@ function mapCard(site, audit, { bio = true } = {}) {
 
 function photosCard(site, { editable, audit }) {
   const ph = site.photos || {};
-  // Un seul bouton : sans attribut « capture », le téléphone propose l'appareil photo OU la galerie / les fichiers.
-  const input = slot => html`<input type="file" accept="image/*" hidden data-change="st-photo" data-site="${site.id}" data-slot="${slot}" data-audit="${audit?.id || ''}">`;
-  const tools = slot => html`<div class="ss-photo-tools">
-    <label class="ss-ph-btn" title="Remplacer la photographie ${SLOT_LONG[slot].toLowerCase()} (appareil photo ou fichier)">${icon('refresh', { size: 18 })}<span>Remplacer</span>${input(slot)}</label>
+  // Deux choix distincts : « Prendre une photo » (appareil photo de la tablette) et « Importer depuis la galerie »
+  // (photo déjà dans l'appareil : date de prise de vue reprise de la photo) — js/ui/components.js, mediaInputs.
+  const inputs = (slot, opts) => mediaInputs(null, { auditId: audit?.id || '', act: 'st-photo', data: { site: site.id, slot }, ...opts });
+  const tools = slot => html`<div class="ss-photo-tools" role="group" aria-label="Remplacer la photographie ${SLOT_LONG[slot].toLowerCase()}">
+    ${inputs(slot, { cls: 'ss-ph-btn', labels: { camera: 'Photo', gallery: 'Galerie' } })}
   </div>`;
   const body = html`<div class="ss-photos">${SLOTS.map(([slot, def]) => {
     const p = ph[slot] || {};
@@ -204,7 +274,7 @@ function photosCard(site, { editable, audit }) {
     return html`<figure class="ss-photo${has ? '' : ' is-empty'}" data-slot="${slot}">
       ${p.mediaId ? html`<button type="button" class="ss-photo-open" data-act="st-photo-view" data-media="${p.mediaId}" aria-label="Agrandir la photographie ${alt}"><img data-st-media="${p.mediaId}" data-fallback="${src}" alt="${alt}"></button>`
         : p.src ? html`<img src="${src}" alt="${alt}">`
-        : editable ? html`<label class="ss-photo-ph is-add" title="Appareil photo ou fichier image">${icon('camera', { size: 38 })}<span>Ajouter la photographie ${SLOT_LONG[slot].toLowerCase()}</span>${input(slot)}</label>`
+        : editable ? html`<div class="ss-photo-ph is-add" role="group" aria-label="Ajouter la photographie ${SLOT_LONG[slot].toLowerCase()}"><span class="ss-ph-k">Photographie ${SLOT_LONG[slot].toLowerCase()}</span><span class="ss-ph-add">${inputs(slot, { cls: 'ss-ph-btn is-big' })}</span></div>`
         : html`<span class="ss-photo-ph">${icon('camera', { size: 38 })}<span>Photographie ${SLOT_LONG[slot].toLowerCase()} non disponible</span></span>`}
       <figcaption><b>${slot}</b> – ${cap}</figcaption>
       ${editable && has ? tools(slot) : ''}
@@ -233,12 +303,14 @@ function difficultiesCard(site) {
   return blockCard({ icon: 'warning', title: 'Difficultés / points d’attention', cls: 'ss-diff', body });
 }
 
-function compartmentsCard(grid, type, { site, audit }) {
+function compartmentsCard(grid, type, { site, audit, parts = null }) {
   const all = grid?.compartments || [];
-  const keys = gridType(grid, type) ? typeCompartments(grid, type) : all.map(c => c.key);
-  const chosen = new Set(audit ? normalizeCompartments(grid, audit.compartments) : (site.compartments || []));
+  // Station d'une tournée mixte (`parts` donné) : compartiments de ses parties, cochés selon le périmètre contrôlé.
+  const multi = (parts || []).length > 0;
+  const keys = multi ? [...new Set(parts.flatMap(t => typeCompartments(grid, t)))] : gridType(grid, type) ? typeCompartments(grid, type) : all.map(c => c.key);
+  const chosen = new Set(multi && audit ? stationCompartmentKeys(grid, audit.compartments, parts) : audit ? normalizeCompartments(grid, audit.compartments) : (site.compartments || []));
   const year = (String(grid?.code || '').match(/\d{4}/) || [])[0] || String(new Date().getFullYear());
-  const body = html`<ul class="ss-comp">${all.filter(c => keys.includes(c.key)).map(c => html`<li class="${chosen.has(c.key) ? 'on' : ''}">
+  const body = html`${multi ? html`<p class="ss-perim">${icon('route', { size: 16 })}<span>Contrôlé à cette station : <b>${partsText(grid, parts)}</b>${parts.length > 1 ? ' — opérations communes saisies une seule fois' : ''}</span></p>` : ''}<ul class="ss-comp">${all.filter(c => keys.includes(c.key)).map(c => html`<li class="${chosen.has(c.key) ? 'on' : ''}">
       <span class="ss-comp-ic">${icon(c.icon || 'check', { size: 24 })}</span><span class="ss-comp-l">${c.label}</span>${checkSquare({ checked: chosen.has(c.key), cls: 'lg' })}</li>`)}</ul>`;
   return blockCard({ icon: 'clipboard', title: `Compartiments à contrôler – campagne ${year}`, cls: 'ss-comps', body });
 }
@@ -273,13 +345,15 @@ function blankReperes(grid, type, provider) {
  * - reperes : HTML des « Repères terrain » rendu par l'écran d'audit (sinon lignes pointillées vierges) ;
  * - variant : 'page' (fiche complète : en-tête OEG et pied de page), 'audit' (idem, dans l'écran d'audit), 'body'
  *   (sans en-tête ni pied de page, sous l'en-tête propre de l'écran) ;
- * - auditType : variante hors tournée ('bio' | 'ce' | 'eso' ; défaut : type principal de la station).
+ * - auditType : variante hors tournée ('bio' | 'ce' | 'eso' ; défaut : type principal de la station) ;
+ * - parts : parties contrôlées à la station dans une tournée mixte (partie principale en tête : variante de la feuille,
+ *   compartiments et périmètre affichés).
  */
-export function stationSheet({ site, grid = null, audit = null, editable = false, reperes = '', variant = 'page', auditType = '' } = {}) {
+export function stationSheet({ site, grid = null, audit = null, editable = false, reperes = '', variant = 'page', auditType = '', parts = null } = {}) {
   if (!site) return html`<div class="card"><p>Station introuvable.</p></div>`;
   const g = grid || audit?.gridSnapshot || ctGrid();
   const known = k => k && (!gridTypes(g).length || gridType(g, k));
-  const type = [auditType, audit ? auditTypeOf(audit) : '', primaryType(site)].find(known) || defaultAuditType(g) || '';
+  const type = [parts?.[0], auditType, audit ? auditTypeOf(audit) : '', primaryType(site)].find(known) || defaultAuditType(g) || '';
   const sheetDef = resolveSheet(sheetOf(g, 1) || { no: 1, title: 'Fiche station de contrôle terrain', theme: 'ocean', layout: 'station' }, type);
   const provider = audit ? store.get('provider', audit.providerId) : plannedProvider(site, type);
   const campaign = audit?.campaignId ? store.get('campaign', audit.campaignId) : null;
@@ -295,18 +369,18 @@ export function stationSheet({ site, grid = null, audit = null, editable = false
   const body = html`
     ${full ? oegHeader({ grid: g, sheet: { ...sheetDef, layout: 'station' }, site, title: head.title, subtitle: head.subtitle }) : ''}
     ${stationBanner({ site, kicker: sheetDef.kicker || head.program || '', theme, photo: bannerPhoto, stationIndex: pos >= 0 ? pos + 1 : null, stationTotal: stations.length || null,
-      tagline: eso ? (head.tagline || '') : 'Des rivières vivantes pour demain' })}
+      tagline: eso ? (head.tagline || '') : 'Des rivières vivantes pour demain', networks: siteNetworks(site) })}
     ${infoStrip(site, { codeType: site.codeType || (eso ? 'BSS' : '') })}
     <div class="ss-body">
       <div class="ss-col">
-        ${mapCard(site, audit, { bio: type === 'bio' })}
+        ${mapCard(site, audit, { bio: type === 'bio' || (parts || []).includes('bio') })}
         ${photosCard(site, { editable, audit })}
       </div>
       <div class="ss-col">
         ${eso ? esoCard(site) : ''}
         ${accessCard(site)}
         ${difficultiesCard(site)}
-        ${compartmentsCard(g, type, { site, audit })}
+        ${compartmentsCard(g, type, { site, audit, parts })}
       </div>
       <div class="ss-wide">${sectionCard({ icon: 'edit', title: 'Repères terrain', cls: 'ss-card ss-reperes', body: reperes ? (typeof reperes === 'string' ? raw(reperes) : reperes) : blankReperes(g, type, provider) })}</div>
     </div>
@@ -414,18 +488,19 @@ export const stationHandlers = {
     const slot = el.dataset.slot;
     if (!SLOT_LONG[slot]) throw new Error('Emplacement de photo inconnu.');
     toast('Enregistrement de la photographie…', '', 1500);
-    const { compressImage } = await import('../ui/capture.js');
-    const { quickPosition } = await import('../ui/gps.js');
-    const { bytes, width, height } = await compressImage(file);
-    const gps = await quickPosition().catch(() => null);
+    // Photo prise (appareil photo) ou importée de la galerie : compression, date de prise de vue (EXIF, sinon date
+    // d'import signalée), position (js/ui/capture.js).
+    const { preparePhoto, inputSource } = await import('../ui/capture.js');
+    const source = inputSource(el);
+    const ph = await preparePhoto(file, { source });
     const prev = site.photos?.[slot] || {};
     const caption = prev.caption || SLOT_LONG[slot];
-    const m = await saveMedia(bytes, { mime: 'image/jpeg', kind: 'photo', name: file.name, caption: `${slot} – ${caption}`, link: { type: 'site', id: site.id, slot }, auditId: el.dataset.audit || null, gps, width, height });
+    const m = await saveMedia(ph.bytes, { mime: 'image/jpeg', kind: 'photo', name: file.name, caption: `${slot} – ${caption}`, link: { type: 'site', id: site.id, slot }, auditId: el.dataset.audit || null, gps: ph.gps, width: ph.width, height: ph.height, takenAt: ph.takenAt, takenAtSource: ph.takenAtSource, importedAt: ph.importedAt, source: ph.source });
     const cur = store.get('site', site.id);
     const replaced = !!(prev.mediaId || prev.src);
     await store.put('site', { ...cur, photos: { ...(cur.photos || {}), [slot]: { ...prev, caption, mediaId: m.id, previousMediaId: prev.mediaId || null } } },
-      { reason: `Photographie ${slot} (${caption}) de la station ${cur.name} ${replaced ? 'remplacée' : 'ajoutée'}` });
-    toast(`Photographie ${slot} enregistrée ✓`, 'ok');
+      { reason: `Photographie ${slot} (${caption}) de la station ${cur.name} ${replaced ? 'remplacée' : 'ajoutée'}${source === 'gallery' ? ' (importée de la galerie)' : ''}` });
+    toast(`Photographie ${slot} enregistrée ✓${ph.takenAtSource === 'import' ? ' — date de prise de vue inconnue : date d’import retenue' : ''}`, ph.takenAtSource === 'import' ? 'warn' : 'ok', ph.takenAtSource === 'import' ? 5000 : 3200);
     if (typeof this?.refresh === 'function') this.refresh();
   },
   async 'st-photo-view'(el) {

@@ -91,6 +91,7 @@
 .ss-map.is-offline{height:auto;min-height:clamp(200px,30cqi,300px)}
 .ss-map.is-offline .ss-map-fallback{position:relative;inset:auto;min-height:inherit;padding:14px clamp(14px,3vw,30px)}
 .ss-fb-k{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--oeg-muted);margin-top:4px}
+.ss-fb-k.ss-fb-origin{text-transform:none;letter-spacing:0;font-weight:600;font-style:italic}
 .ss-fb-v{display:flex;flex-wrap:wrap;gap:0 12px;font-weight:700;font-variant-numeric:tabular-nums}
 .ss-fb-v>span{white-space:nowrap}
 .ss-map-label{background:#ffffffe6;border:0;box-shadow:none;padding:1px 6px;font-family:var(--f-text);font-weight:700;font-size:13.5px;color:#14284b}
@@ -113,16 +114,24 @@
 .ss-photo figcaption b{font-weight:700}
 .ss-photo.is-empty{border:2px dashed #9cc3e0;background:#f4f9fd}
 .ss-photo-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 10px 36px;color:#7d97b3;text-align:center;font-size:13px;font-weight:600}
-.ss-photo-ph.is-add{cursor:pointer;color:var(--oeg-blue);font-size:14px}
+.ss-photo-ph.is-add{color:var(--oeg-blue);font-size:14px;gap:8px}
 .ss-photo-ph.is-add:hover{background:#eaf4fc}
 .ss-photo-ph.is-add:focus-within{outline:3px solid #ffb300;outline-offset:-3px}
-.ss-photo-ph.is-add .ico{width:44px;height:44px;padding:9px;border-radius:50%;background:var(--oeg-blue);color:#fff;box-shadow:0 2px 6px #0b5fae55}
+.ss-photo-ph.is-add>.ico{width:44px;height:44px;padding:9px;border-radius:50%;background:var(--oeg-blue);color:#fff;box-shadow:0 2px 6px #0b5fae55}
 .ss-photo-tools{position:absolute;right:6px;top:6px;display:flex;gap:6px}
 .ss-ph-btn{display:inline-flex;align-items:center;gap:5px;min-height:44px;min-width:44px;justify-content:center;padding:4px 10px;border-radius:999px;background:#ffffffeb;color:var(--oeg-navy);
   font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 1px 4px #0003;border:1px solid #0d357722}
 .ss-ph-btn:hover{background:#fff}
 .ss-ph-btn:focus-within{outline:3px solid #ffb300}
-@container ss (max-width:420px){.ss-ph-btn span{display:none}.ss-ph-btn{padding:4px}}
+/* Photographies RD / RG / AM / AV : « Prendre une photo » et « Importer depuis la galerie » (deux boutons distincts) ;
+   emplacement vide : boutons libellés ; photo présente : remplacement par « Photo » / « Galerie » en surimpression.
+   Fiche étroite : icônes seules (libellé en info-bulle et pour les lecteurs d'écran). */
+.ss-ph-btn .ic{display:inline-flex}
+.ss-ph-k{color:#4b6a8a;font-size:13px}
+.ss-ph-add{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.ss-ph-btn.is-big{background:var(--oeg-blue);color:#fff;border-color:transparent}
+.ss-ph-btn.is-big.ms-gallery{background:#fff;color:var(--oeg-blue);border-color:#0b5fae55}
+@container ss (max-width:420px){.ss-ph-btn .ms-l{display:none}.ss-ph-btn{padding:4px}.ss-ph-k{font-size:12px}}
 
 /* Accès / difficultés : grand pictogramme + texte */
 .ss-iconrow{display:flex;align-items:center;gap:clamp(12px,1.8vw,24px)}
@@ -204,6 +213,15 @@
   .hm-bassin{flex:1 1 100%}
 }
 
+/* Échanges entre tablettes : modifications à envoyer, recevoir un fichier (mode autonome) */
+.hm-xch{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 14px;margin:0 0 12px;border-radius:16px;background:#fff;border:1px solid var(--line);border-left:6px solid var(--ok)}
+.hm-xch.is-pending{border-left-color:var(--perf);background:var(--perf-bg)}
+.hm-xch.is-todo{border-left-color:var(--warn);background:var(--warn-bg)}
+.hm-xch-txt{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hm-xch-txt b{font-size:16.5px;color:var(--brand)}
+.hm-xch-txt span{font-size:14px;color:var(--muted)}
+.hm-xch-btns{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:560px){.hm-xch-btns{width:100%}.hm-xch-btns .btn{flex:1 1 auto}}
 .hm-tours{margin:0 0 12px}
 .hm-tours h2{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font-family:var(--font-cond);font-weight:800;text-transform:uppercase;font-size:17px;letter-spacing:.04em;color:var(--brand)}
 .hm-tours h2 .ico{color:var(--perf)}
@@ -255,7 +273,32 @@
 .hm-foot .badge .ico{width:14px;height:14px}
 .hm-next{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--info)}
 .hm-next.is-unplanned{color:var(--warn)}
-.hm-last{font-size:12.5px;color:var(--muted)}
+.hm-last{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 8px;max-width:100%;font-size:12.5px;color:var(--muted)}
+/* Note de la dernière tournée signée (gradeTag) à côté de « Dernière tournée » */
+.hm-last .grade-tag{font-size:12px;padding:0 9px}
+.hm-last .grade-tag b{font-size:14px}
+/* Réseaux de surveillance : filtre (pastille, code, effectif en stations distinctes), « Ranger : par réseau | par
+ * statut », sections par réseau (une station sur deux réseaux dans chacune : « Aussi : … » sur la carte) */
+.hm-nets{align-items:center}
+.hm-nets-k,.hm-sort-k{font-size:13.5px;font-weight:700;color:var(--muted);margin-right:2px}
+.hm-net .net-dot{width:13px;height:13px}
+.chip.sel.hm-net .net-dot{box-shadow:0 0 0 2px #fff}
+.hm-countbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:6px 0 10px}
+.hm-countbar .hm-count{margin:0 auto 0 2px}
+.hm-sort{align-items:center;gap:6px}
+.hm-sort .chip{min-height:44px;padding:4px 14px}
+.hm-secs{display:flex;flex-direction:column;gap:20px}
+.hm-sec[hidden]{display:none}
+.hm-sec-h{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0 0 6px;padding:8px 12px;border-radius:14px;border-left:6px solid var(--net,#5f6b7a);
+  background:var(--net-light,#eef1f4);font-family:var(--font-cond);font-weight:800;font-size:19px;letter-spacing:.02em;color:var(--net-dark,var(--brand));line-height:1.15}
+.hm-sec-h .net-dot{width:16px;height:16px}
+.hm-sec-code{text-transform:uppercase}
+.hm-sec-label{min-width:0;font-family:var(--font-text);font-weight:600;font-size:14.5px;letter-spacing:0;color:var(--ink);overflow-wrap:anywhere}
+.hm-sec-n{margin-left:auto;border-radius:999px;padding:1px 10px;background:#fff;color:var(--net-dark,var(--brand));font-family:var(--font-text);font-size:13.5px;font-weight:700;white-space:nowrap;box-shadow:inset 0 0 0 1px var(--net-line,#c9d1d9)}
+.hm-sec-d{margin:0 2px 10px;font-size:13px;color:var(--muted)}
+.hm-netline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0}
+.hm-also-k{font-size:12.5px;font-weight:700;color:var(--muted)}
+@media(max-width:560px){.hm-nets-k{display:none}.hm-nets .chip{padding:6px 11px}.hm-sec-h{font-size:17px}.hm-sec-label{flex-basis:100%;order:3;font-size:13.5px}.hm-sec-d{display:none}}
 
 /* ---------- Création de tournée (#/nouvel-audit) ---------- */
 .an-form{max-width:980px;margin:0 auto}
@@ -308,6 +351,9 @@
 .an-cand-sub{font-size:12.5px;color:var(--muted)}
 .an-cand-pres{display:inline-flex;align-items:center;gap:4px;margin-top:2px;font-size:12.5px;font-weight:600;color:var(--info)}
 .an-cand-pres.is-unplanned{color:var(--warn)}
+.an-nets{margin:2px 0 4px;align-items:center}
+.an-cand-nets{margin-top:4px}
+.an-sel-sub .net-badge{font-size:12px}
 .an-fixed{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .an-fixed li{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;background:var(--soft2);color:var(--brand);font-weight:600}
 .an-comps .check .ico{color:var(--sky)}
@@ -368,9 +414,53 @@
 .se-sec>h2 .ico{color:var(--sky)}
 .se-checks .check .ico{color:var(--sky)}
 .se-sp{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
-.se-sp-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:12px;background:#f7fbfe;border:1px solid var(--line)}
+/* Points de prélèvement : type, libellé, système (UTM 22N / 21N), X, Y, retrait ; aperçu de la conversion dessous.
+   Téléphone : type + retrait, libellé, système, X | Y, aperçu. */
+.se-sp-row{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.5fr) minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:12px;background:#f7fbfe;border:1px solid var(--line)}
 .se-sp-row :is(input,select){width:100%}
-@media(max-width:700px){.se-sp-row{grid-template-columns:1fr 1fr}.se-sp-row>label:nth-child(2){grid-column:1 / -1;grid-row:2}.se-sp-row>.icon-btn{justify-self:end}}
+.se-sp-row>.se-xy-conv{grid-column:1 / -1;margin:0}
+.se-sp-row>.se-xy-conv:empty{display:none}
+@media(max-width:700px){.se-sp-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.se-sp-kind{grid-column:1 / 3}.se-sp-row>.icon-btn{grid-column:3;grid-row:1;justify-self:end}
+  .se-sp-label,.se-sp-srs{grid-column:1 / -1}.se-sp-y{grid-column:2 / -1}}
+/* Coordonnées X / Y de la station : système, X, Y sur une ligne ; conversion (UTM 21N → 22N) ou incohérence dessous. */
+.se-xy{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:0 10px;align-items:start}
+.se-xy>.se-xy-conv{grid-column:1 / -1;margin:-4px 0 12px}
+.se-xy>.se-xy-conv:empty{display:none}
+@media(max-width:640px){.se-xy{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.se-xy>.field:first-child{grid-column:1 / -1}}
+.se-xy-conv[data-state=conv]{font-size:14px;font-weight:700;color:var(--oeg-navy,#0d3577)}
+.se-xy-conv[data-state=warn]{font-size:13.5px;font-weight:600;color:#8a4b00;background:#fff4e0;border-radius:8px;padding:6px 9px}
 .se-inline{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-weight:600;color:var(--nc)}
 .se-inline input{width:20px;height:20px}
 .se-reason{border-color:#9cc8ea}
+/* Tournées en binôme : contrôleurs de la tournée, tournées de l'agent connecté en premier */
+.hm-tour-ctrl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--brand)}
+.hm-tour.is-mine{border-left-color:var(--brand)}
+/* Création de tournée : contrôleurs OEG (initiales, nom, profil ; agent connecté coché d'office) */
+.an-ctrls{grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr))}
+.an-ctrls .check{align-items:center;gap:10px}
+.an-ctrl-av{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;letter-spacing:.02em}
+.an-ctrl-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.an-ctrl-txt b{color:var(--brand);font-size:15.5px}
+.an-ctrl-txt small{font-size:12.5px;color:var(--muted)}
+/* Périmètre contrôlé à une station sur plusieurs réseaux (« Biologie », « Chimie ») : création de tournée, ajout d'une
+   station, onglet Infos ; prestation programmée de chaque partie dessous ; tournée mixte (plusieurs types). */
+.pm-checks{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.pm-check{flex:1 1 170px;min-width:0;align-items:center;gap:10px;padding:6px 10px;min-height:var(--tap)}
+.pm-check input{flex:none;width:22px;height:22px}
+.pm-check.t-bio.sel{border-color:#2f8a3f;background:#e4f4e8}
+.pm-check.t-ce.sel{border-color:#0b6cb4;background:#e6f6fd}
+.pm-check.t-eso.sel{border-color:#2f6f8f;background:#e3eef5}
+.pm-txt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.pm-txt b{color:var(--brand);font-size:15.5px}
+.pm-pres{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:var(--info);overflow-wrap:anywhere}
+.pm-pres.is-other{color:#8a4b00}
+.pm-pres.is-none{color:var(--muted)}
+.an-sel-parts{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.an-parts-k{font-size:13px;font-weight:700;color:var(--brand)}
+.an-parts-note{display:flex;gap:6px;align-items:flex-start;margin-top:8px}
+.an-recap-mixed{font-weight:700;color:var(--brand)}
+.as-perim{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 2px}
+.as-perim-k{font-weight:700;color:var(--brand)}
+.as-perim-s{display:inline-block;margin-left:4px;font-size:12px;font-weight:700;color:var(--info)}
+.as-pm-for{margin:0 0 6px;font-size:16px}
+.ss-perim{display:flex;align-items:flex-start;gap:6px;margin:0 0 8px;padding:6px 9px;border-radius:9px;background:#eef6fd;color:var(--brand);font-size:13.5px;line-height:1.3}

@@ -2,11 +2,14 @@
  * référentiel des fiches terrain OEG (stations biologie, cours d'eau, eaux souterraines), programmes RCS ESC BIO 2026
  * et cours d'eau 2026, jeu de démonstration facultatif, et mise à niveau d'un appareil déjà initialisé.
  * Toutes les opérations sont idempotentes : elles n'ajoutent que ce qui manque (identifiants déterministes)
- * et ne remplacent jamais une saisie existante. */
+ * et ne remplacent jamais une saisie existante. Exception documentée : les grilles PAR DÉFAUT enregistrées suivent
+ * la version livrée avec l'application (upgradeDefaultGrids) ; les tournées, elles, ne sont jamais modifiées. */
 import { store } from '../core/store.js';
 import { baseReferential, referenceDocuments, oegReferential, oegProgramme, bioProgramme, ceProgramme, demoData, emptyStationFields, STATION_DETAILS, BIO_CAMPAIGN, CT_GRID_ID, CE_NETWORKS, orderCompartments } from '../domain/seed.js';
 import { DEFAULT_GRIDS, OLD_BIO_GRID_ID } from '../domain/default-grids.js';
+import { upgradeStoredGrid } from '../domain/grids.js';
 import { nowISO } from '../core/util.js';
+import { ensureNetworks, usedNetworkCodes } from './networks.js';
 
 let dataPromise = null;
 /** Charge le référentiel des stations OEG (data/referentiel-oeg.json, repris des fiches terrain). */
@@ -160,8 +163,36 @@ export async function seedAll({ oeg = true, demo = false, bio = oeg, ce = oeg } 
 }
 
 /**
+ * Grilles par défaut enregistrées mises à niveau d'après celles du code (upgradeStoredGrid, js/domain/grids.js) :
+ * version du code plus élevée ⇒ contenu remplacé par celui du code (une grille archivée par un administrateur reste
+ * archivée) ; même version ⇒ unités de turbidité FNU / NFU remplacées par NTU. DÉTERMINISTE (aucune date dans le
+ * contenu : deux tablettes produisent la même grille, sans conflit à l'échange) et IDEMPOTENTE. Une grille supprimée
+ * n'est jamais recréée. Les tournées ne sont JAMAIS modifiées : leur instantané (gridSnapshot, gridSha256) fait partie
+ * du contenu signé et scellé. Écriture par store.put : journal d'audit et file d'envoi gérés par le magasin.
+ * Retourne { replaced: [{ id, from, to }], units: [{ id, count }] }.
+ */
+export async function upgradeDefaultGrids() {
+  const out = { replaced: [], units: [] };
+  for (const code of DEFAULT_GRIDS) {
+    const stored = store.get('grid', code.id);
+    if (!stored) continue;
+    const r = upgradeStoredGrid(stored, code);
+    if (!r.changed) continue;
+    const reason = r.replaced
+      ? `Grille ${code.code} mise à niveau : version ${r.from || '?'} → ${r.to} (version livrée avec l’application ; tournées existantes inchangées)`
+      : `Turbidité exprimée en NTU (CCTP 2026) : ${r.units} unité(s) FNU / NFU remplacée(s) ; tournées existantes inchangées`;
+    await store.put('grid', r.grid, { reason, action: 'seed' });
+    if (r.replaced) out.replaced.push({ id: code.id, from: r.from, to: r.to }); else out.units.push({ id: code.id, count: r.units });
+  }
+  return out;
+}
+
+/**
  * Mise à niveau d'un appareil déjà initialisé (à appeler après ouverture de session), IDEMPOTENTE :
  * - ajoute la grille CT-2026 (et toute grille par défaut manquante) ; archive l'ancienne grille CT-BIO-2026 ;
+ * - grilles par défaut enregistrées mises à niveau (upgradeDefaultGrids : nouvelle version, turbidité en NTU) ;
+ * - référentiel « Réseaux de surveillance » : réseaux par défaut et unité NTU installés s'ils manquent, puis un réseau
+ *   créé pour chaque code utilisé par une station ou une campagne sans réseau enregistré (aucune station réécrite) ;
  * - si le référentiel des stations est installé : ajoute les prestataires, sites (dont les 17 points d'eaux
  *   souterraines), points et campagnes manquants, complète les sites (types de tournée, code BSS, compartiments,
  *   nature / usage / aquifère), installe les programmes BIO 2026 et cours d'eau 2026 manquants et rattache à la
@@ -177,6 +208,18 @@ export async function upgradeReferentiel2026() {
       await store.put('grid', { ...old, status: 'archivee', archivedAt: nowISO() }, { reason: 'Remplacée par la grille CT-2026 (contrôle terrain des prestations de prélèvement – 2026)' });
       res.upgraded = true; res.oldGridArchived = true;
     }
+    // Avant toute sortie anticipée : grilles par défaut à jour, réseaux de surveillance et unité NTU.
+    const grids = await upgradeDefaultGrids();
+    if (grids.replaced.length || grids.units.length) { res.upgraded = true; res.gridsUpgraded = grids.replaced.length + grids.units.length; }
+    const base = baseReferential();
+    for (const type of ['network', 'unit']) {
+      const todo = only(type, base[type]);
+      if (!todo.length) continue;
+      await store.bulkPut(type, todo, { reason: type === 'network' ? 'Référentiel des réseaux de surveillance (marchés OEG 2026)' : 'Référentiel initial : unités manquantes (turbidité en NTU)', action: 'seed', label: `${todo.length} ${type}` });
+      res.upgraded = true; res[type === 'network' ? 'networks' : 'units'] = todo.length;
+    }
+    const created = await ensureNetworks(usedNetworkCodes(), { reason: 'Réseaux utilisés par les stations ou les campagnes, absents du référentiel' });
+    if (created.length) { res.upgraded = true; res.networksCreated = created.length; }
     if (!store.count('site')) return res;
     const retarget = store.filter('prestation', p => p.gridId === OLD_BIO_GRID_ID);
     // Contrôles rapides (éléments supprimés compris : un élément supprimé n'est jamais recréé).
