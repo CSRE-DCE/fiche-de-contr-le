@@ -1,8 +1,8 @@
 """Note sur 20 des fiches de contrôle (demande de l'OEG du 14/10/2026 « Mettre une grille de notation pour chaque fiche
 d'évaluation » ; règles validées par l'OEG le 23/10/2026 : C = 1, P = 0,5, NC = 0, N/A non compté, 26 points majeurs
-× 2, points de synthèse hors note, note au dixième, appréciation ≥ 16 « Satisfaisant », 12 à < 16 « À améliorer »,
-< 12 « Insuffisant », seuils modifiables en Administration, note figée à la signature). Le calcul lui-même est vérifié
-par tests/unit/grading.test.js.
+(28 depuis la grille 1.3 : F6.15 et F6.16, PEZSML) × 2, points de synthèse hors note, note au dixième, appréciation
+≥ 16 « Satisfaisant », 12 à < 16 « À améliorer », < 12 « Insuffisant », seuils modifiables en Administration, note figée
+à la signature). Le calcul lui-même est vérifié par tests/unit/grading.test.js.
 
   1. test_saisie_grille_de_notation_et_synthese (tablette 1280 × 800 puis téléphone 390 × 844) : badge « Majeur (×2) »
      sur les points majeurs (F4.2 commun à la tournée, F4.12), pas sur les autres ; encadré « Grille de notation » en

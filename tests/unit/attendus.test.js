@@ -2,10 +2,13 @@
  * - data/attendus-ct-2026.json : une entrée complète par critère de GRID_CT_2026 (attendu, vérification, C, P, NC
  *   pour les critères de conformité ; « information à relever » pour les critères valeur seule), aucune clé
  *   orpheline, feuille / n° / libellé / section / portée / types recopiés à l'identique de la grille, feuilles 1 à 10,
- *   échelle, liste de préparation, références normatives connues, aucun nombre « contractuel » inventé (heuristique),
- *   turbidité en NTU ; SANS DOUBLON (grille 1.2) : aucun attendu recopié d'un critère à l'autre, renvois vers des
- *   critères existants, un constat coté à un seul endroit (recadrages des critères voisins), points de synthèse « hors
- *   note », liste de préparation sans élément répété ;
+ *   échelle, liste de préparation, références normatives connues, aucun nombre « contractuel » inventé (heuristique :
+ *   les valeurs chiffrées ne sont admises que dans une entrée qui porte ses sources — CCTP du réseau ou protocole, avec
+ *   la page), turbidité en NTU ; SANS DOUBLON (grille 1.2) : aucun attendu recopié d'un critère à l'autre, renvois vers
+ *   des critères existants, un constat coté à un seul endroit (recadrages des critères voisins), points de synthèse
+ *   « hors note », liste de préparation sans élément répété ; CCTP 2026 ET PEZSML (1.3) : sources au format « CCTP
+ *   <réseau> (marché OEG 2026-0x), § …, p. N » ou protocole, valeurs par réseau, points résolus sans « à préciser »,
+ *   F6.14 à F6.16, F5.31, F5.32, corrections de F7.5 et F9.8, délais d'acheminement de l'eau (F2.7.3) ;
  * - js/app/attendus-pdf.js : attenduFor (identifiants de base et effectifs), visibilité par type de tournée calculée
  *   par les conditions de la grille, modèle d'affichage, PDF (fiche complète et liste de préparation) ;
  * - js/views/attendus.js : rendu de l'écran par type et par feuille, recherche, carte d'un critère, découpage de l'aide de
@@ -27,7 +30,13 @@ const G_ITEMS = new Map(items.map(i => [i.id, i]));
 
 /** Références normatives que le document peut citer (existence et intitulé vérifiés) — aucune autre. */
 const KNOWN_REFS = ['NF EN ISO 5667-1', 'NF EN ISO 5667-3', 'NF EN ISO 5667-6', 'NF EN ISO 5667-11', 'NF EN ISO 5667-14',
-  'FD T90-523-1', 'FD T90-523-3', 'NF EN ISO 10523', 'NF EN 27888', 'NF EN ISO 5814', 'NF EN ISO 7027-1', 'NF EN 13946', 'NF EN ISO/IEC 17025'];
+  'FD T90-523-1', 'FD T90-523-3', 'NF EN ISO 10523', 'NF EN 27888', 'NF EN ISO 5814', 'NF EN ISO 7027-1', 'NF EN 13946', 'NF EN ISO/IEC 17025',
+  'NF T 90-354', 'NF S 99-700'];
+/** Sources admises (champ « sources » : traçabilité des valeurs chiffrées) : CCTP 2026 d'un réseau (marché OEG
+ * 2026-01 à 05 : BIO, EL, Chimie, RCO, ESO), protocoles et guides nationaux fournis par l'OEG ; toujours une page. */
+const CCTP_MARCHES = { BIO: '01', EL: '02', Chimie: '03', RCO: '04', ESO: '05' };
+const SOURCE_RE = new RegExp(`^(?:CCTP (${Object.keys(CCTP_MARCHES).join('|')}) \\(marché OEG 2026-(0[1-5])\\), §[^]+|(?:Guide AQUAREF|Guide IDGF|Circulaire DCE|Protocole ONEMA|Recommandation Ifremer|Ifremer|Étude AQUAREF)[^]+), p\\. \\d+(?:-\\d+)?(?:, \\d+(?:-\\d+)?)*(?: \\(pages? imprimées? [^)]+\\))?$`);
+const NETWORK_KEYS = [...Object.keys(CCTP_MARCHES), 'tous'];
 
 /** Tous les textes rédigés du document (hors libellés recopiés de la grille), avec leur chemin. */
 function writtenTexts() {
@@ -42,6 +51,7 @@ function writtenTexts() {
   }
   for (const [id, e] of Object.entries(data.criteres || {})) {
     for (const k of ['attendu', 'verification', 'C', 'P', 'NC', 'NA', 'aPreciser']) if (e[k]) out.push([`${id}.${k}`, e[k]]);
+    for (const [k, v] of Object.entries(e.parReseau || {})) out.push([`${id}.parReseau.${k}`, v]);
   }
   return out.filter(([, v]) => typeof v === 'string');
 }
@@ -66,7 +76,7 @@ test('attendus : en-tête, échelle C / P / NC / N/A et liste de préparation', 
 });
 
 test('attendus : une entrée par critère de la grille, aucune clé orpheline', () => {
-  eq(items.length, 212, 'nombre de critères de GRID_CT_2026 (1.2 : F8.A3 réuni à F8.A2)');
+  eq(items.length, 217, 'nombre de critères de GRID_CT_2026 (1.2 : F8.A3 réuni à F8.A2 ; 1.3 : F5.31, F5.32, F6.14 à F6.16)');
   const ids = new Set(items.map(i => i.id));
   const missing = items.filter(i => !data.criteres[i.id]).map(i => i.id);
   const orphans = Object.keys(data.criteres).filter(k => !ids.has(k));
@@ -89,7 +99,7 @@ test('attendus : critères de conformité complets (attendu, vérification, C, P
     if (!/^Information à relever\s*:\s*\S/.test(e.attendu || '')) bad.push(`${it.id} : « Information à relever : … » attendu`);
   }
   deepEq(bad, [], 'entrées incomplètes');
-  eq(conformity.length, 187, 'critères cotés');
+  eq(conformity.length, 191, 'critères cotés');
 });
 
 test('attendus : feuille, n°, libellé, section, portée et types identiques à la grille', () => {
@@ -110,7 +120,7 @@ test('attendus : feuille, n°, libellé, section, portée et types identiques à
 test('attendus : points majeurs recopiés de la grille, note sur 20 expliquée, fusion F8.A2 et dépôt F2.7.3 (OEG, 23/10/2026)', () => {
   const diffs = items.filter(it => !!data.criteres[it.id].majeur !== !!it.major).map(it => it.code);
   deepEq(diffs, [], '« majeur » identique à l’attribut major de la grille');
-  eq(Object.values(data.criteres).filter(e => e.majeur).length, 26);
+  eq(Object.values(data.criteres).filter(e => e.majeur).length, 28, '28 points majeurs (1.3 : F6.15 et F6.16)');
   assert(Object.values(data.criteres).every(e => e.majeur === undefined || e.majeur === true), '« majeur » : true ou absent');
   assert(filled(data.notation) && /note sur 20/.test(data.notation) && /majeurs/.test(data.notation) && /synthèse/.test(data.notation), 'règle de la note sur 20');
   assert(!data.criteres['it-F8-A3'], 'F8.A3 retiré');
@@ -155,9 +165,7 @@ test('attendus : références normatives connues uniquement, autres références
     }
   }
   deepEq(bad, [], 'références inattendues');
-  // Aucun article de CCTP inventé
-  const art = writtenTexts().filter(([, v]) => /\b(art\.|article)\s*\d/i.test(v)).map(([k]) => k);
-  deepEq(art, [], 'article de CCTP cité');
+  // Les articles et paragraphes des CCTP sont désormais admis : ils figurent dans les sources (CCTP du réseau, §, page).
 });
 
 /** Valeurs chiffrées déjà présentes dans la grille, AVEC leur unité (un nombre seul n'est jamais admis) : seuils de
@@ -181,12 +189,16 @@ function gridValuePatterns(grid) {
 test('attendus : aucun nombre « contractuel » inventé (heuristique)', () => {
   // Retirés avant l'analyse : références normatives (NF EN ISO 5667-3…), codes de critères (F4.12, F2.2.1 à F2.2.7),
   // « feuille 4 », « 4x4 », « (valeur 0) » (saisie d'un décompte nul) et les valeurs de la grille avec leur unité.
-  // Tout autre chiffre (nombre de prélèvements, délai, volume, fréquence…) est signalé : il doit être remplacé par
-  // « conformément au protocole / CCTP du marché » et une mention « aPreciser ».
+  // Une entrée qui porte ses SOURCES (CCTP 2026 du réseau ou protocole, avec la page : champ « sources ») peut citer
+  // leurs valeurs chiffrées (validation de l'OEG du 24/10/2026). Tout autre chiffre (nombre de prélèvements, délai,
+  // volume, fréquence…) est signalé : il doit être remplacé par « conformément au protocole / CCTP du marché » et une
+  // mention « aPreciser », ou rattaché à sa source.
   const patterns = gridValuePatterns(GRID_CT_2026);
   const refs = [...Object.keys(data.references || {})].sort((a, b) => b.length - a.length);
+  const sourced = new Set(Object.entries(data.criteres).filter(([, e]) => (e.sources || []).length).map(([id]) => id));
   const stray = [];
   for (const [path, text] of writtenTexts()) {
+    if ([...sourced].some(id => path.startsWith(id + '.'))) continue;
     let t = text;
     for (const r of refs) t = t.split(r).join(' ');
     for (const re of patterns) t = t.replace(re, ' ');
@@ -198,9 +210,78 @@ test('attendus : aucun nombre « contractuel » inventé (heuristique)', () => {
   let pt = probe;
   for (const re of patterns) pt = pt.replace(re, ' ');
   deepEq(pt.match(/\d+/g), ['8', '48', '3'], 'heuristique : valeurs inventées détectées, valeurs de la grille admises');
-  deepEq(stray, [], 'nombres à confirmer (renseigner « aPreciser » plutôt qu’une valeur)');
-  // Les exigences chiffrées propres au marché sont renvoyées à l'OEG.
-  for (const id of ['it-F6-5', 'it-F4-2']) assert(filled(data.criteres[id].aPreciser), `${id} : « à préciser » attendu`);
+  deepEq(stray, [], 'nombres à confirmer (renseigner « aPreciser », ou citer la source CCTP / protocole)');
+  // Une valeur chiffrée sans source reste signalée, même dans une entrée voisine d'une entrée sourcée.
+  assert(!sourced.has('it-F4-26') && sourced.has('it-F6-5'), 'entrées avec et sans sources');
+  // Exigences chiffrées : résolues par les CCTP et protocoles (sources, plus de « à préciser »), ou renvoyées à l'OEG.
+  for (const id of ['it-F6-5', 'it-F6-6', 'it-F7-6', 'it-F7-7', 'it-F7-10', 'it-F8-A5', 'it-F8-B1', 'it-F8-B3', 'it-F9-9', 'it-F10-5', 'it-F10-6', 'it-F4-31', 'it-F5-5', 'it-F5-15', 'it-F5-26', 'it-F2-2.2', 'it-F4-21']) {
+    assert(!data.criteres[id].aPreciser, `${id} : résolu par les CCTP / protocoles, plus de « à préciser »`);
+    assert(sourced.has(id), `${id} : sources citées`);
+  }
+  for (const id of ['it-F4-2', 'it-F4-9', 'it-F2-2.4', 'it-F6-13', 'it-F9-1']) assert(filled(data.criteres[id].aPreciser), `${id} : « à préciser » attendu`);
+});
+
+test('attendus : sources (CCTP du réseau et marché, §, page ; protocoles) et valeurs par réseau', () => {
+  const bad = [];
+  for (const [id, e] of Object.entries(data.criteres)) {
+    if (e.sources !== undefined && (!Array.isArray(e.sources) || !e.sources.length)) bad.push(`${id}.sources vide`);
+    for (const s of e.sources || []) {
+      const m = SOURCE_RE.exec(s);
+      if (!m) bad.push(`${id} : source « ${s} »`);
+      else if (m[1] && CCTP_MARCHES[m[1]] !== m[2]) bad.push(`${id} : marché de ${m[1]} (${m[2]})`);
+      if (/\.pdf\b/i.test(s)) bad.push(`${id} : nom de fichier cité (${s})`);
+    }
+    if (new Set(e.sources || []).size !== (e.sources || []).length) bad.push(`${id} : source en double`);
+    const keys = Object.keys(e.parReseau || {});
+    if (keys.length && !(e.sources || []).length) bad.push(`${id} : valeurs par réseau sans source`);
+    for (const k of keys) if (!NETWORK_KEYS.includes(k) || !filled(e.parReseau[k])) bad.push(`${id}.parReseau.${k}`);
+    if (keys.filter(k => k !== 'tous').length >= 2 && !keys.includes('tous')) {
+      const core = v => v.replace(/\s*\((?:p\.|Tableau|§)[^)]*\)/g, '').replace(/[ .]+$/, '');
+      const vals = keys.map(k => core(e.parReseau[k]));
+      if (vals.every(v => v === vals[0] || /^Idem/.test(v))) bad.push(`${id} : valeurs par réseau identiques (à ne pas répéter)`);
+    }
+  }
+  deepEq(bad, [], 'sources et valeurs par réseau');
+  const n = Object.values(data.criteres).filter(e => (e.sources || []).length).length;
+  assert(n >= 75, `critères avec sources : ${n}`);
+  // Les cinq CCTP et les protocoles sont cités ; aucun long extrait (paraphrases et références seulement).
+  const all = Object.values(data.criteres).flatMap(e => e.sources || []).join('\n');
+  for (const r of Object.keys(CCTP_MARCHES)) assert(all.includes(`CCTP ${r} (marché OEG 2026-${CCTP_MARCHES[r]})`), `CCTP ${r} cité`);
+  for (const g of ['Guide IDGF 2023', 'Guide AQUAREF 2022', 'Guide AQUAREF 2017, module DROM', 'Circulaire DCE 2007/22', 'Protocole ONEMA 2010']) assert(all.includes(g), `${g} cité`);
+  const quotes = writtenTexts().flatMap(([k, v]) => [...v.matchAll(/«([^»]*)»/g)].map(m => [k, m[1].trim()])).filter(([, q]) => q.split(/\s+/).length > 12);
+  deepEq(quotes, [], 'citation entre guillemets de plus de 12 mots');
+});
+
+test('attendus : CCTP 2026 et PEZSML (OEG, 24/10/2026) — F6.14 à F6.16, F5.31, F5.32, F7.5, F9.8, délais de l’eau (F2.7.3)', () => {
+  const c = data.criteres;
+  // Feuille 6 commune aux deux protocoles
+  eq(data.feuilles['6'].titre, 'Invertébrés aquatiques – PEZADA / PEZSML');
+  for (let n = 1; n <= 13; n++) for (const r of c[`it-F6-${n}`].refs || []) assert(!/PEZADA en vigueur/.test(r), `F6.${n} : référence neutre (${r})`);
+  for (const id of ['it-F6-2', 'it-F6-5', 'it-F6-6', 'it-F6-7', 'it-F6-9', 'it-F6-11']) deepEq(c[id].refs, ['Protocole invertébrés de la station (PEZADA ou PEZSML)'], id);
+  for (const id of ['it-F3-5', 'it-F3-10', 'it-F3-11', 'it-F3-17']) assert(c[id].refs.includes('CCTP du marché') && !c[id].refs.some(r => /PEZADA/.test(r)), id);
+  assert(/PEZADA/.test(c['it-F6-5'].attendu) && /PEZSML/.test(c['it-F6-5'].attendu) && /F6\.14/.test(c['it-F6-5'].attendu), 'F6.5 : nombre de Surber de chaque protocole');
+  assert(c['it-F6-14'].valeur && /hydro-écorégion 52/.test(c['it-F6-14'].attendu) && /hydro-écorégion 51/.test(c['it-F6-14'].attendu) && /choisit/.test(c['it-F6-14'].attendu), 'F6.14 : proposé d’après l’HER, choix manuel');
+  for (const id of ['it-F6-15', 'it-F6-16']) {
+    assert(c[id].majeur && /PEZSML/.test(c[id].libelle) && filled(c[id].NA), `${id} : point majeur PEZSML`);
+    assert(c[id].refs.includes('Protocole PEZSML (Guillemet et Clavier, 2006)'), `${id} : protocole PEZSML`);
+  }
+  assert(/trois semaines/.test(c['it-F6-16'].attendu), 'F6.16 : relève après trois semaines');
+  // F5.31 et F5.32 : non majeurs, renvoyés à l'OEG pour les points ouverts (délai, édition AQUAREF)
+  for (const id of ['it-F5-31', 'it-F5-32']) assert(!c[id].majeur && filled(c[id].aPreciser) && filled(c[id].NA), id);
+  deepEq([c['it-F5-31'].types, c['it-F5-32'].types], [['bio', 'ce'], ['bio', 'ce']]);
+  // F7.5 : brosse renouvelée ou nettoyée à chaque prélèvement (guide IDGF) ; F9.8 : flacon transparent (CCTP BIO)
+  assert(/à chaque prélèvement/.test(c['it-F7-5'].attendu) && /guide IDGF/.test(c['it-F7-5'].attendu) && !/entre les stations/.test(c['it-F7-5'].attendu) && /éthanol/.test(c['it-F7-5'].attendu), 'F7.5 corrigé');
+  assert(/transparent/.test(c['it-F9-8'].attendu) && !/teinté ou opaque/.test(c['it-F9-8'].attendu) && c['it-F9-8'].sources.some(s => s.startsWith('CCTP BIO')), 'F9.8 corrigé');
+  // F2.7.3 : libellé et attendu validés inchangés ; délai du CCTP qui fait foi, 72 h recommandées par AQUAREF (DROM)
+  const f = c['it-F2-7.3'];
+  eq(f.libelle, 'Dépôt / expédition des échantillons le jour même');
+  assert(/délai du CCTP du réseau fait foi/.test(f.aPreciser) && /fait foi/.test(f.parReseau.tous) && /72 h/.test(f.parReseau.tous) && /AQUAREF \(module DROM\)/.test(f.parReseau.tous), 'F2.7.3 : délai du CCTP, 72 h AQUAREF');
+  for (const k of ['BIO', 'EL', 'Chimie', 'RCO', 'ESO']) assert(filled(f.parReseau[k]), `F2.7.3 : délai du CCTP ${k}`);
+  assert(f.sources.some(s => s.startsWith('Guide AQUAREF 2017, module DROM')), 'F2.7.3 : source AQUAREF module DROM');
+  // Turbidité : NTU, méthode et turbidimètre toujours à préciser au CCTP
+  assert(/NTU/.test(c['it-F4-9'].attendu) && /turbidimètre/.test(c['it-F4-9'].aPreciser));
+  // Glossaire : normes ajoutées
+  for (const r of ['NF T 90-354', 'NF S 99-700']) assert(filled(data.references[r]), r);
 });
 
 /** Unité de turbidité écartée (seule NTU est admise), écrite en deux morceaux pour ne pas figurer en clair. */
@@ -405,7 +486,19 @@ test('écran : rendu par type et par feuille, recherche, carte d’un critère',
     box.innerHTML = String(await view.render({}, { type: 'bio', feuille: '10' }));
     eq(box.querySelectorAll('.att-sheet').length, 9, 'feuille non affichée pour le type : filtre ignoré');
     box.innerHTML = String(await view.render({}, {}));
-    eq(box.querySelectorAll('[data-id]').length, items.length, 'tous types : 212 critères');
+    eq(box.querySelectorAll('[data-id]').length, items.length, 'tous types : 217 critères');
+    // Valeurs par réseau (badge et valeur du CCTP) et sources repliées ; F6.14 : sources et « à préciser »
+    box.innerHTML = String(await view.render({}, { type: 'bio', feuille: '2' }));
+    const f273 = box.querySelector('#att-it-F2-7\\.3') || box.querySelector('[data-id="it-F2-7.3"]');
+    assert(f273.querySelector('.att-c-net') && f273.querySelectorAll('.att-c-net dl > div').length === 6 && /72 h/.test(f273.querySelector('.att-c-net').textContent), 'F2.7.3 : délais par réseau');
+    assert(f273.querySelector('.att-c-net .net-badge') && f273.querySelector('details.att-c-src li'), 'badges des réseaux, sources');
+    box.innerHTML = String(await view.render({}, { type: 'bio', feuille: '6' }));
+    const v14 = box.querySelector('[data-id="it-F6-14"]');
+    assert(v14.classList.contains('att-val') && v14.querySelector('.att-c-prec') && v14.querySelector('details.att-c-src'), 'F6.14 : information relevée, sources et « à préciser »');
+    assert(box.querySelector('[data-id="it-F6-15"] .major-badge') && box.querySelector('[data-id="it-F6-15"] .att-cond'), 'F6.15 : majeur, affiché selon une réponse');
+    box.innerHTML = String(await view.render({}, { type: 'ce', feuille: '5' }));
+    assert(/Selon le réseau de la station/.test(box.querySelector('[data-id="it-F5-32"]').textContent) && !/Selon le réseau de la station/.test(box.querySelector('[data-id="it-F5-31"]').textContent), 'F5.32 : selon le réseau');
+    assert(mod.matches(mod.searchText({ code: 'F5.19', label: 'Technique', entry: data.criteres['it-F5-19'] }), 'niskin'), 'recherche dans les valeurs par réseau');
 
     eq(mod.attenduFor('it-F5-13@09271503').id, 'it-F5-13', 'attenduFor de l’écran (id effectif)');
     const card = String(mod.attenduCard('it-F4-12@09271503'));

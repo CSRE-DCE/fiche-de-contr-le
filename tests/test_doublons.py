@@ -6,7 +6,8 @@ fois, aides, attendus, numéros retirés) sont vérifiées par tests/unit/grid-c
   1. test_mise_a_niveau_tournee_signee_intacte : tablette en service avec la grille CT-2026 1.1 (« Heure début » /
      « Heure fin » en double dans F2, F4.14 et F4.16 répétés par station, pas de point de synthèse) et une tournée
      commencée puis signée et verrouillée avec cette grille. Avant la mise à niveau : nouvelle tournée et fiches vierges
-     déjà en 1.2. upgradeReferentiel2026 : grille enregistrée en 1.2 (journal) ; la tournée signée n'est jamais
+     déjà en 1.2 (version du code : 1.3 depuis les CCTP 2026). upgradeReferentiel2026 : grille enregistrée dans la
+     version du code (journal) ; la tournée signée n'est jamais
      modifiée (instantané 1.1, empreinte, sceau vérifié ; PDF avec ses libellés d'origine, sans avertissement) ;
      idempotence.
   2. test_fenetre_aide_et_attendu (tablette 1280 × 800 puis téléphone 390 × 844) : un seul bouton ⓘ par point (plus de
@@ -16,6 +17,9 @@ fois, aides, attendus, numéros retirés) sont vérifiées par tests/unit/grid-c
   3. test_menus_sans_doublon : une seule entrée « Audits » (puce « Historique et comparaison ») ; type d'audit
      « avec rendez-vous » partout (plus de « planifié ») ; Mon compte renvoie à Administration pour renommer la tablette.
 """
+import pathlib
+import re
+
 import pytest
 
 from helpers import ATHANASE, answer_required, create_tour, goto_hash, js, setup_standalone
@@ -24,6 +28,9 @@ from test_parcours import pdf_texts, sign_and_lock
 
 TABLET = {'width': 1280, 'height': 800}
 S1 = '09271503'
+# Version de la grille CT-2026 livrée avec l'application (1.2 : doublons et redondances ; 1.3 : CCTP 2026 et PEZSML) :
+# la tablette en 1.1 reçoit la version du code, qui garde les libellés et portées de la 1.2.
+CT_VERSION = re.search(r"^  version: '([\d.]+)',", (pathlib.Path(__file__).resolve().parent.parent / 'js' / 'domain' / 'grid-ct-2026.js').read_text(encoding='utf-8'), re.M).group(1)
 
 # Grille CT-2026 telle qu'enregistrée sur une tablette en service avant la version 1.2.
 GRID_11 = """const g = structuredClone(store.get('grid', 'grid-ct-2026-v1')); g.version = '1.1';
@@ -49,7 +56,7 @@ def seal(page, audit_id):
 @pytest.mark.lent
 def test_mise_a_niveau_tournee_signee_intacte(page, app_url):
     setup_standalone(page, app_url)
-    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == '1.2', 'installation récente : 1.2'
+    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == CT_VERSION, 'installation récente : version du code'
     js(page, GRID_11)
     # Tournée commencée avec la grille 1.1 (instantané 1.1), complète, signée et verrouillée.
     old = create_tour(page, 'ce', [ATHANASE], 'prov-TL1')
@@ -64,20 +71,20 @@ def test_mise_a_niveau_tournee_signee_intacte(page, app_url):
     before = seal(page, old['id'])
     assert before['ok'] and before['version'] == '1.1', before
 
-    # Avant toute mise à niveau (aucune session administrateur depuis la mise à jour) : nouvelle tournée en 1.2.
+    # Avant toute mise à niveau (aucune session administrateur depuis la mise à jour) : nouvelle tournée dans la version du code.
     new = create_tour(page, 'ce', [ATHANASE], 'prov-TL1')
     snap = js(page, """const { itemIndex } = await import('./js/domain/grids.js'); const g = store.get('audit', arg).gridSnapshot, i = itemIndex(g);
         return { version: g.version, f16: i.get('it-F4-16').scope || null, h: i.get('it-F2-1.5').label, n: i.get('it-F2-2.8').noScore || false };""", new['id'])
-    assert snap == {'version': '1.2', 'f16': 'tournee', 'h': 'Début du contrôle', 'n': True}, snap
+    assert snap == {'version': CT_VERSION, 'f16': 'tournee', 'h': 'Début du contrôle', 'n': True}, snap
     blank = ' '.join(pdf_texts(page, "const P = await import('./js/app/sheets-pdf.js'); await P.generateBlankSheetsPdf({ auditType: 'ce', siteIds: [arg] });", ATHANASE))
     assert 'Début du contrôle' in blank and 'prévu au planning' in blank, 'fiches vierges : libellés 1.2'
 
     # ----- Mise à niveau
     res = js(page, "return (await import('./js/app/bootstrap.js')).upgradeReferentiel2026();")
     assert res['upgraded'] and not res.get('error') and res.get('gridsUpgraded', 0) >= 1, res
-    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == '1.2'
+    assert js(page, "return store.get('grid', 'grid-ct-2026-v1').version;") == CT_VERSION
     trail = js(page, "return store.all('trail').filter(t => t.entityType === 'grid').map(t => t.reason || '');")
-    assert any('version 1.1 → 1.2' in t for t in trail), trail
+    assert any(f'version 1.1 → {CT_VERSION}' in t for t in trail), trail
 
     # Tournée signée : jamais modifiée (instantané, empreinte, sceau, date de modification).
     after = seal(page, old['id'])

@@ -4,8 +4,10 @@
  * une campagne en porte un seul (campaign.network). Le code est la valeur enregistrée : il ne se modifie plus après la
  * création du réseau, dont l'identifiant est déterministe (net-<code>). Un réseau : { id, code, label, description,
  * color, order, auditTypes (types de tournée associés, parmi bio / ce / eso), active }.
- * - NETWORK_DEFAULTS : les cinq réseaux des marchés OEG 2026 (un CCTP par réseau). Contenu DÉTERMINISTE, sans date :
- *   deux tablettes qui les installent produisent la même donnée (aucun conflit à l'échange). Libellés, descriptions et
+ * - NETWORK_DEFAULTS : les cinq réseaux des marchés OEG 2026 (un CCTP par réseau ; descriptions reprenant l'intitulé
+ *   officiel de chaque marché : « Mise en œuvre du programme de surveillance de la DCE dans les eaux … de Guyane »).
+ *   Contenu DÉTERMINISTE, sans date : deux tablettes qui les installent produisent la même donnée (aucun conflit à
+ *   l'échange) ; un réseau déjà enregistré n'est jamais réécrit. Libellés, descriptions et
  *   couleurs restent modifiables par l'OEG dans Référentiels › Réseaux de surveillance. BIO n'a pas de type associé :
  *   le type « bio » d'une station est déduit de ses listes biologiques (site.bioLists), comme avant le référentiel.
  * - networkIndex(liste) : index code → réseau, complété par les réseaux par défaut absents (repli tant que le
@@ -37,11 +39,11 @@ export const DEFAULT_ORDER = 900;
 export const networkId = code => 'net-' + String(code ?? '').trim().replace(/[^\w-]+/g, '_');
 
 const DEFAULTS = [
-  { code: 'BIO', label: 'Biologie (RCS ESC BIO)', description: 'Marché OEG 2026-01 – suivi biologique des eaux douces (DCE) : invertébrés, diatomées, ichtyologie et mercure, phytoplancton.', color: '#2f8a3f', order: 10, auditTypes: [] },
-  { code: 'Chimie', label: 'Chimie des cours d’eau', description: 'Marché OEG 2026-03 – suivi chimique des eaux douces (DCE), réseau de contrôle de surveillance.', color: '#6a35b0', order: 20, auditTypes: ['ce'] },
-  { code: 'RCO', label: 'Réseau de contrôle opérationnel', description: 'Marché OEG 2026-04 – réseau de contrôle opérationnel des eaux de surface (DCE).', color: '#0b6cb4', order: 30, auditTypes: ['ce'] },
-  { code: 'EL', label: 'Eaux littorales', description: 'Marché OEG 2026-02 – surveillance des eaux littorales, côtières et de transition (DCE).', color: '#0b7a7c', order: 40, auditTypes: ['ce'] },
-  { code: 'ESO', label: 'Eaux souterraines', description: 'Marché OEG 2026-05 – suivi chimique des eaux souterraines (DCE).', color: '#2f6f8f', order: 50, auditTypes: ['eso'] }
+  { code: 'BIO', label: 'Biologie (RCS ESC BIO)', description: 'Marché OEG 2026-01 – surveillance DCE des eaux douces de Guyane en 2026, suivi biologique : invertébrés (PEZADA / PEZSML), diatomées, ichtyologie et mercure, phytoplancton.', color: '#2f8a3f', order: 10, auditTypes: [] },
+  { code: 'Chimie', label: 'Chimie des cours d’eau', description: 'Marché OEG 2026-03 – surveillance DCE des eaux douces de Guyane en 2026-27, suivi chimique (eau et sédiments), réseau de contrôle de surveillance.', color: '#6a35b0', order: 20, auditTypes: ['ce'] },
+  { code: 'RCO', label: 'Réseau de contrôle opérationnel', description: 'Marché OEG 2026-04 – surveillance DCE des eaux de surface de Guyane en 2026-27, réseau de contrôle opérationnel : eau et sédiments ; lot 2 : invertébrés et diatomées.', color: '#0b6cb4', order: 30, auditTypes: ['ce'] },
+  { code: 'EL', label: 'Eaux littorales', description: 'Marché OEG 2026-02 – surveillance DCE des eaux littorales de Guyane en 2026-27 (eaux côtières et de transition).', color: '#0b7a7c', order: 40, auditTypes: ['ce'] },
+  { code: 'ESO', label: 'Eaux souterraines', description: 'Marché OEG 2026-05 – surveillance DCE des eaux souterraines de Guyane en 2026, suivi chimique.', color: '#2f6f8f', order: 50, auditTypes: ['eso'] }
 ];
 /** Réseaux installés par défaut (référentiel initial et mise à niveau). Objets figés : copier avant d'écrire. */
 export const NETWORK_DEFAULTS = Object.freeze(DEFAULTS.map(n => Object.freeze({ id: networkId(n.code), ...n, auditTypes: Object.freeze([...n.auditTypes]), active: true })));

@@ -36,15 +36,15 @@ def route_integree():
 def test_json_valide_et_complet():
     data = load()
     assert data['grid'] == 'grid-ct-2026-v1'
-    assert len(data['criteres']) == 212, 'une entrée par critère de GRID_CT_2026 (1.2 : F8.A3 réuni à F8.A2)'
+    assert len(data['criteres']) == 217, 'une entrée par critère de GRID_CT_2026 (1.2 : F8.A3 réuni à F8.A2 ; 1.3 : F5.31, F5.32, F6.14 à F6.16)'
     assert 'it-F8-A3' not in data['criteres'], 'numéro retiré : plus d’attendu'
     assert sorted(data['feuilles'], key=int) == [str(n) for n in range(1, 11)]
     assert set(data['echelle']) == {'C', 'P', 'NC', 'NA'}
     assert set(data['preparation']) == {'commun', 'bio', 'ce', 'eso'}
     cotes = [e for e in data['criteres'].values() if not e.get('valeur')]
-    assert len(cotes) == 187
-    # Note sur 20 : 26 points majeurs (« majeur », recopié de la grille), règle de notation expliquée.
-    assert sum(1 for e in cotes if e.get('majeur')) == 26
+    assert len(cotes) == 191
+    # Note sur 20 : 28 points majeurs (« majeur », recopié de la grille ; 1.3 : F6.15 et F6.16), règle de notation expliquée.
+    assert sum(1 for e in cotes if e.get('majeur')) == 28
     assert 'note sur 20' in data['notation'] and 'majeurs' in data['notation']
     for e in cotes:
         for k in ('attendu', 'verification', 'C', 'P', 'NC'):
@@ -93,7 +93,10 @@ def test_markdown_contenu():
                 assert attendus_md.md_escape(e['aPreciser']) in text
     assert text.count('- [ ] ') == sum(len(g['elements']) for groups in data['preparation'].values() for g in groups)
     assert 'Commun à la tournée' in text and 'À préciser (OEG)' in text
-    assert text.count('Point majeur (compte double dans la note)') == 26 and '**Note sur 20.**' in text
+    assert text.count('Point majeur (compte double dans la note)') == 28 and '**Note sur 20.**' in text
+    # CCTP 2026 : valeurs par réseau et sources (références seulement : aucun nom de fichier)
+    assert '**Selon le réseau (CCTP 2026) :**' in text and '- **Sources :** CCTP' in text and '.pdf' not in text
+    assert '72 h au plus entre le prélèvement et la prise en charge' in text and 'AQUAREF (module DROM)' in text
 
 
 # ---------- Écran #/attendus ----------

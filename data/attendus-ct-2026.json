@@ -1137,12 +1137,12 @@
       "aPreciser": "Aucun CCTP ne fixe de délai chiffré pour transmettre le planning ou signaler une modification (« en temps réel ») : délai de prévenance éventuel à fixer par l’OEG. La règle « du lundi au mercredi » des CCTP Chimie, RCO et ESO n’est pas reprise par les CCTP BIO et EL.",
       "sources": [
         "CCTP BIO (marché OEG 2026-01), § Planning prévisionnel, p. 10",
-        "CCTP Chimie (marché OEG 2026-03), Coordination entre les prestataires, § 1, p. 11",
+        "CCTP Chimie (marché OEG 2026-03), § Coordination entre les prestataires, point 1, p. 11",
         "CCTP Chimie (marché OEG 2026-03), § Planning prévisionnel, p. 13",
-        "CCTP RCO (marché OEG 2026-04), Coordination entre les prestataires, § 1, p. 13",
+        "CCTP RCO (marché OEG 2026-04), § Coordination entre les prestataires, point 1, p. 13",
         "CCTP RCO (marché OEG 2026-04), § Planning prévisionnel, p. 15",
         "CCTP RCO (marché OEG 2026-04), § Lot 2, p. 34",
-        "CCTP ESO (marché OEG 2026-05), Coordination entre les prestataires, § 1, p. 9",
+        "CCTP ESO (marché OEG 2026-05), § Coordination entre les prestataires, point 1, p. 9",
         "CCTP ESO (marché OEG 2026-05), § Objet du marché, p. 7",
         "CCTP ESO (marché OEG 2026-05), § Planning prévisionnel, p. 11",
         "CCTP EL (marché OEG 2026-02), § 1 Planning prévisionnel, p. 10",
@@ -1455,11 +1455,11 @@
       "sources": [
         "CCTP BIO (marché OEG 2026-01), § Condition d’échantillonnage, de conservation et de transport, p. 25",
         "CCTP BIO (marché OEG 2026-01), § Paramètres généraux (chlorophylle a), p. 19",
-        "CCTP Chimie (marché OEG 2026-03), Coordination entre les prestataires, § 1, p. 11",
+        "CCTP Chimie (marché OEG 2026-03), § Coordination entre les prestataires, point 1, p. 11",
         "CCTP Chimie (marché OEG 2026-03), § Condition de conservation et de transport, p. 26",
-        "CCTP RCO (marché OEG 2026-04), Coordination entre les prestataires, § 1, p. 13",
+        "CCTP RCO (marché OEG 2026-04), § Coordination entre les prestataires, point 1, p. 13",
         "CCTP RCO (marché OEG 2026-04), § Condition de conservation et de transport, p. 28",
-        "CCTP ESO (marché OEG 2026-05), Coordination entre les prestataires, § 1, p. 9",
+        "CCTP ESO (marché OEG 2026-05), § Coordination entre les prestataires, point 1, p. 9",
         "CCTP ESO (marché OEG 2026-05), § Condition de conservation et de transport, p. 20",
         "CCTP EL (marché OEG 2026-02), § Engagement commun des organismes préleveurs, p. 16",
         "CCTP EL (marché OEG 2026-02), § Coordination opérationnelle, point 3, p. 25",
@@ -2311,7 +2311,7 @@
         "CCTP Chimie (marché OEG 2026-03), § Mesures in situ, p. 19-20",
         "CCTP RCO (marché OEG 2026-04), § Lot 1, mesures in situ, p. 21-22",
         "CCTP EL (marché OEG 2026-02), § Mesures in situ ; inter-calibration, p. 13-14",
-        "CCTP ESO (marché OEG 2026-05), Coordination, § 1, p. 9",
+        "CCTP ESO (marché OEG 2026-05), § Coordination, point 1, p. 9",
         "CCTP ESO (marché OEG 2026-05), § Mesures in situ, p. 16-17",
         "Guide AQUAREF 2022, échantillonnage d’eau en cours d’eau, § 5.3 Appareillage, p. 13-14",
         "Guide AQUAREF 2022 (V2), échantillonnage des eaux souterraines, § 5.3 Appareillage, p. 13-14"
@@ -2752,9 +2752,9 @@
       "NA": "Eaux littorales : le CCTP n’impose pas de jeu de secours au titulaire (prêt d’un jeu de dépannage par l’OEG ou le titulaire) : préciser en observation.",
       "sources": [
         "CCTP BIO (marché OEG 2026-01), § Mesures physico-chimiques in situ, p. 17",
-        "CCTP Chimie (marché OEG 2026-03), Coordination, § 1 ; mesures in situ, p. 11, 19",
-        "CCTP RCO (marché OEG 2026-04), Coordination, § 1 ; mesures in situ, p. 13, 21",
-        "CCTP ESO (marché OEG 2026-05), Coordination, § 1, p. 9",
+        "CCTP Chimie (marché OEG 2026-03), § Coordination, point 1 ; mesures in situ, p. 11, 19",
+        "CCTP RCO (marché OEG 2026-04), § Coordination, point 1 ; mesures in situ, p. 13, 21",
+        "CCTP ESO (marché OEG 2026-05), § Coordination, point 1, p. 9",
         "CCTP EL (marché OEG 2026-02), § Lot 1, mesures in situ, p. 13",
         "Guide AQUAREF 2022, échantillonnage d’eau en cours d’eau, § 5.3 Appareillage, p. 14",
         "Guide AQUAREF 2022 (V2), échantillonnage des eaux souterraines, § 5.3 Appareillage, p. 14"
@@ -3614,7 +3614,7 @@
         "Guide AQUAREF 2022 (V2), échantillonnage des eaux souterraines, § 7 Conditionnement des échantillons (cas des métaux), p. 19",
         "CCTP Chimie (marché OEG 2026-03), § Cas de préfiltration d’autres paramètres, p. 21-22",
         "CCTP RCO (marché OEG 2026-04), § Cas de préfiltration d’autres paramètres, p. 23",
-        "CCTP ESO (marché OEG 2026-05), Coordination, § 2 ; flaconnage et étiquetage, p. 10, 31"
+        "CCTP ESO (marché OEG 2026-05), § Coordination, point 2 ; flaconnage et étiquetage, p. 10, 31"
       ],
       "parReseau": {
         "BIO": "Aucun métal dissous au Tableau 3 (p. 19).",

@@ -560,7 +560,7 @@ test('turbidité : NTU dans les grilles par défaut (CT-2026 depuis 1.1, GR-PREL
   assert(!/"(FNU|NFU)"/.test(text), 'aucune unité FNU / NFU dans les grilles du code');
   deepEq(turbUnits(G), ['NTU', 'NTU', 'NTU'], 'F4.9 : trois mesures en NTU');
   eq(itemIndex(GRID_GENERAL).get('it-V08').unit, 'NTU', 'V08 en NTU');
-  eq(G.id, 'grid-ct-2026-v1', 'même identifiant'); eq(G.version, '1.2', 'version 1.2 (NTU depuis 1.1)'); eq(GRID_GENERAL.id, 'grid-prel-eau-general-v1');
+  eq(G.id, 'grid-ct-2026-v1', 'même identifiant'); eq(G.version, '1.3', 'version 1.3 (NTU depuis 1.1, PEZSML depuis 1.3)'); eq(GRID_GENERAL.id, 'grid-prel-eau-general-v1');
   eq(formatValue(item('it-F4-9'), { t1: 3.1, t2: 3.3, t3: 3.2 }), 'Mesure 1 : 3,1 NTU · Mesure 2 : 3,3 NTU · Mesure 3 : 3,2 NTU');
   eq(formatValue(itemIndex(GRID_GENERAL).get('it-V08'), 2.5), '2,5 NTU');
   eq(formatValue(item('it-F4-9'), { t1: 3.1 }, { unit: false }), 'Mesure 1 : 3,1', 'sans l’unité de la grille');
