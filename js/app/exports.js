@@ -5,7 +5,10 @@
  * Réseaux de surveillance (codes du référentiel « Réseaux », séparés par « ; », triés) : « Réseau(x) » des stations
  * d'une tournée ou d'un écart ; prestations : « Réseau » du programme (celui de la campagne, unique) et « Réseau(x)
  * de la station » (une station peut appartenir à plusieurs réseaux) ; stations : une ligne par station (« Réseau(x) »)
- * et une ligne par station ET par réseau (stationsByNetwork : rangement par réseau, « Aussi dans »). */
+ * et une ligne par station ET par réseau (stationsByNetwork : rangement par réseau, « Aussi dans »).
+ * Note sur 20 (js/domain/grading.js) : colonnes « Note /20 », « Appréciation », points et état de la note (figée à la
+ * signature, recalculée, calculée, provisoire) des tournées ; feuille « Notes » (gradesRows) : une ligne pour la tournée,
+ * le commun à la tournée, chaque station et chaque feuille. */
 import { store, LOCAL_ONLY } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { mediaBytes, storeRemoteBytes } from '../core/media.js';
@@ -17,13 +20,14 @@ import { writeXLSX } from '../formats/xlsx.js';
 import { toICS } from '../formats/ics.js';
 import { PRESTATION_STATUS, DEVIATION_STATUS, AUDIT_STATUS, PROVIDER_KINDS, RESPONSES, responseText, formatValue, ACTION_STATUS, AUDIT_TYPES, CODE_TYPES, auditDate, auditKindLabel, auditTimes } from '../domain/model.js';
 import { allItems, sheetOf, gridType, tourTypeLabel, partsText } from '../domain/grids.js';
-import { isOverdue, sheetSummary } from '../domain/summary.js';
+import { isOverdue } from '../domain/summary.js';
+import { GRADE_STATES, thresholdsText } from '../domain/grading.js';
 import { mergeEntity } from '../domain/merge.js';
 import { upToDateGrid } from '../domain/default-grids.js';
 import { NO_NETWORK, prestationNetwork, sortNetworkCodes, groupSitesByNetwork, auditTypesOf } from '../domain/networks.js';
 import { currentNetworkIndex } from './networks.js';
 import { controllerNamesText } from '../domain/permissions.js';
-import { auditState, effectiveGrid, auditContext, auditTypeOf, deviationPlace, tourTypesOf, stationPartsOf } from './audits.js';
+import { auditState, effectiveGrid, auditTypeOf, deviationPlace, tourTypesOf, stationPartsOf } from './audits.js';
 
 const name = (type, id, f = x => x.name || x.label) => { const e = store.get(type, id); return e ? f(e) : ''; };
 const crit = code => store.all('criticality').find(c => c.code === code)?.label || code || '';
@@ -70,6 +74,11 @@ export const COLUMNS = {
     { label: 'Auditeur', get: a => a.auditorName }, { label: 'Contrôleurs OEG', get: a => controllerNamesText(a) }, { label: 'Appareil', get: a => a.device?.name || '' }, { label: 'Version application', get: a => a.appVersion },
     { label: 'Critères contrôlés', get: a => a._s.counts.controlled }, { label: 'Conformes', get: a => a._s.counts.C }, { label: 'Perfectibles', get: a => a._s.counts.P || 0 }, { label: 'Non conformes', get: a => a._s.counts.NC },
     { label: 'Non applicables', get: a => a._s.counts.NA }, { label: 'Non observés', get: a => a._s.counts.NO }, { label: 'Non vérifiables', get: a => a._s.counts.NV },
+    // Note sur 20 de la tournée (grilles en feuilles ; vide pour une grille historique).
+    { label: 'Note /20', get: a => graded(a)?.note ?? '' }, { label: 'Appréciation', get: a => graded(a)?.label || (gradeOf(a) ? 'non noté' : '') },
+    { label: 'Points obtenus (pondérés)', get: a => graded(a)?.points ?? '' }, { label: 'Points évalués (pondérés)', get: a => graded(a)?.max ?? '' },
+    { label: 'Points évalués', get: a => gradeOf(a)?.evaluated ?? '' }, { label: 'dont points majeurs (×2)', get: a => gradeOf(a)?.majors ?? '' },
+    { label: 'État de la note', get: a => GRADE_STATES[a._s.grading?.state] || '' }, { label: 'Seuils de la note', get: a => (a._s.grading ? thresholdsText(a._s.grading.thresholds) : '') },
     { label: 'Écarts', get: a => a._s.deviationsCount }, ...['OBS', 'MIN', 'MAJ', 'CRIT'].map(c => ({ label: `Écarts ${crit(c)}`, get: a => a._s.byCriticality.find(x => x.code === c)?.count || 0 })),
     { label: 'Empreinte scellée', get: a => a.lock?.contentHash || '' }, { label: 'Modifications après signature', get: a => (a.amendments || []).length },
     { label: 'Compartiments contrôlés', get: a => (a.compartments || []).map(k => (a.gridSnapshot?.compartments || []).find(c => c.key === k)?.label || k).join(' ; ') }
@@ -116,6 +125,31 @@ export const COLUMNS = {
 };
 
 export function auditsWithSummary(audits) { return audits.map(a => ({ ...a, _s: auditState(a).summary })); }
+/** Note de la tournée d'un audit enrichi (auditsWithSummary) ou null ; graded : seulement si elle est notée. */
+const gradeOf = a => a._s?.grading?.tour || null;
+const graded = a => { const g = gradeOf(a); return g && g.note !== null ? g : null; };
+const gradeCells = g => (g ? [g.C, g.P, g.NC, g.NA, g.evaluated, g.majors, g.note === null ? '' : g.points, g.note === null ? '' : g.max, g.note ?? '', g.note === null ? 'non noté' : g.label] : ['', '', '', '', '', '', '', '', '', '']);
+
+/**
+ * Notes sur 20 des tournées (grilles en feuilles) : une ligne pour la tournée, le commun à la tournée, chaque station
+ * et chaque feuille (instance) ; cotes C / P / NC / N/A, points évalués (dont majeurs ×2), points pondérés, note et
+ * appréciation, état de la note (figée à la signature, recalculée, calculée, provisoire).
+ */
+export function gradesRows(audits) {
+  const rows = [['Audit', 'Date', 'Prestataire', 'Type de tournée', 'Portée', 'Station', 'Feuille', 'C', 'P', 'NC', 'N/A', 'Points évalués', 'dont majeurs (×2)', 'Points obtenus (pondérés)', 'Points évalués (pondérés)', 'Note /20', 'Appréciation', 'État de la note']];
+  for (const a of audits) {
+    const sum = a._s || auditState(a).summary;
+    const r = sum.grading;
+    if (!r || !sum.stations) continue;
+    const head = [a.number, fmtDate(auditDate(a)), name('provider', a.providerId), typeLabel(a)];
+    const state = GRADE_STATES[r.state] || '';
+    rows.push([...head, 'Tournée', '', '', ...gradeCells(r.tour), state]);
+    if (sum.stations.tournee.total) rows.push([...head, 'Commun à la tournée', '', '', ...gradeCells(sum.stations.tournee.grade), state]);
+    for (const st of sum.stations.stations) rows.push([...head, 'Station', `${st.name} (${st.code})`, '', ...gradeCells(st.grade), state]);
+    for (const sh of sum.sheets) rows.push([...head, 'Feuille', sh.station ? `${sh.station.name} (${sh.station.code})` : (a.stations || []).length > 1 ? 'Commun à la tournée' : name('site', a.siteId), `${sh.no} – ${sh.tab || sh.title}`, ...gradeCells(sh.grade), state]);
+  }
+  return rows;
+}
 
 /**
  * Réponses critère par critère (valeurs lisibles : formatValue ; objets « fields » en « Libellé : valeur · … ») :
@@ -140,16 +174,18 @@ export function responsesRows(audits) {
  * une fois, dans la 1re station), conclusion du contrôleur, observations / notes des encadrés.
  */
 export function sheetsRows(audits) {
-  const rows = [['Audit', 'Date', 'Type de tournée', 'Station', 'Feuille', 'N° affiché', 'Titre', 'C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total', 'Conclusion', 'Commentaires', 'Observations', 'Notes', 'Photos / références', 'Agent(s) prestataire(s)']];
-  for (const a of audits) for (const st of sheetSummary({ audit: a, grid: effectiveGrid(a), ctx: auditContext(a) })) {
+  const rows = [['Audit', 'Date', 'Type de tournée', 'Station', 'Feuille', 'N° affiché', 'Titre', 'C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total', 'Note /20', 'Appréciation', 'Conclusion', 'Commentaires', 'Observations', 'Notes', 'Photos / références', 'Agent(s) prestataire(s)']];
+  for (const a of audits) for (const st of auditState(a).summary.sheets) {
     const d = a.sheets?.[st.instanceKey] || {};
     const station = st.station ? st.station.name : (a.stations || []).length > 1 ? 'Commun à la tournée' : name('site', a.siteId);
-    rows.push([a.number, fmtDate(auditDate(a)), typeLabel(a), station, st.no, st.index ? `${st.index} / ${st.sheetTotal}` : '', st.title, st.C, st.P, st.NC, st.NA, st.unanswered, st.total, st.conclusionLabel, st.comments, d.observations || '', d.notes || '', d.photos || '', d.agents || '']);
+    const g = st.grade;
+    rows.push([a.number, fmtDate(auditDate(a)), typeLabel(a), station, st.no, st.index ? `${st.index} / ${st.sheetTotal}` : '', st.title, st.C, st.P, st.NC, st.NA, st.unanswered, st.total, g?.note ?? '', g ? (g.note === null ? 'non noté' : g.label) : '', st.conclusionLabel, st.comments, d.observations || '', d.notes || '', d.photos || '', d.agents || '']);
   }
   return rows;
 }
 
-export function table(kind, list) { return objectsToRows(kind === 'audits' ? auditsWithSummary(list) : list, COLUMNS[kind]); }
+/** Tableau d'un export ; audits : synthèse calculée une fois (enriched : auditsWithSummary déjà fait). */
+export function table(kind, list, enriched = null) { return objectsToRows(kind === 'audits' ? enriched || auditsWithSummary(list) : list, COLUMNS[kind]); }
 export function csvOf(kind, list) { return toCSV(table(kind, list)); }
 
 export async function exportWorkbook(sheets, filename, title) {

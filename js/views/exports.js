@@ -9,7 +9,7 @@ import { can, isTeamMode } from '../core/auth.js';
 import { toast, downloadBlob, promptDialog, readFileAsText, confirmDialog } from '../ui/dom.js';
 import { pageTitle, options, field } from '../ui/components.js';
 import { auditDate } from '../domain/model.js';
-import { table, csvOf, responsesRows, exportWorkbook, planningICS, buildPackage, protectPackage, readPackage, importPackage, stationsByNetwork } from '../app/exports.js';
+import { table, csvOf, responsesRows, gradesRows, auditsWithSummary, exportWorkbook, planningICS, buildPackage, protectPackage, readPackage, importPackage, stationsByNetwork } from '../app/exports.js';
 import { NO_NETWORK, inNetwork, prestationNetwork, sortNetworkCodes } from '../domain/networks.js';
 import { currentNetworkIndex, currentNetworkOf, usedNetworkCodes } from '../app/networks.js';
 
@@ -42,7 +42,7 @@ export default {
         ${field('Réseau de surveillance', html`<select data-change="f" data-k="reseau">${options(nets, filters.reseau, { placeholder: 'Tous' })}</select>`, { hint: 'Tournées et écarts : stations du réseau ; prestations : programme du réseau.' })}</div>
         <p class="note">${select('audits').length} audit(s), ${select('deviations').length} écart(s), ${select('prestations').length} prestation(s), ${select('sites').length} station(s), ${select('trail').length} entrée(s) de journal.</p></div>
       <div class="card"><h2>Tableaux</h2><div class="list">
-        ${[['audits', '📋 Audits (synthèse, réponses, écarts)'], ['deviations', '⚠️ Registre des écarts et actions correctives'], ['prestations', '📅 Prestations programmées et statuts'], ['sites', '📍 Stations et réseaux de surveillance', 'Classeur Excel : aussi une feuille « Stations par réseau » (une ligne par station et par réseau)'], ['trail', '🧾 Historique — journal d’audit informatique']].map(([k, l, sub]) => html`<div class="li"><div class="li-main"><div class="li-title">${l}</div>${sub ? html`<div class="li-sub">${sub}</div>` : ''}</div><button class="btn primary sm" data-act="xlsx" data-k="${k}">Excel</button><button class="btn ghost sm" data-act="csv" data-k="${k}">CSV</button></div>`)}
+        ${[['audits', '📋 Audits (synthèse et note sur 20, notes par station et par feuille, réponses, écarts)'], ['deviations', '⚠️ Registre des écarts et actions correctives'], ['prestations', '📅 Prestations programmées et statuts'], ['sites', '📍 Stations et réseaux de surveillance', 'Classeur Excel : aussi une feuille « Stations par réseau » (une ligne par station et par réseau)'], ['trail', '🧾 Historique — journal d’audit informatique']].map(([k, l, sub]) => html`<div class="li"><div class="li-main"><div class="li-title">${l}</div>${sub ? html`<div class="li-sub">${sub}</div>` : ''}</div><button class="btn primary sm" data-act="xlsx" data-k="${k}">Excel</button><button class="btn ghost sm" data-act="csv" data-k="${k}">CSV</button></div>`)}
         <div class="li"><div class="li-main"><div class="li-title">🗓️ Calendrier des prestations (iCalendar)</div><div class="li-sub">À importer dans Outlook, Google Agenda, Thunderbird…</div></div><button class="btn ghost sm" data-act="ics">ICS</button></div>
       </div><p class="note">Les rapports PDF se génèrent depuis chaque audit (étape « Signatures »).</p></div>
       <div class="card"><h2>Données d’audit et sauvegarde</h2>
@@ -56,7 +56,9 @@ export default {
     f(el) { filters[el.dataset.k] = el.value; this.refresh(); },
     async xlsx(el) {
       const k = el.dataset.k, list = select(k), d = localDate();
-      const sheets = k === 'audits' ? [{ name: 'Audits', rows: table('audits', list) }, { name: 'Réponses', rows: responsesRows(list) }, { name: 'Écarts', rows: table('deviations', store.filter('deviation', x => list.some(a => a.id === x.auditId))) }]
+      // Audits : synthèse (dont note sur 20), notes par tournée, station et feuille, réponses, écarts.
+      const enriched = k === 'audits' ? auditsWithSummary(list) : null;
+      const sheets = k === 'audits' ? [{ name: 'Audits', rows: table('audits', list, enriched) }, { name: 'Notes', rows: gradesRows(enriched) }, { name: 'Réponses', rows: responsesRows(list) }, { name: 'Écarts', rows: table('deviations', store.filter('deviation', x => list.some(a => a.id === x.auditId))) }]
         : k === 'sites' ? [{ name: 'Stations', rows: table('sites', list) }, { name: 'Stations par réseau', rows: table('stationsByNetwork', stationsByNetwork(list).filter(r => !filters.reseau || r.network.code === filters.reseau)) }]
         : [{ name: { deviations: 'Registre des écarts', prestations: 'Prestations', trail: 'Journal d’audit' }[k], rows: table(k, list) }];
       const file = `${FILE_NAMES[k] || k}_${d}.xlsx`;

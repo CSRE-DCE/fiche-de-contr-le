@@ -1,10 +1,14 @@
-/* Synthèse factuelle d'un audit et indicateurs d'historique. Fichier pur.
- * Volontairement AUCUN score global : seuls des décomptes traçables sont produits (C / P / NC / N/A / non
- * renseignés), y compris par feuille, par station et pour l'ensemble de la tournée (grilles en feuilles) ;
- * la conclusion d'une feuille reste le choix du contrôleur. Chaque critère est compté UNE fois (un critère
- * « commun à la tournée » affiché dans chaque fiche station n'est compté qu'une fois). */
+/* Synthèse d'un audit et indicateurs d'historique. Fichier pur.
+ * Décomptes traçables (C / P / NC / N/A / non renseignés) par feuille, par station et pour l'ensemble de la tournée
+ * (grilles en feuilles), et NOTE SUR 20 de chacune de ces portées (demande de l'OEG, règles validées le 23/10/2026 :
+ * js/domain/grading.js — C = 1, P = 0,5, NC = 0, N/A non compté, points majeurs × 2, points de synthèse hors note) ;
+ * la conclusion d'une feuille reste le choix du contrôleur. Chaque critère est compté UNE fois dans les décomptes et la
+ * note de la tournée (un critère « commun à la tournée » affiché dans chaque fiche station n'est compté qu'une fois) ;
+ * la note d'une feuille porte sur les points AFFICHÉS dans la feuille. Seuils et barème : `grading` ({thresholds,
+ * scoring}) — défaut : seuils par défaut et barème de l'instantané de la tournée (scoringOf). */
 import { visibleStructure, visibleItems, isAnswerable, sheetsOf, isSheetGrid, expandGrid, withCompartments } from './grids.js';
 import { OPEN_DEVIATION, SHEET_CONCLUSIONS } from './model.js';
+import { emptyTally, tallyItem, gradeOf, scoringOf, gradeThresholds } from './grading.js';
 
 const STATUSES = ['C', 'P', 'NC', 'NA', 'NO', 'NV'];
 const emptyCounts = () => ({ C: 0, P: 0, NC: 0, NA: 0, NO: 0, NV: 0, unanswered: 0, total: 0, values: 0 });
@@ -30,6 +34,11 @@ function gridAndCtx(audit, grid, ctx = {}) {
   if (!c.auditType && audit?.auditType) c.auditType = audit.auditType;
   return { grid: g, ctx: g?.compartments?.length ? withCompartments(g, c) : c };
 }
+/** Seuils et barème de la note : ceux donnés (figés à la signature, réglages) ou les défauts. */
+const gradingOf = (audit, grid, grading) => ({
+  thresholds: gradeThresholds(grading?.thresholds),
+  scoring: grading?.scoring || scoringOf(audit?.gridSnapshot || grid)
+});
 const hintOf = (st) => {
   const parts = [];
   if (st.NC) parts.push(`${st.NC} NC`);
@@ -47,19 +56,23 @@ const hintOf = (st) => {
  *   la somme des lignes = décompte global ; sharedTotal = critères partagés affichés dans l'instance ;
  * - values = critères « valeur seule » renseignés ;
  * - conclusion = choix du contrôleur (audit.sheets[instanceKey].conclusion.status) ou '' ;
- * - hint = simple suggestion factuelle (« 2 NC, 1 P sur cette feuille »), jamais appliquée automatiquement.
+ * - hint = simple suggestion factuelle (« 2 NC, 1 P sur cette feuille »), jamais appliquée automatiquement ;
+ * - grade = note sur 20 de la feuille (gradeOf : points AFFICHÉS dans la feuille, communs à la tournée compris).
  */
-export function sheetSummary({ audit, grid = null, ctx = {} }) {
+export function sheetSummary({ audit, grid = null, ctx = {}, grading = null }) {
   const g = gridAndCtx(audit, grid, ctx);
   if (!isSheetGrid(g.grid)) return [];
   const responses = audit?.responses || {};
+  const gr = gradingOf(audit, g.grid, grading);
   const seenShared = new Set();
   return sheetsOf(g.grid, responses, g.ctx).map(sh => {
     const st = { no: sh.no, instanceKey: sh.instanceKey, station: sh.station, stationKey: sh.stationKey, index: sh.index, sheetTotal: sh.total, key: sh.key, tab: sh.tab, title: sh.title, theme: sh.theme, ...emptyCounts(), sharedCounted: 0, sharedTotal: 0 };
     const shown = emptyCounts();
+    const tally = emptyTally();
     for (const it of sh.items) {
       const r = responses[it.id];
       count(shown, it, r);
+      tallyItem(tally, it, r, gr.scoring);
       if (it.shared) {
         if (it.kind === 'conformity') st.sharedTotal++;
         if (seenShared.has(it.id)) continue;
@@ -74,6 +87,7 @@ export function sheetSummary({ audit, grid = null, ctx = {} }) {
     st.conclusionLabel = st.conclusion ? ((block?.options || []).find(o => o[0] === st.conclusion)?.[1] || SHEET_CONCLUSIONS[st.conclusion] || st.conclusion) : '';
     st.comments = concl.comments || '';
     st.hint = hintOf(shown);
+    st.grade = gradeOf(tally, gr.thresholds);
     return st;
   });
 }
@@ -81,28 +95,37 @@ export function sheetSummary({ audit, grid = null, ctx = {} }) {
 /**
  * Décomptes de la tournée : {global, tournee, stations: [{key, index, siteId, name, code, ...décomptes}]}.
  * global : chaque critère visible une fois ; tournee : feuilles tournée et critères partagés ; chaque station :
- * ses critères propres (tournee + stations = global). Décomptes : {C, P, NC, NA, NO, NV, unanswered, total, values}.
+ * ses critères propres (tournee + stations = global). Décomptes : {C, P, NC, NA, NO, NV, unanswered, total, values,
+ * grade} — grade : note sur 20 de la portée (gradeOf ; tournée : chaque point une fois).
  */
-export function stationSummary({ audit, grid = null, ctx = {} }) {
+export function stationSummary({ audit, grid = null, ctx = {}, grading = null }) {
   const g = gridAndCtx(audit, grid, ctx);
   const responses = audit?.responses || {};
+  const gr = gradingOf(audit, g.grid, grading);
   const global = emptyCounts(), tournee = emptyCounts();
   const stations = (g.grid?.stations || []).map(s => ({ key: s.key, index: s.index, siteId: s.siteId, name: s.name, code: s.code, ...emptyCounts() }));
   const byKey = new Map(stations.map(s => [s.key, s]));
+  const tallies = new Map([[global, emptyTally()], [tournee, emptyTally()], ...stations.map(s => [s, emptyTally()])]);
   if (g.grid) for (const { item } of visibleItems(g.grid, responses, g.ctx)) {
     const r = responses[item.id];
+    const own = !item.shared && item.station && byKey.get(item.station.key) || tournee;
     count(global, item, r);
-    count(!item.shared && item.station && byKey.get(item.station.key) || tournee, item, r);
+    count(own, item, r);
+    tallyItem(tallies.get(global), item, r, gr.scoring);
+    tallyItem(tallies.get(own), item, r, gr.scoring);
   }
+  for (const [c, t] of tallies) c.grade = gradeOf(t, gr.thresholds);
   return { global, tournee, stations };
 }
 
 /**
- * @param {object} p {audit, grid (effective de préférence), ctx, deviations:[…], criticalities:[…], alerts:[…]}
- * Retour : {counts, sections, sheets, stations, ncItems, pItems, deviationsCount, byCriticality, frequentRequirements,
- *   strengths, vigilance, actions, samples, equipment, comment, preconisations}
+ * @param {object} p {audit, grid (effective de préférence), ctx, deviations:[…], criticalities:[…], alerts:[…],
+ *   grading ({thresholds, scoring} : seuils et barème de la note)}
+ * Retour : {counts, sections, sheets, stations, grade, ncItems, pItems, deviationsCount, byCriticality,
+ *   frequentRequirements, strengths, vigilance, actions, samples, equipment, comment, preconisations} — grade : note sur 20
+ *   de la tournée (grilles en feuilles ; null sinon : les grilles historiques ne sont pas notées).
  */
-export function auditSummary({ audit, grid, ctx = {}, deviations = [], criticalities = [], alerts = [] }) {
+export function auditSummary({ audit, grid, ctx = {}, deviations = [], criticalities = [], alerts = [], grading = null }) {
   const responses = audit.responses || {};
   const g = grid ? gridAndCtx(audit, grid, ctx) : { grid: null, ctx };
   const structure = g.grid ? visibleStructure(g.grid, responses, g.ctx) : [];
@@ -159,10 +182,11 @@ export function auditSummary({ audit, grid, ctx = {}, deviations = [], criticali
   const actions = deviations.filter(d => d.correctiveActionRequested || d.immediateAction)
     .map(d => ({ number: d.number, criticality: crit.get(d.criticalityCode)?.label || d.criticalityCode || '', action: d.correctiveActionRequested || '', immediate: d.immediateAction || '', responsible: d.responsible || '', dueDate: d.dueDate || '' }));
 
-  const sheets = g.grid ? sheetSummary({ audit, grid: g.grid, ctx: g.ctx }) : [];
-  const stations = g.grid && isSheetGrid(g.grid) ? stationSummary({ audit, grid: g.grid, ctx: g.ctx }) : null;
+  const sheets = g.grid ? sheetSummary({ audit, grid: g.grid, ctx: g.ctx, grading }) : [];
+  const stations = g.grid && isSheetGrid(g.grid) ? stationSummary({ audit, grid: g.grid, ctx: g.ctx, grading }) : null;
   return {
-    counts, sections, sheets, stations, ncItems, pItems, deviationsCount: deviations.length, byCriticality, frequentRequirements, strengths, vigilance, actions,
+    counts, sections, sheets, stations, grade: stations ? stations.global.grade : null,
+    ncItems, pItems, deviationsCount: deviations.length, byCriticality, frequentRequirements, strengths, vigilance, actions,
     samples: (audit.samples || []).length, equipment: (audit.equipmentChecks || []).length,
     comment: audit.conclusions?.comment || '', preconisations: audit.conclusions?.preconisations || ''
   };

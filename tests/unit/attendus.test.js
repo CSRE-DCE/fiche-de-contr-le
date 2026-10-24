@@ -23,6 +23,7 @@ const items = allItems(GRID_CT_2026);
 const conformity = items.filter(it => it.kind === 'conformity');
 const sectionOf = new Map(flatSections(GRID_CT_2026).flatMap(s => (s.items || []).map(it => [it.id, s])));
 const filled = v => typeof v === 'string' && v.trim().length > 0;
+const G_ITEMS = new Map(items.map(i => [i.id, i]));
 
 /** Références normatives que le document peut citer (existence et intitulé vérifiés) — aucune autre. */
 const KNOWN_REFS = ['NF EN ISO 5667-1', 'NF EN ISO 5667-3', 'NF EN ISO 5667-6', 'NF EN ISO 5667-11', 'NF EN ISO 5667-14',
@@ -65,7 +66,7 @@ test('attendus : en-tête, échelle C / P / NC / N/A et liste de préparation', 
 });
 
 test('attendus : une entrée par critère de la grille, aucune clé orpheline', () => {
-  eq(items.length, 213, 'nombre de critères de GRID_CT_2026');
+  eq(items.length, 212, 'nombre de critères de GRID_CT_2026 (1.2 : F8.A3 réuni à F8.A2)');
   const ids = new Set(items.map(i => i.id));
   const missing = items.filter(i => !data.criteres[i.id]).map(i => i.id);
   const orphans = Object.keys(data.criteres).filter(k => !ids.has(k));
@@ -88,7 +89,7 @@ test('attendus : critères de conformité complets (attendu, vérification, C, P
     if (!/^Information à relever\s*:\s*\S/.test(e.attendu || '')) bad.push(`${it.id} : « Information à relever : … » attendu`);
   }
   deepEq(bad, [], 'entrées incomplètes');
-  eq(conformity.length, 188, 'critères cotés');
+  eq(conformity.length, 187, 'critères cotés');
 });
 
 test('attendus : feuille, n°, libellé, section, portée et types identiques à la grille', () => {
@@ -104,6 +105,21 @@ test('attendus : feuille, n°, libellé, section, portée et types identiques à
     if (JSON.stringify(got) !== JSON.stringify(expect)) diffs.push(`${it.id} : ${JSON.stringify(got)} ≠ ${JSON.stringify(expect)}`);
   }
   deepEq(diffs.slice(0, 5), [], `${diffs.length} différence(s) avec la grille`);
+});
+
+test('attendus : points majeurs recopiés de la grille, note sur 20 expliquée, fusion F8.A2 et dépôt F2.7.3 (OEG, 23/10/2026)', () => {
+  const diffs = items.filter(it => !!data.criteres[it.id].majeur !== !!it.major).map(it => it.code);
+  deepEq(diffs, [], '« majeur » identique à l’attribut major de la grille');
+  eq(Object.values(data.criteres).filter(e => e.majeur).length, 26);
+  assert(Object.values(data.criteres).every(e => e.majeur === undefined || e.majeur === true), '« majeur » : true ou absent');
+  assert(filled(data.notation) && /note sur 20/.test(data.notation) && /majeurs/.test(data.notation) && /synthèse/.test(data.notation), 'règle de la note sur 20');
+  assert(!data.criteres['it-F8-A3'], 'F8.A3 retiré');
+  const a2 = data.criteres['it-F8-A2'];
+  assert(/batterie/i.test(a2.attendu) && /mailles/.test(a2.attendu) && /mailles/.test(a2.NC) && /mailles/.test(a2.aPreciser), 'F8.A2 : batterie et mailles');
+  const f = data.criteres['it-F2-7.3'];
+  assert(/jour même est recommandé/.test(f.attendu) && /contexte guyanais/.test(f.attendu) && /n’est pas une non-conformité pour ce seul motif/.test(f.attendu), 'F2.7.3 : le jour même recommandé, pas toujours réalisable');
+  assert(/jour même/.test(f.C) && /plus tardif/.test(f.P) && /dépassé/.test(f.NC) && /conservation non maîtrisée/.test(f.NC), 'F2.7.3 : C / P / NC');
+  assert(!f.majeur && !data.criteres['it-F2-4.3'].majeur, 'F2.7.3 et F2.4.3 ne sont pas majeurs');
 });
 
 test('attendus : feuilles 1 à 10 (titre, onglet, thème, portée, types, introduction, documents)', () => {
@@ -339,6 +355,7 @@ test('PDF : fiche des attendus (eaux souterraines) et liste de préparation', as
   assert(!t.includes(hexOf('Nombre de prélèvements Surber')), 'pas de critère de biologie dans la fiche eaux souterraines');
   assert(!t.includes(hexOf(OTHER_UNIT)), 'turbidité en NTU uniquement');
 
+  assert(t.includes(hexOf('Point majeur (×2)')) && t.includes(hexOf('Note sur 20')), 'PDF : points majeurs et note sur 20');
   const p = await buildAttendusPdf(data, { auditType: 'bio', preparationOnly: true });
   assert(latin1(p.bytes.subarray(0, 5)) === '%PDF-', 'liste de préparation : %PDF');
   assert(p.pages >= 1 && p.pages < r.pages, `liste de préparation : ${p.pages} page(s)`);
@@ -365,6 +382,9 @@ test('écran : rendu par type et par feuille, recherche, carte d’un critère',
     assert(box.querySelector('[data-act=att-pdf][data-type=eso]') && box.querySelector('[data-act=att-prep-pdf]'), 'boutons PDF');
     assert(box.querySelector('#att-it-F4-2 .shared-badge'), 'badge « Commun à la tournée »');
     assert(box.querySelector('[data-id="it-F4-27"] .att-noscore') && !box.querySelector('[data-id="it-F4-26"] .att-noscore'), 'badge « Point de synthèse, hors note »');
+    assert(box.querySelector('[data-id="it-F4-12"] .major-badge') && box.querySelector('[data-id="it-F10-5"] .major-badge') && !box.querySelector('[data-id="it-F4-26"] .major-badge'), 'badge « Point majeur (×2) »');
+    eq(box.querySelectorAll('.att-crit .major-badge').length, [...vis.types.eso.items].filter(id => G_ITEMS.get(id)?.major).length, 'un badge par point majeur affiché');
+    assert(box.querySelector('#attNotation') && /note sur 20/.test(box.querySelector('#attNotation').textContent), 'règle de la note sur 20');
     assert(box.querySelector('#att-it-F6-5') === null, 'critère de biologie absent');
 
     let r = mod.applyFilter(box, 'glacière');
@@ -385,7 +405,7 @@ test('écran : rendu par type et par feuille, recherche, carte d’un critère',
     box.innerHTML = String(await view.render({}, { type: 'bio', feuille: '10' }));
     eq(box.querySelectorAll('.att-sheet').length, 9, 'feuille non affichée pour le type : filtre ignoré');
     box.innerHTML = String(await view.render({}, {}));
-    eq(box.querySelectorAll('[data-id]').length, items.length, 'tous types : 213 critères');
+    eq(box.querySelectorAll('[data-id]').length, items.length, 'tous types : 212 critères');
 
     eq(mod.attenduFor('it-F5-13@09271503').id, 'it-F5-13', 'attenduFor de l’écran (id effectif)');
     const card = String(mod.attenduCard('it-F4-12@09271503'));

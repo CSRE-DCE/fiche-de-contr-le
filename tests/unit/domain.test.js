@@ -119,12 +119,13 @@ test('habilitations et équipements', () => {
 });
 
 /* ---------- Synthèse, écarts, comparaison ---------- */
-test('synthèse factuelle sans score, écarts récurrents, retards', () => {
+test('synthèse factuelle (grille historique : décomptes, non notée), écarts récurrents, retards', () => {
   const crit = baseReferential().criticality;
   const s = auditSummary({ audit: { responses: { 'it-R01': R('C'), 'it-R03': R('NC', { comment: 'x' }), 'it-R04': R('NA') } }, grid: GRID_RAPIDE, deviations: [{ criticalityCode: 'MAJ' }], criticalities: crit });
   eq(s.counts.C, 1); eq(s.counts.NC, 1); eq(s.counts.NA, 1);
   eq(s.byCriticality.find(c => c.code === 'MAJ').count, 1);
-  assert(!('score' in s), 'aucun score');
+  assert(!('score' in s), 'note dans « grade » (grading.js), jamais « score »');
+  eq(s.grade, null, 'grille historique (par sections) : pas de note sur 20');
   eq(s.ncItems.length, 1); eq(s.ncItems[0].code, 'R03'); eq(s.ncItems[0].comment, 'x');
   const rec = recurringDeviations([{ providerId: 'p', itemCode: 'Q04', auditId: 'a1', status: 'clos' }, { providerId: 'p', itemCode: 'Q04', auditId: 'a2', status: 'ouvert' }, { providerId: 'p', itemCode: 'Q05', auditId: 'a2', status: 'ouvert' }]);
   eq(rec.length, 1); eq(rec[0].open, 1);

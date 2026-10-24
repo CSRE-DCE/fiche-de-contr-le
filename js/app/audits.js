@@ -31,7 +31,12 @@
  * stations[].parts) et à l'ajout d'une station (addStation), modifiable avant la signature du contrôleur
  * (setStationParts : motif obligatoire si des saisies deviennent masquées — elles sont conservées —, écarts ouverts
  * annulés avec le même motif, historique audit.stationLog « perimetre » et journal). Une tournée d'un seul type ne porte
- * ni `parts` ni `partPrestations` : les tournées existantes, leurs sceaux et leurs PDF sont inchangés. */
+ * ni `parts` ni `partPrestations` : les tournées existantes, leurs sceaux et leurs PDF sont inchangés.
+ * NOTE SUR 20 (js/domain/grading.js) : auditState donne les notes de chaque feuille, station et de la tournée
+ * (summary.grade, summary.grading) ; à la signature du contrôleur, la note, les seuils et le barème utilisés sont
+ * enregistrés dans la tournée (audit.grading) AVANT le calcul de l'empreinte, qu'ils rejoignent : une tournée signée
+ * garde sa note même si les seuils changent ensuite. Une tournée signée avant la notation (sans audit.grading : son
+ * sceau reste valide) affiche sa note calculée (mention « calculée »). Rouvrir la tournée efface la note figée. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
@@ -48,6 +53,7 @@ import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, SITE_SOURCE, 
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
+import { gradeThresholds, scoringOf, scoringFromRecord, isGradingRecord, collectGrades, gradingRecord, resolveGrades, applyResolvedGrades } from '../domain/grading.js';
 import { CT_GRID_ID, upToDateGrid } from '../domain/default-grids.js';
 import { operatorLabel } from '../domain/operators.js';
 import { nextNumber } from './numbering.js';
@@ -161,6 +167,51 @@ export function auditContext(audit) {
   return ctx;
 }
 
+/* ---------- Note sur 20 ---------- */
+/**
+ * Seuils et barème de la note d'une tournée : {record, thresholds, scoring} — figés à la signature (audit.grading) ;
+ * sinon seuils de l'organisation (Administration) et barème de l'instantané de la grille (scoringOf).
+ */
+export function gradingContext(audit) {
+  const record = isGradingRecord(audit?.grading) ? audit.grading : null;
+  return record ? { record, thresholds: gradeThresholds(record.thresholds), scoring: scoringFromRecord(record) }
+    : { record: null, thresholds: gradeThresholds(orgSettings()), scoring: scoringOf(audit?.gridSnapshot) };
+}
+/** Notes à afficher d'une synthèse calculée avec gradingContext (resolveGrades), reportées dans la synthèse. */
+function resolveAuditGrades(audit, summary, g) {
+  const r = resolveGrades({
+    live: collectGrades(summary), record: g.record, thresholds: g.record ? gradeThresholds(orgSettings()) : g.thresholds,
+    signed: !!(audit.lock?.lockedAt || audit.signatures?.auditor), amended: !!(audit.amendments || []).length, locked: !!audit.lock?.lockedAt
+  });
+  return applyResolvedGrades(summary, r);
+}
+const GRADES = new WeakMap();
+/**
+ * Notes d'une tournée sans l'état complet (tableau de bord, exports) : resolveGrades — {state, thresholds, tour,
+ * tournee, stations, sheets} ; null hors grille « en feuilles ». Mémorisé par objet et par seuils.
+ */
+export function tourGrades(audit) {
+  if (!isSheetGrid(audit?.gridSnapshot)) return null;
+  const g = gradingContext(audit);
+  const cur = gradeThresholds(orgSettings());
+  const key = `${g.record ? 'figee' : ''}|${cur.good}|${cur.fair}`;
+  const hit = GRADES.get(audit);
+  if (hit?.key === key) return hit.value;
+  const summary = auditSummary({ audit, grid: effectiveGrid(audit), ctx: auditContext(audit), grading: g });
+  const value = resolveAuditGrades(audit, summary, g).grading || null;
+  GRADES.set(audit, { key, value });
+  return value;
+}
+/** Note à figer à la signature du contrôleur (seuils actuels, barème de la grille de la tournée) ; null hors grille en feuilles. */
+function freezeGrading(audit) {
+  if (!isSheetGrid(audit?.gridSnapshot)) return null;
+  const a = { ...audit };
+  delete a.grading;
+  const g = gradingContext(a);
+  const live = collectGrades(auditSummary({ audit: a, grid: effectiveGrid(a), ctx: auditContext(a), grading: g }));
+  return live ? gradingRecord(live, { thresholds: g.thresholds, scoring: g.scoring, at: nowISO(), by: session.user?.id || '', byName: session.user?.name || '' }) : null;
+}
+
 export function mediaCounts(audit) {
   const counts = {};
   for (const m of auditMedia(audit.id)) if (m.link?.type === 'item' && m.link.itemId) counts[m.link.itemId] = (counts[m.link.itemId] || 0) + 1;
@@ -171,7 +222,9 @@ export function mediaCounts(audit) {
  * État calculé complet d'un audit (pour l'affichage) — sur la grille EFFECTIVE :
  * {grid (effective), baseGrid (instantané), ctx, auditType, type, header, stations (stationsOf), counts, deviations,
  *  prestation, point, site, operators, alerts, structure, progress, sheets (instances), sheetProgress (par instanceKey),
- *  stationProgress ({tournee, stations}), validation, summary}
+ *  stationProgress ({tournee, stations}), validation, summary (dont summary.grade : note de la tournée, et
+ *  summary.grading : resolveGrades — état figée / recalculée / calculée / provisoire, seuils, notes par portée), scoring
+ *  (barème de la note : points majeurs et de synthèse)}
  */
 export function auditState(audit, { includeMissing = false } = {}) {
   const baseGrid = audit.gridSnapshot;
@@ -200,6 +253,9 @@ export function auditState(audit, { includeMissing = false } = {}) {
   for (const d of deviations) if (d.itemId) deviationsByItem[d.itemId] = (deviationsByItem[d.itemId] || 0) + 1;
   const responses = audit.responses || {};
   const sheetGrid = isSheetGrid(grid);
+  const grading = gradingContext(audit);
+  const summary = auditSummary({ audit, grid, ctx, deviations: deviations.filter(d => d.status !== 'annule'), criticalities: store.all('criticality'), alerts, grading });
+  if (sheetGrid) resolveAuditGrades(audit, summary, grading);
   return {
     grid, baseGrid, ctx, auditType: ctx.auditType || '', type: gridType(baseGrid, ctx.auditType) || null,
     // Types contrôlés (tournée mixte : plusieurs) et leurs définitions.
@@ -212,7 +268,7 @@ export function auditState(audit, { includeMissing = false } = {}) {
     sheetProgress: sheetGrid ? sheetProgress(grid, responses, ctx, counts) : {},
     stationProgress: sheetGrid ? stationProgress(grid, responses, ctx, counts) : null,
     validation: validateResponses(grid, responses, ctx, { mediaCounts: counts, deviationsByItem }),
-    summary: auditSummary({ audit, grid, ctx, deviations: deviations.filter(d => d.status !== 'annule'), criticalities: store.all('criticality'), alerts })
+    summary, scoring: grading.scoring
   };
 }
 
@@ -1089,7 +1145,8 @@ export async function updateDeviation(dev, patch, { reason = null, event = null 
  * (stations, ordre de passage, parties contrôlées à chaque station d'une tournée mixte), les compartiments retenus (compartments), les contrôleurs OEG de la tournée
  * (controllerIds, controllerNames) et les données des feuilles (sheets : observations, conclusions, instruments…) —,
  * les constats des écarts (hors suivi : statut, responsable, échéance, actions correctives) et les
- * médias (hors images de signature).
+ * médias (hors images de signature). La note sur 20 figée à la signature du contrôleur (audit.grading) en fait partie ;
+ * une tournée signée avant la notation n'en a pas : son contenu, donc son sceau, est inchangé.
  * Les écarts et médias ajoutés après le verrouillage relèvent du suivi et sont tracés au journal.
  */
 const DEVIATION_CONSTAT = ['id', 'number', 'date', 'time', 'itemId', 'itemCode', 'stationKey', 'requirement', 'docRefs', 'description', 'auditorObservation', 'criticalityCode', 'typeCode', 'immediateAction', 'correctiveActionRequested', 'location', 'source', 'alertCode'];
@@ -1111,20 +1168,24 @@ export async function finishAudit(audit) {
 }
 export async function reopenAudit(audit) {
   if (audit.lock?.lockedAt) throw new Error('Audit verrouillé');
-  return updateAudit(audit, a => { a.status = 'en_cours'; a.endedAt = null; a.signatures = {}; }, { action: 'reopen', reason: 'Réouverture avant signature' });
+  return updateAudit(audit, a => { a.status = 'en_cours'; a.endedAt = null; a.signatures = {}; delete a.grading; }, { action: 'reopen', reason: 'Réouverture avant signature' });
 }
 
 /**
  * Enregistre une signature (role : 'auditor' | 'provider'). Signature « contrôleur » (auditor) : par n'importe quel
- * contrôleur OEG de la tournée (ou l'encadrement) ; elle couvre la liste des contrôleurs.
+ * contrôleur OEG de la tournée (ou l'encadrement) ; elle couvre la liste des contrôleurs. Grille « en feuilles » : la
+ * note sur 20 (notes de la tournée, des stations et des feuilles), les seuils et le barème utilisés sont figés dans la
+ * tournée (audit.grading, freezeGrading) AVANT le calcul de l'empreinte signée, qui les couvre ; une nouvelle signature
+ * du contrôleur les recalcule.
  */
 export async function signAudit(audit, role, { bytes, mime, name, fn = '', refused = false, comment = '' }) {
   if (role === 'auditor' && !canEditAudit(store.get('audit', audit.id) || audit)) throw new Error('Seul un contrôleur de la tournée peut la signer.');
-  const contentHash = await auditContentHash(audit);
+  const grading = role === 'auditor' ? freezeGrading(audit) : null;
+  const contentHash = await auditContentHash(grading ? { ...audit, grading } : audit);
   let media = null;
   if (bytes) media = await saveMedia(bytes, { mime, kind: 'signature', name: `signature-${role}.png`, link: { type: 'signature', id: audit.id, itemId: role }, auditId: audit.id });
   const sig = { role, name, function: fn, at: nowISO(), mediaId: media?.id || null, mediaSha256: media?.sha256 || null, refused, comment, contentHash, userId: role === 'auditor' ? session.user.id : null, deviceId: session.device.id, offline: !navigator.onLine };
-  return updateAudit(audit, a => { a.signatures = { ...(a.signatures || {}), [role]: sig }; }, { action: 'sign' });
+  return updateAudit(audit, a => { if (grading) a.grading = grading; a.signatures = { ...(a.signatures || {}), [role]: sig }; }, { action: 'sign' });
 }
 
 /** Verrouille l'audit signé : empreinte SHA-256 du contenu probant, plus aucune modification sans trace. */

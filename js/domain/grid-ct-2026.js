@@ -19,7 +19,11 @@
  * - `labelTemplate` : libellé complété avec le prestataire de la tournée ({prestataire}) dans la grille effective.
  * - `suggest` : valeur calculée proposée à l'auditeur (ex. amplitude horaire), jamais appliquée seule.
  * - `noScore: true` : critère de SYNTHÈSE d'autres critères (F2.2.8, F4.27) : coté C / P / NC / N/A et compté dans les
- *   décomptes, mais exclu de toute note calculée, pour ne pas compter deux fois un même constat.
+ *   décomptes, mais exclu de la note sur 20, pour ne pas compter deux fois un même constat.
+ * - `major: true` : POINT MAJEUR (liste MAJOR_ITEMS ci-dessous, validée par l'OEG le 23/10/2026 : localisation, purge,
+ *   étalonnage, flaconnage et réactifs, stabilisation, contamination, conservation, remplissage, filtration, étiquetage,
+ *   protocoles biologiques) : compte double (× 2) dans la note sur 20 (js/domain/grading.js) ; badge « Majeur (×2) »
+ *   sur les feuilles, dans la fiche des attendus et leurs PDF.
  * Les numéros en double des maquettes (F3 « 16 », F4 « 16 », F9 « 12 ») sont corrigés en 17 / 17 / 13.
  *
  * SANS DOUBLON NI REDONDANCE (demande de l'OEG du 16/10/2026, version 1.2). Chaque constat n'est coté qu'à UN endroit :
@@ -30,13 +34,16 @@
  * (liste blanche commentée de tests/unit/grid-ct-2026.test.js, qui détecte automatiquement les doublons).
  * Un numéro n'est JAMAIS réutilisé ni renuméroté (les réponses des tournées y sont rattachées) : un critère retiré est
  * listé ci-dessous (« F<feuille>.<no> → critère qui le reprend (version) ») et aucun critère ne peut reprendre son numéro.
- * NUMÉROS RETIRÉS : aucun.
+ * NUMÉROS RETIRÉS :
+ *   F8.A3 → F8.A2 (1.2) : « Mailles utilisées » réuni à « Filets maillants / batteries » (même constat du protocole de
+ *         pêche ; fusion validée par l'OEG le 23/10/2026). Les tournées commencées avant gardent F8.A3 (instantané).
  * RÉVISIONS (grille par défaut diffusée aux tablettes par upgradeStoredGrid ; tournées existantes jamais modifiées) :
  *   1.1 : turbidité (F4.9) en NTU.
  *   1.2 : doublons et redondances : libellés F2.1.5, F2.1.6 (contrôle OEG) et F2.5.2, F2.5.3 (tournée du prestataire)
  *         distingués ; F4.14 et F4.16 communs à la tournée ; F2.2.8 et F4.27 hors note (noScore) ; aides qui
  *         répétaient l'attendu retirées (renvois dans les attendus) ; F4.17 limité aux flacons sans réactif (F4.13) ;
- *         zones de texte libres des feuilles distinguées (placeholder).
+ *         zones de texte libres des feuilles distinguées (placeholder) ; note sur 20 : 26 points majeurs (`major`,
+ *         × 2), F8.A2 et F8.A3 réunis en F8.A2 « Filets maillants / batteries et mailles utilisées » (F8.A3 retiré).
  *
  * TRAÇABILITÉ DES FICHES D'ÉVALUATION (fiches Agences de l'eau / Aquascop 2026, non reproduites dans le dépôt).
  * Une ligne par point de la fiche source → critère(s) CT-2026 qui le couvre(nt). « (Inclut) » : point fusionné dans
@@ -229,15 +236,15 @@ const BILAN = (title, extra = {}) => ({ key: 'conclusion', title, icon: 'check',
 export const GRID_CT_2026 = {
   id: 'grid-ct-2026-v1',
   code: 'CT-2026',
-  // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 ; 1.2 : doublons et redondances (voir RÉVISIONS en tête du
-  // fichier). Même identifiant : grilles enregistrées mises à niveau par upgradeStoredGrid ; tournées existantes
+  // 1.1 : turbidité (F4.9) en NTU, unité des CCTP 2026 ; 1.2 : doublons et redondances, points majeurs de la note sur
+  // 20, F8.A3 réuni à F8.A2 (voir RÉVISIONS en tête du fichier). Même identifiant : grilles enregistrées mises à niveau par upgradeStoredGrid ; tournées existantes
   // inchangées. Toute évolution diffusée aux tablettes incrémente ce numéro.
   version: '1.2',
   status: 'publiee',
   publishedAt: '2026-10-10T00:00:00.000Z',
   name: 'Contrôle terrain des prestations de prélèvement – 2026',
   layout: 'sheets',
-  description: 'Grille unique des contrôles terrain des prestations de prélèvement 2026 : hydrobiologie (RCS ESC BIO, 9 feuilles des maquettes), physico-chimie des cours d’eau et eaux souterraines (points des fiches d’évaluation intégrés sans doublon). Un audit = une tournée : les points communs à la journée (organisation, logistique, étalonnage, flaconnage, froid, documentation, sécurité, expédition) sont renseignés une fois, les fiches station sont répétées pour chaque station visitée. Échelle C / P / NC / N/A.',
+  description: 'Grille unique des contrôles terrain des prestations de prélèvement 2026 : hydrobiologie (RCS ESC BIO, 9 feuilles des maquettes), physico-chimie des cours d’eau et eaux souterraines (points des fiches d’évaluation intégrés sans doublon). Un audit = une tournée : les points communs à la journée (organisation, logistique, étalonnage, flaconnage, froid, documentation, sécurité, expédition) sont renseignés une fois, les fiches station sont répétées pour chaque station visitée. Échelle C / P / NC / N/A ; note sur 20 (C = 1, P = 0,5, NC = 0, N/A non compté, points majeurs comptés double).',
   scope: { providerIds: [], samplingTypeIds: ['stype-HYDROBIO', 'stype-PC', 'stype-ESO', 'stype-MICROPOL', 'stype-INSITU'], matrixIds: [], protocolDocKeys: [], cctpDocKeys: [], environments: [] },
   /** Prestataires proposés en premier pour les tournées (tout autre prestataire reste possible). */
   providers: ['prov-TL1', 'prov-OEG', 'prov-HYDRECO', 'prov-NBC'],
@@ -744,8 +751,9 @@ export const GRID_CT_2026 = {
       columns: 'full', domain: 'prelevement', condition: ONLY('poissons'), headers: { label: 'Paramètre / information' },
       items: [
         C(8, 'A1', 'Agent prestataire & fonction', 'A1', { icon: 'person' }),
-        C(8, 'A2', 'Filets maillants / batteries', 'A2', { icon: 'net' }),
-        C(8, 'A3', 'Mailles utilisées', 'A3', { icon: 'grid' }),
+        // A2 réunit les lignes « Filets maillants / batteries » et « Mailles utilisées » de la maquette (1.2 ; numéro A3
+        // retiré, jamais réutilisé).
+        C(8, 'A2', 'Filets maillants / batteries et mailles utilisées', 'A2', { icon: 'net', help: inc('mailles utilisées (ligne « Mailles utilisées » de la maquette, réunie à celle-ci).') }),
         C(8, 'A4', 'Heure de pose', 'A4', { icon: 'clock', input: { type: 'time' } }),
         C(8, 'A5', 'Heure de relève', 'A5', { icon: 'clock', input: { type: 'time' } }),
         C(8, 'A6', 'État des filets', 'A6', { icon: 'gear' }),
@@ -792,7 +800,22 @@ export const GRID_CT_2026 = {
   ]
 };
 
-/* Nettoyage des critères construits par C() puis surchargés (`input: null` ⇒ statut seul, sans « Valeur / réponse »). */
+/**
+ * POINTS MAJEURS de la note sur 20 (× 2), liste DÉFINITIVE validée par l'OEG le 23/10/2026 : localisation (F3.19),
+ * purge (F10.4 à F10.6), étalonnage (F4.2), flaconnage et réactifs (F4.12, F4.13), stabilisation (F4.31), EPI
+ * (F2.4.4), contamination, conservation, remplissage, renouvellement, filtration et étiquetage (F5), protocoles
+ * biologiques (F6.5, F6.11, F6.12, F7.6, F7.12, F8.A2, F8.A5, F8.B4, F8.B5, F9.9, F9.12). Les futurs critères du
+ * protocole PEZSML équivalents à F6.5 / F6.11 / F6.12 seront majeurs aussi. Porté par chaque critère : `major: true`.
+ */
+export const MAJOR_ITEMS = Object.freeze([
+  'F2.4.4', 'F3.19', 'F10.4', 'F10.5', 'F10.6', 'F4.2', 'F4.12', 'F4.13', 'F4.31',
+  'F5.7', 'F5.13', 'F5.21', 'F5.24', 'F5.26', 'F5.27', 'F6.5', 'F6.11', 'F6.12', 'F7.6', 'F7.12',
+  'F8.A2', 'F8.A5', 'F8.B4', 'F8.B5', 'F9.9', 'F9.12'
+]);
+
+/* Nettoyage des critères construits par C() puis surchargés (`input: null` ⇒ statut seul, sans « Valeur / réponse ») ;
+ * points majeurs marqués. */
 for (const s of GRID_CT_2026.sections) for (const it of s.items) {
   for (const k of Object.keys(it)) if (it[k] === undefined || (k === 'input' && it[k] === null)) delete it[k];
+  if (MAJOR_ITEMS.includes(it.code)) it.major = true;
 }

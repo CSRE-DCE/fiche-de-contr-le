@@ -18,7 +18,7 @@ import { navigate, parseHash } from '../ui/router.js';
 import { toast, openModal, downloadBlob } from '../ui/dom.js';
 import { pageTitle } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
-import { sectionCard, sharedBadge, checkSquare, assetURL } from '../ui/sheet-chrome.js';
+import { sectionCard, sharedBadge, majorBadge, checkSquare, assetURL } from '../ui/sheet-chrome.js';
 import { themeVars, THEMES } from '../ui/themes.js';
 import { GRID_CT_2026 } from '../domain/grid-ct-2026.js';
 import { gridType, parseItemId } from '../domain/grids.js';
@@ -95,6 +95,7 @@ function critCard(item, model = { type: null }, { id = true } = {}) {
   const e = item.entry || {};
   const badges = [
     item.shared && item.sheetScope !== 'tournee' ? sharedBadge() : '',
+    item.major ? majorBadge('Point majeur (×2)') : '',
     item.conditional ? html`<span class="att-tb att-cond">${icon('filter', { size: 14 })}Affiché selon une réponse</span>` : '',
     item.noScore ? html`<span class="att-tb att-noscore" title="Point de synthèse : coté, mais exclu de la note (chaque écart y est déjà compté)">${icon('info', { size: 14 })}Point de synthèse, hors note</span>` : '',
     typeBadges(item, model)
@@ -128,6 +129,7 @@ function scaleBox(model) {
     <div class="att-scale">${model.echelle.map(s => html`<div class="att-sc-tile ${SCALE_CLS[s.code]}"><div class="att-sc-h">${scaleKey(s)}<span>${s.label}</span></div><p>${s.text}</p></div>`)}</div>
     <p class="att-note">${sharedBadge()} critère jugé une seule fois pour toute la tournée (une réponse partagée par toutes les stations).
       Les mentions « À préciser (OEG) » signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.</p>
+    ${model.notation ? html`<p class="att-note att-notation" id="attNotation"><b>Note sur 20.</b> ${model.notation} ${majorBadge('Point majeur (×2)')}</p>` : ''}
   </section>`;
 }
 

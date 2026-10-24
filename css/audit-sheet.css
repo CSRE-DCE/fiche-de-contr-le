@@ -288,6 +288,10 @@ table.as-sum td.n-c{color:var(--ok);font-weight:700}table.as-sum td.n-p{color:va
 table.as-sum tr.as-sum-group>td{background:#e6f2fb!important;font-weight:700;color:var(--brand);font-size:13.5px}
 table.as-sum tr.as-sum-total>*{border-top:2px solid var(--line);font-weight:800}
 table.as-sum tr.as-sum-tour>th{color:var(--sky)}
+/* Note sur 20 : colonne « Note /20 » des tableaux de synthèse, carte « Note de la tournée » */
+table.as-sum .n-g{text-align:center;width:6.5em;white-space:nowrap}
+.as-grade-card .grade-box{margin-top:4px}
+.as-grade-state{font-weight:600;color:var(--ink)}
 .as-concl .badge{white-space:normal}
 .as-li-no{font-family:var(--font-cond);font-weight:800;font-size:20px}
 

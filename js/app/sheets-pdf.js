@@ -2,7 +2,9 @@
  *
  * - generateSheetsPdf({ auditId }) : rapport de TOURNÉE rempli = feuille tournée (F2) une fois puis, pour chaque
  *   station dans l'ordre de passage, ses feuilles (F1 portrait A4, les autres paysage A4), puis la synthèse
- *   (C / P / NC / N/A par station et par feuille, bilan, préconisations, écarts, signatures). Filigrane
+ *   (note sur 20 de la tournée, C / P / NC / N/A et note par station et par feuille, bilan, préconisations, écarts,
+ *   signatures). Chaque feuille cotée se termine par l'encadré « Grille de notation » (C, P, NC, N/A, évalués,
+ *   points, note /20, appréciation colorée ; cases vides sur les fiches vierges) ; points majeurs : badge « Majeur ×2 ». Filigrane
  *   « PROVISOIRE » tant que l'audit n'est pas verrouillé ; n° d'audit, empreinte du contenu imprimé et pagination
  *   en pied de page. Tournée modifiée après signature : mention « MODIFIÉ APRÈS SIGNATURE » en pied de chaque page,
  *   empreinte scellée rappelée et récapitulatif des modifications (date, auteur, motif, avant → après) en synthèse.
@@ -50,6 +52,7 @@ import {
 } from '../domain/grids.js';
 import { formatValue, itemInput, fieldShown, AUDIT_TYPES, PROVIDER_KINDS, auditDate as dateOfAudit, auditKindLabel } from '../domain/model.js';
 import { sheetSummary, stationSummary } from '../domain/summary.js';
+import { scoringOf, isMajorItem, thresholdsText, frNumber, gradeThresholds, GRADE_STATES } from '../domain/grading.js';
 import { calibrationStatus } from '../domain/rules.js';
 import { ROLES } from '../domain/permissions.js';
 import { auditState, auditContentHash, auditMedia, stationLabel, deviationPlace, tourControllers } from './audits.js';
@@ -78,6 +81,13 @@ const STATUS = [
   { code: 'NA', short: 'N/A', label: 'Non applicable', color: '#5f6b7a', bg: '#eef1f4' }
 ];
 const STATUS_OF = Object.fromEntries(STATUS.map(s => [s.code, s]));
+/** Cellule « Note /20 » d'un tableau de synthèse : pastille colorée selon l'appréciation, « non noté » en italique. */
+const gradeCell = g => (g && g.n10 !== null && g.n10 !== undefined ? { text: g.text, pill: LEVEL[g.level]?.color || LEVEL.none.color } : { text: 'non noté', color: MUTED, font: F.italic });
+/** Couleurs des appréciations de la note sur 20 (texte / pastille, fond, filet). */
+const LEVEL = {
+  good: { color: '#1b7a43', bg: '#e8f5ec', line: '#9fd1b1' }, fair: { color: '#a35a00', bg: '#fff4e2', line: '#f3c27a' },
+  poor: { color: '#c62828', bg: '#fdecea', line: '#efb4ae' }, none: { color: '#5f6b7a', bg: '#eef1f4', line: '#c3cad3' }
+};
 const conclColor = (code, t) => STATUS_OF[code]?.color || t.main;
 const theme = name => { const t = THEMES[name] || THEMES.ocean; return { ...t, title: t.title || t.dark, num: t.num || t.main, ink: t.ink || OEG.navy, name: THEMES[name] ? name : 'ocean' }; };
 const present = v => v !== undefined && v !== null && String(v).trim() !== '';
@@ -362,7 +372,8 @@ export async function sheetsModelFromAudit(audit) {
     // Contrôleurs OEG de la tournée (binôme) : « A. Dupont, B. Martin » partout où figure le contrôleur OEG.
     number: audit.number, fingerprint, provisional: !locked, auditDate, auditorName: controllers.map(c => c.name).filter(Boolean).join(', ') || audit.auditorName || '', controllerCount: controllers.length,
     sealedFingerprint: locked ? audit.lock.contentHash : '', amendments, sealOk: !locked || fingerprint === expected,
-    summary: st.summary, generatedAt: nowISO()
+    // Synthèse avec les notes sur 20 (figées à la signature, recalculées, calculées ou provisoires) et barème de la note.
+    summary: st.summary, scoring: st.scoring, generatedAt: nowISO()
   };
 }
 
@@ -419,6 +430,8 @@ class SheetsRenderer {
     this.doc = doc; this.A = assets; this.m = model;
     this.blank = model.mode !== 'filled';
     this.stationList = model.grid?.stations || [];
+    // Barème de la note sur 20 (badges « Majeur ×2 ») : celui de la tournée, sinon celui de la grille.
+    this.scoring = model.scoring || scoringOf(model.baseGrid || model.grid);
     this.y = 0; this.bottom = 0; this.ctx = null;
   }
   get W() { return this.doc.W; }
@@ -895,11 +908,15 @@ class SheetsRenderer {
     const icoW = iconCol && item.icon ? 15 : 0;
     const labW = lc.w - 6 - icoW;
     let label = d.wrap(item.label, F.text, FS, labW);
-    if (item.shared) {
-      const badge = lc.w >= 150 ? 'Commun à la tournée' : 'tournée';
-      const bw = d.width(badge, F.semi, 5.8) + 8;
+    // Badges : « Commun à la tournée » (critère partagé), « Majeur ×2 » (point majeur de la note sur 20).
+    const badges = [];
+    if (item.shared) badges.push({ text: lc.w >= 150 ? 'Commun à la tournée' : 'tournée', kind: 'shared' });
+    if (item.kind === 'conformity' && isMajorItem(item, this.scoring)) badges.push({ text: lc.w >= 150 ? 'Majeur ×2' : '×2', kind: 'major' });
+    if (badges.length) {
+      for (const b of badges) b.w = d.width(b.text, F.semi, 5.8) + 8;
+      const bw = badges.reduce((n, b) => n + b.w, 0) + 3 * (badges.length - 1);
       const last = label[label.length - 1] || '';
-      out.badge = { text: badge, w: bw, line: d.width(last, F.text, FS) + bw + 4 <= labW ? label.length - 1 : label.length };
+      out.badge = { list: badges, line: d.width(last, F.text, FS) + bw + 4 <= labW ? label.length - 1 : label.length };
       if (out.badge.line === label.length) label = [...label, ''];
     }
     out.cells.label = { lines: label, icoW };
@@ -953,10 +970,14 @@ class SheetsRenderer {
         const ly = y + (row.h - lines.length * LH) / 2 + 0.6;
         lines.forEach((l, k) => { if (l) this.chemText(l, lx, ly + k * LH, { font: F.text, size: FS, color: t.ink }); });
         if (row.badge) {
-          const bx = row.badge.line < lines.length && lines[row.badge.line] ? lx + d.width(lines[row.badge.line], F.text, FS) + 4 : lx;
+          let bx = row.badge.line < lines.length && lines[row.badge.line] ? lx + d.width(lines[row.badge.line], F.text, FS) + 4 : lx;
           const by = ly + row.badge.line * LH - 0.6;
-          d.roundRect(bx, by, row.badge.w, 8.4, 4.2, { fill: '#e8f3fc', stroke: '#6fb1e2', lineWidth: 0.5, dash: [1.4, 1] });
-          d.text(row.badge.text, bx, by + 1.5, { font: F.semi, size: 5.8, color: '#0b4f9c', align: 'center', width: row.badge.w });
+          for (const b of row.badge.list) {
+            if (b.kind === 'major') d.roundRect(bx, by, b.w, 8.4, 4.2, { fill: '#fff1d6', stroke: '#e3b062', lineWidth: 0.5 });
+            else d.roundRect(bx, by, b.w, 8.4, 4.2, { fill: '#e8f3fc', stroke: '#6fb1e2', lineWidth: 0.5, dash: [1.4, 1] });
+            d.text(b.text, bx, by + 1.5, { font: F.semi, size: 5.8, color: b.kind === 'major' ? '#6b3600' : '#0b4f9c', align: 'center', width: b.w });
+            bx += b.w + 3;
+          }
         }
       } else if (c.key === 'short') {
         const ls = row.cells.short || [];
@@ -1324,6 +1345,88 @@ class SheetsRenderer {
       else await this.tableFull(sh, g.full, { merged: !!g.merged });
     }
     await this.blocks(sh);
+    await this.gradeBox(sh);
+  }
+
+  /* --- grille de notation de la feuille (note sur 20) --- */
+  /**
+   * Encadré « Grille de notation » en pied de feuille (feuille cotée) : C, P, NC, N/A, évalués (dont majeurs ×2), points
+   * pondérés, note /20 et appréciation colorée, règle de calcul et seuils (ceux figés à la signature, sinon actuels) ;
+   * fiche vierge : cases vides à remplir. Jamais coupé entre deux pages.
+   */
+  async gradeBox(sh) {
+    if (!(sh.items || []).some(i => i.kind === 'conformity')) return;
+    const d = this.doc, t = theme(sh.theme);
+    const filled = this.m.mode === 'filled';
+    const g = filled ? (this.m.summary?.sheets || []).find(x => x.instanceKey === sh.instanceKey)?.grade || null : null;
+    const r = filled ? this.m.summary?.grading || null : null;
+    const graded = !!g && g.n10 !== null && g.n10 !== undefined;
+    const lvl = LEVEL[graded ? g.level : 'none'];
+    const w = this.W - 2 * M, head = 18, cellH = 31;
+    const extra = [g?.excluded ? `${g.excluded} point(s) de synthèse coté(s) hors note` : '', g?.unanswered ? `${g.unanswered} point(s) non renseigné(s)` : '', r?.state ? `note ${GRADE_STATES[r.state]}` : ''].filter(Boolean).join(' · ');
+    const rule = `C = 1 point · P = 0,5 · NC = 0 · N/A non compté · point majeur ×2 · point de synthèse hors note. Appréciation : ${thresholdsText(r?.thresholds || this.m.gradeThresholds, { words: true })}.`;
+    const h = head + 5 + cellH + 5 + 9 + (extra ? 9 : 0) + 4;
+    // Peu de place en bas de page : version compacte (deux lignes) plutôt qu'une page de suite pour l'encadré seul.
+    if (this.y + h + 4 > this.bottom && this.y + 34 <= this.bottom) return this.gradeLine(sh, { g, r, graded, lvl, rule, extra, filled });
+    await this.ensure(h + 4);
+    const x = M, y = this.y;
+    d.roundRect(x, y, w, h, 7, { fill: '#ffffff', stroke: t.line, lineWidth: 0.9 });
+    d.roundRect(x, y, w, head, [7, 7, 0, 0], { fill: t.bar });
+    await this.pastille(x + 11, y + head / 2, 7.5, { iconName: 'star', fill: t.main });
+    d.text('Grille de notation', x + 23, y + 4.4, { font: F.bold, size: 9, color: t.barText === '#ffffff' ? '#ffffff' : t.title });
+    if (graded) {
+      const txt = `${g.text} / 20 — ${g.label}`, pw = d.width(txt, F.bold, 8) + 14;
+      d.roundRect(x + w - pw - 6, y + 3, pw, head - 6, (head - 6) / 2, { fill: lvl.color });
+      d.text(txt, x + w - pw - 6, y + 5.6, { font: F.bold, size: 8, color: '#ffffff', align: 'center', width: pw });
+    }
+    // Cellules : C, P, NC, N/A, évalués, points (une unité chacune), note /20 (deux unités).
+    const gap = 5, unit = (w - 16 - 6 * gap) / 8;
+    const cells = [
+      ['C', graded || filled ? String(g?.C ?? 0) : '', STATUS_OF.C.color], ['P', graded || filled ? String(g?.P ?? 0) : '', STATUS_OF.P.color],
+      ['NC', graded || filled ? String(g?.NC ?? 0) : '', STATUS_OF.NC.color], ['N/A', graded || filled ? String(g?.NA ?? 0) : '', STATUS_OF.NA.color],
+      ['Évalués', filled ? String(g?.evaluated ?? 0) : '', INK, g?.majors ? `dont ${g.majors} majeur(s) ×2` : ''],
+      ['Points', graded ? `${frNumber(g.points)} / ${frNumber(g.max)}` : filled ? '—' : '      /', INK]
+    ];
+    let cx = x + 8;
+    const cy = y + head + 5;
+    for (const [k, v, color, sub] of cells) {
+      d.roundRect(cx, cy, unit, cellH, 5, { fill: '#f8fafc', stroke: '#d5dee7', lineWidth: 0.6 });
+      d.text(k.toLocaleUpperCase('fr-FR'), cx, cy + 3, { font: F.cond, size: 6.6, color: MUTED, align: 'center', width: unit });
+      if (v) d.text(v, cx, cy + 11.5, { font: F.cond, size: d.fitSize(v, F.cond, 12, unit - 6, 7), color, align: 'center', width: unit });
+      if (sub) d.text(sub, cx, cy + cellH - 7.5, { font: F.text, size: d.fitSize(sub, F.text, 5.6, unit - 4, 4.2), color: MUTED, align: 'center', width: unit });
+      cx += unit + gap;
+    }
+    const nw = 2 * unit + gap;
+    d.roundRect(cx, cy, nw, cellH, 5, { fill: lvl.bg, stroke: lvl.line, lineWidth: 0.8 });
+    d.text('NOTE /20', cx, cy + 3, { font: F.cond, size: 6.6, color: MUTED, align: 'center', width: nw });
+    if (graded) {
+      d.text(g.text, cx, cy + 10, { font: F.black, size: 13, color: lvl.color, align: 'center', width: nw / 2 + 10 });
+      d.text(g.label, cx + nw / 2, cy + 13, { font: F.bold, size: d.fitSize(g.label, F.bold, 8, nw / 2 - 6, 5), color: lvl.color, align: 'center', width: nw / 2 - 4 });
+    } else if (filled) d.text('non noté', cx, cy + 13, { font: F.italic, size: 8, color: MUTED, align: 'center', width: nw });
+    else d.text('……… / 20', cx, cy + 12, { font: F.semi, size: 9, color: MUTED, align: 'center', width: nw });
+    let ty = cy + cellH + 4;
+    d.text(rule, x + 8, ty, { font: F.italic, size: d.fitSize(rule, F.italic, 6.6, w - 16, 5), color: MUTED });
+    if (extra) { ty += 9; d.text(extra.charAt(0).toUpperCase() + extra.slice(1) + '.', x + 8, ty, { font: F.semi, size: d.fitSize(extra, F.semi, 6.8, w - 16, 5), color: INK }); }
+    this.y += h + 8;
+  }
+  /** Grille de notation compacte (deux lignes) : cotes, évalués, points et note sur une ligne, règle et état dessous. */
+  async gradeLine(sh, { g, r, graded, lvl, rule, extra, filled }) {
+    const d = this.doc, t = theme(sh.theme);
+    const x = M, y = this.y, w = this.W - 2 * M, h = 30;
+    d.roundRect(x, y, w, h, 6, { fill: '#ffffff', stroke: t.line, lineWidth: 0.9 });
+    await this.pastille(x + 10, y + 9.5, 6.5, { iconName: 'star', fill: t.main });
+    d.text('Grille de notation', x + 20, y + 5, { font: F.bold, size: 8.4, color: t.title });
+    const pill = graded ? `${g.text} / 20 — ${g.label}` : filled ? 'non noté' : '……… / 20';
+    const pw = d.width(pill, F.bold, 7.6) + 14, px = x + w - pw - 6;
+    d.roundRect(px, y + 3.5, pw, 12, 6, { fill: graded ? lvl.color : '#ffffff', stroke: graded ? lvl.color : LEVEL.none.line, lineWidth: 0.6 });
+    d.text(pill, px, y + 5.6, { font: F.bold, size: 7.6, color: graded ? '#ffffff' : MUTED, align: 'center', width: pw });
+    const v = k => (filled ? String(g?.[k] ?? 0) : '____');
+    const counts = `C ${v('C')} · P ${v('P')} · NC ${v('NC')} · N/A ${v('NA')} · évalués ${v('evaluated')}${g?.majors ? ` (dont ${g.majors} majeur(s) ×2)` : ''} · points ${graded ? `${frNumber(g.points)} / ${frNumber(g.max)}` : filled ? '—' : '____ / ____'}`;
+    const cx = x + 26 + d.width('Grille de notation', F.bold, 8.4);
+    d.text(counts, cx, y + 5.4, { font: F.semi, size: d.fitSize(counts, F.semi, 7.6, px - cx - 8, 5), color: INK });
+    const line2 = extra ? `${rule} ${extra.charAt(0).toUpperCase() + extra.slice(1)}.` : rule;
+    d.text(line2, x + 8, y + 19.5, { font: F.italic, size: d.fitSize(line2, F.italic, 6.2, w - 16, 4.4), color: MUTED });
+    this.y += h + 6;
   }
 
   /* --- feuille 1 : fiche station (portrait) --- */
@@ -1688,7 +1791,7 @@ class SheetsRenderer {
     this.ctx = { landscape: true, theme: 'navy', label: 'Synthèse de la tournée', title: 'Synthèse de la tournée', right: `Tournée ${m.number}` };
     this.newPage({ landscape: true, theme: 'navy', label: 'Synthèse de la tournée' });
     let y = await this.fullHeader({ landscape: true, theme: 'navy', stationBlock: { k: 'Tournée', name: m.number, sheetNo: '', tour: n > 1 ? `${n} stations` : '' } });
-    y += this.sheetTitle('Synthèse de la tournée', 'Décomptes factuels C / P / NC / N/A — sans score global', M, y, this.W - 2 * M, t);
+    y += this.sheetTitle('Synthèse de la tournée', 'Note sur 20 et décomptes C / P / NC / N/A', M, y, this.W - 2 * M, t);
     this.y = y;
     // Identification et totaux.
     const provider = m.provider;
@@ -1719,7 +1822,8 @@ class SheetsRenderer {
       ls.forEach((l, i) => d.text(l, x0 + lw + 6, iy + 3 + i * 9.4, { font: k.startsWith('Empreinte') ? F.text : F.semi, size: k.startsWith('Empreinte') ? 6.6 : 8, color: (k === 'Statut' && !a.lock?.lockedAt) || k === 'Intégrité' ? OEG.nc : k === 'Statut' && amended ? OEG.warn : INK }));
       iy += h;
     }
-    const sum = stationSummary({ audit: a, grid: m.grid, ctx: m.ctx });
+    // Décomptes et notes (synthèse de la tournée : notes figées à la signature, recalculées, calculées ou provisoires).
+    const sum = m.summary?.stations || stationSummary({ audit: a, grid: m.grid, ctx: m.ctx });
     const g = sum.global;
     const tiles = [['C', 'Conformes', g.C], ['P', 'Perfectibles', g.P], ['NC', 'Non conformes', g.NC], ['NA', 'Non applicables', g.NA], ['', 'Non renseignés', g.unanswered]];
     const tx0 = M + iw + 12, tw = (this.W - M - tx0 - 4 * 6) / 5;
@@ -1731,28 +1835,46 @@ class SheetsRenderer {
       d.text(label, x, this.y + 42, { font: F.text, size: d.fitSize(label, F.text, 7, tw - 6, 5), color: INK, align: 'center', width: tw });
     });
     d.text(`${g.total} point(s) de conformité contrôlés · ${g.values} valeur(s) renseignée(s) · ${(m.deviations || []).length} écart(s) enregistré(s)`, tx0, this.y + 64, { font: F.italic, size: 7, color: MUTED });
-    this.y = Math.max(iy, this.y + 76) + 10;
+    // Note de la tournée (sur 20) : chaque point une fois, points majeurs ×2, points de synthèse hors note.
+    const tg = m.summary?.grading;
+    let noteBottom = this.y + 76;
+    if (tg?.tour) {
+      const gt = tg.tour, graded = gt.n10 !== null && gt.n10 !== undefined, lvl = LEVEL[graded ? gt.level : 'none'];
+      const nx = tx0, nw = this.W - M - tx0, ny = this.y + 78, nh = 54;
+      d.roundRect(nx, ny, nw, nh, 7, { fill: lvl.bg, stroke: lvl.line, lineWidth: 0.9 });
+      d.text('NOTE DE LA TOURNÉE', nx + 10, ny + 5, { font: F.cond, size: 8, color: MUTED });
+      const big = graded ? `${gt.text} / 20` : 'non noté';
+      d.text(big, nx + 10, ny + 13, { font: F.black, size: 18, color: lvl.color });
+      d.text(graded ? gt.label : 'aucun point évalué', nx + 18 + d.width(big, F.black, 18), ny + 19, { font: F.bold, size: 11, color: lvl.color });
+      const l1 = `${gt.evaluated} point(s) évalué(s)${gt.majors ? `, dont ${gt.majors} majeur(s) ×2` : ''}${graded ? ` · ${frNumber(gt.points)} / ${frNumber(gt.max)} points` : ''}${gt.excluded ? ` · ${gt.excluded} point(s) de synthèse hors note` : ''} · note ${GRADE_STATES[tg.state] || ''}${tg.state === 'recalculee' && tg.signedTour ? ` (à la signature : ${tg.signedTour.text} / 20)` : ''}`;
+      const l2 = `C = 1 point · P = 0,5 · NC = 0 · N/A non compté. Appréciation : ${thresholdsText(tg.thresholds, { words: true })}.`;
+      d.text(l1, nx + 10, ny + 35, { font: F.semi, size: d.fitSize(l1, F.semi, 6.8, nw - 20, 4.8), color: INK });
+      d.text(l2, nx + 10, ny + 44, { font: F.italic, size: d.fitSize(l2, F.italic, 6.4, nw - 20, 4.6), color: MUTED });
+      noteBottom = ny + nh;
+    }
+    this.y = Math.max(iy, noteBottom) + 10;
     // Par station.
     const W2 = this.W - 2 * M;
     const num = v => ({ text: String(v), align: 'center' });
     await this.heading('Décomptes par station', t, 'route');
     const sc = [{ label: 'N°', w: 26, align: 'center' }, { label: 'Station', w: W2 * 0.26 }, { label: 'Code', w: 80, align: 'center' }];
-    const rest = (W2 - sc.reduce((s, c) => s + c.w, 0)) / 6;
-    for (const l of ['C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total']) sc.push({ label: l, w: rest, align: 'center' });
-    const srow = (no, name, code, c) => [no, name, code, ...[c.C, c.P, c.NC, c.NA, c.unanswered, c.total].map((v, i) => ({ text: String(v), font: i < 4 && v ? F.bold : F.text, color: i < 4 && v ? STATUS[i].color : INK }))];
+    const rest = (W2 - sc.reduce((s, c) => s + c.w, 0)) / 7;
+    for (const l of ['C', 'P', 'NC', 'N/A', 'Non renseignés', 'Total', 'Note /20']) sc.push({ label: l, w: rest, align: 'center' });
+    const srow = (no, name, code, c) => [no, name, code, ...[c.C, c.P, c.NC, c.NA, c.unanswered, c.total].map((v, i) => ({ text: String(v), font: i < 4 && v ? F.bold : F.text, color: i < 4 && v ? STATUS[i].color : INK })), gradeCell(c.grade)];
     const srows = sum.stations.map(s => srow(String(s.index + 1), upper(s.name), s.code, s));
     if (sum.tournee.total || sum.tournee.values) srows.push(srow('—', 'Commun à la tournée (feuille tournée et points partagés)', '', sum.tournee));
-    srows.push([{ text: '', rowFill: t.light }, { text: 'Ensemble de la tournée', font: F.bold }, '', ...[g.C, g.P, g.NC, g.NA, g.unanswered, g.total].map(v => ({ text: String(v), font: F.bold }))]);
+    srows.push([{ text: '', rowFill: t.light }, { text: 'Ensemble de la tournée', font: F.bold }, '', ...[g.C, g.P, g.NC, g.NA, g.unanswered, g.total].map(v => ({ text: String(v), font: F.bold })), gradeCell(g.grade)]);
     await this.simpleTable(sc, srows, t);
     // Par feuille.
-    await this.heading('Décomptes et conclusions par feuille', t, 'clipboard');
-    const sheets = sheetSummary({ audit: a, grid: m.grid, ctx: m.ctx });
+    await this.heading('Décomptes, notes et conclusions par feuille', t, 'clipboard');
+    const sheets = m.summary?.sheets || sheetSummary({ audit: a, grid: m.grid, ctx: m.ctx });
     const fc = [{ label: 'Feuille', w: 50, align: 'center' }, { label: 'Station', w: 92 }, { label: 'Intitulé', w: W2 * 0.27 }];
-    const fr = (W2 - fc.reduce((s, c) => s + c.w, 0) - 120) / 5;
+    const fr = (W2 - fc.reduce((s, c) => s + c.w, 0) - 120 - 56) / 5;
     for (const l of ['C', 'P', 'NC', 'N/A', 'Non rens.']) fc.push({ label: l, w: fr, align: 'center' });
+    fc.push({ label: 'Note /20', w: 56, align: 'center' });
     fc.push({ label: 'Conclusion du contrôleur', w: 120, align: 'center' });
     const frows = sheets.map(s => [`${s.index} / ${s.sheetTotal}`, s.station ? upper(s.station.name) : 'Tournée', s.title + (s.sharedTotal ? ` (dont ${s.sharedTotal} point(s) commun(s))` : ''),
-      ...[s.C, s.P, s.NC, s.NA, s.unanswered].map((v, i) => ({ text: String(v), font: i < 4 && v ? F.bold : F.text, color: i < 4 && v ? STATUS[i].color : INK })),
+      ...[s.C, s.P, s.NC, s.NA, s.unanswered].map((v, i) => ({ text: String(v), font: i < 4 && v ? F.bold : F.text, color: i < 4 && v ? STATUS[i].color : INK })), gradeCell(s.grade),
       s.conclusion ? { text: s.conclusionLabel, pill: conclColor(s.conclusion, t) } : { text: s.hint ? '— (' + s.hint + ')' : '—', color: MUTED, font: F.italic }]);
     await this.simpleTable(fc, frows, t);
     // Points non conformes et perfectibles.
@@ -1886,6 +2008,8 @@ export async function generateBlankSheetsPdf({ auditType = '', siteId = null, si
   const want = normalizeParts(grid, parts);
   const type = want && !(auditType && want.includes(auditType)) ? want[0] : typeKey(grid, auditType, sites[0]);
   const model = blankSheetsModel({ grid, sites, auditType: type, compartments, provider: plannedProvider(sites, type, grid), mode: 'blank', parts: want });
+  // Seuils actuels de la note sur 20 (rappelés dans les grilles de notation à remplir).
+  model.gradeThresholds = gradeThresholds(store.get('setting', 'org'));
   const { bytes, pages } = await buildSheetsPdf(model, { title: `Fiches vierges de contrôle terrain – ${sites.map(s => s.name).join(', ')}` });
   const names = sites.slice(0, 3).map(s => fileToken(s.name || s.code)).join('-') + (sites.length > 3 ? `-et-${sites.length - 3}-autres` : '');
   return { bytes, filename: `Fiches_vierges_${model.mixed ? want.join('-') : type}_${names}.pdf`, pages, provisional: false };

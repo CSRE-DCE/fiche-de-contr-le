@@ -64,7 +64,10 @@ export function baseReferential() {
   const setting = [{
     id: 'org', orgName: 'Office de l’Eau de Guyane', gpsThresholdM: 100, autoLockMinutes: 30, transportMaxHours: 24, dateToleranceDays: 0,
     sampleIdPattern: '{AUDIT}-E{NN}', tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', tileAttribution: '© contributeurs OpenStreetMap', maxPreloadZoom: 14,
-    reportFooter: 'Document généré par la PWA d’audit des prestations de prélèvement — enregistrement qualité.'
+    reportFooter: 'Document généré par la PWA d’audit des prestations de prélèvement — enregistrement qualité.',
+    // Seuils d'appréciation de la note sur 20 (js/domain/grading.js) : ≥ gradeGood « Satisfaisant », ≥ gradeFair
+    // « À améliorer », sinon « Insuffisant » ; modifiables en Administration, figés dans chaque tournée signée.
+    gradeGood: 16, gradeFair: 12
   }];
   // Réseaux de surveillance (codes enregistrés sur les stations et les campagnes) : contenu déterministe.
   const network = defaultNetworks();

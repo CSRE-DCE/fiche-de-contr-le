@@ -78,6 +78,7 @@ const SHELL = [
   './js/domain/coords.js',
   './js/domain/default-grids.js',
   './js/domain/exchange.js',
+  './js/domain/grading.js',
   './js/domain/grid-ct-2026.js',
   './js/domain/grids.js',
   './js/domain/links.js',

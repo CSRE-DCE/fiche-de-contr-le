@@ -85,7 +85,8 @@ test('CT-2026 : critères (identifiants, codes, échelle C / P / NC / N/A, nombr
   eq(new Set(items.map(i => i.id)).size, items.length, 'identifiants uniques');
   eq(new Set(items.map(i => i.code)).size, items.length, 'codes uniques');
   assert(items.every(i => i.id === `it-F${i.sheet}-${i.no}` && i.code === `F${i.sheet}.${i.no}`), 'id = it-F<feuille>-<no>, code = F<feuille>.<no>');
-  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 30, 13, 14, 17, 13]);
+  // 1.2 : F8.A3 réuni à F8.A2 (16 critères en F8, numéro A3 retiré)
+  deepEq([1, 2, 3, 10, 4, 5, 6, 7, 8, 9].map(no => itemsOfSheet(G, no).length), [8, 47, 33, 7, 31, 30, 13, 14, 16, 13]);
   deepEq(G.sections.filter(s => s.sheet === 2).map(s => s.items.length), [13, 8, 5, 6, 8, 4, 3]);
   const conf = items.filter(i => i.kind === 'conformity');
   assert(conf.every(i => i.responses.join() === 'C,P,NC,NA' && i.justifyOn.join() === 'P,NC'), 'échelle C / P / NC / N/A partout, observation pour P et NC');
@@ -110,7 +111,7 @@ test('CT-2026 : critères (identifiants, codes, échelle C / P / NC / N/A, nombr
   eq(item('it-F4-29').input.unit, 'mV'); eq(item('it-F5-28').domain, 'transport'); eq(item('it-F2-7.3').domain, 'transport');
   // Les numéros des maquettes restent corrigés
   eq(item('it-F3-17').short, 'REP_ME'); eq(item('it-F4-17').label, 'Rinçage des flacons'); eq(item('it-F9-13').short, 'A13');
-  deepEq(itemsOfSheet(G, 8).map(i => i.short), ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7']);
+  deepEq(itemsOfSheet(G, 8).map(i => i.short), ['A1', 'A2', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7']);
 });
 
 /* ---------- Feuilles par type de tournée ---------- */
@@ -128,7 +129,7 @@ test('feuilles affichées par type de tournée et numéro « Feuille X / N »', 
   deepEq(nos(sheetsOf(G, {}, { compartments: ['organisation', 'eso'] })), [1, 2, 3, 10, 4, 5], 'type déduit des compartiments');
   // Nombre de critères visibles par type
   const counts = sheets => sheets.map(s => s.items.length);
-  deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 17, 13]);
+  deepEq(counts(bio), [8, 47, 27, 28, 29, 13, 14, 16, 13]);
   deepEq(counts(ce), [8, 47, 23, 28, 29]);
   deepEq(counts(eso), [7, 46, 25, 6, 30, 25], 'F4.11 masqué en eaux souterraines (couvert par F4.30)');
   // Variantes (titres, onglets, appareils) et encadrés selon le type
@@ -416,7 +417,8 @@ test('synthèse : décomptes C / P / NC / N/A par feuille, par station et pour l
   deepEq(sum.pItems.map(x => [x.itemId, x.stationKey]), [['it-F2-6.2', null], ['it-F4-5@09160201', '09160201']]);
   deepEq(sum.ncItems.map(x => x.code), ['F4.2', 'F3.19·S2']);
   eq(sum.preconisations, 'Vérifier le pont amont'); eq(sum.comment, 'Bonne tournée');
-  assert(!('score' in sum), 'synthèse sans score');
+  assert(!('score' in sum), 'note sur 20 dans « grade » (js/domain/grading.js), jamais « score »');
+  eq(sum.grade.text, sum.stations.global.grade.text, 'note de la tournée = note « ensemble de la tournée »');
   assert(sum.vigilance.some(v => /perfectible/.test(v)), 'P en vigilance');
   eq(sum.stations.stations.length, 2);
   eq(sheetSummary({ audit: { gridSnapshot: DEFAULT_GRIDS[1], responses: {} } }).length, 0, 'grille par sections');
@@ -754,7 +756,10 @@ test('doublons : numéros retirés jamais réutilisés, révision de la grille t
   const retired = m[1].trim() === 'aucun.' ? [] : [...after.matchAll(/^ \*   (F\d+\.[0-9A-Z.]+) → /gm)].map(x => x[1]);
   const codes = new Set(allItems(G).map(i => i.code));
   for (const c of retired) assert(!codes.has(c), `numéro retiré réutilisé : ${c}`);
-  deepEq(retired, [], 'version 1.2 : aucun critère retiré (fusions par recadrage, noScore ou portée « tournée »)');
+  // 1.2 : F8.A3 « Mailles utilisées » réuni à F8.A2 (fusion validée par l'OEG le 23/10/2026) ; les autres fusions par
+  // recadrage, noScore ou portée « tournée ».
+  deepEq(retired, ['F8.A3'], 'version 1.2 : numéros retirés');
+  assert(/^ \*   F8\.A3 → F8\.A2 \(1\.2\) : /m.test(head), 'critère qui reprend le numéro retiré et version');
   assert(new RegExp(`^ \\*   ${G.version.replace('.', '\\.')} : `, 'm').test(head), `révision ${G.version} décrite en tête du fichier (RÉVISIONS)`);
 });
 

@@ -126,7 +126,8 @@ function synthesisStep(audit, st, editable) {
   const tiles = [['Critères contrôlés', c.controlled, ''], ['Conformes', c.C, 'ok'], ['Non conformes', c.NC, 'nc'], ['Non applicables', c.NA, 'na'], ['Non observés', c.NO, 'no'], ['Non vérifiables', c.NV, 'nv'], ['Écarts', s.deviationsCount, 'nc'], ['Échantillons', s.samples, ''], ['Équipements', s.equipment, '']];
   const max = Math.max(1, ...s.byCriticality.map(x => x.count));
   const dis = editable ? '' : raw('disabled');
-  return html`<div class="card"><h2>Synthèse factuelle <span class="badge outline">sans score global</span></h2>
+  // Grille historique (par sections) : décomptes seulement ; la note sur 20 concerne les tournées en feuilles (CT-2026).
+  return html`<div class="card"><h2>Synthèse factuelle <span class="badge outline" title="La note sur 20 concerne les tournées de la grille CT-2026 (fiches en feuilles)">grille historique : sans note sur 20</span></h2>
       <div class="kpis">${tiles.map(([k, v, cls]) => html`<div class="kpi"><span class="k">${k}</span><span class="v" style="${cls ? `color:var(--${cls})` : ''}">${v}</span></div>`)}</div>
       <h3>Écarts par niveau de criticité</h3>
       <div class="bars">${s.byCriticality.map(b => html`<div class="bar-row"><span class="bl">${b.label}</span><span class="bt"><span style="width:${b.count / max * 100}%;background:${b.color || 'var(--sky)'}"></span></span><span class="bn">${b.count}</span></div>`)}</div>

@@ -103,7 +103,8 @@ import { html, raw } from '../js/core/util.js';
 import { THEMES, OEG } from '../js/ui/themes.js';
 import { icon, ICON_NAMES } from '../js/ui/icons.js';
 import { oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, guyaneInset, sheetFooter, sheetFrame, dotLines,
-  STATUS_SCALE, statusHeadCells, statusLegend, sharedBadge, tourStations } from '../js/ui/sheet-chrome.js';
+  STATUS_SCALE, statusHeadCells, statusLegend, sharedBadge, tourStations, majorBadge, gradeBox, gradePill } from '../js/ui/sheet-chrome.js';
+import { gradeOf } from '../js/domain/grading.js';
 import { NETWORK_DEFAULTS, networkColors } from '../js/domain/networks.js';
 
 /* ---------- Données d'exemple ---------- */
@@ -487,6 +488,18 @@ root.innerHTML = String(html`
       <div class="card"><h2>Cases (checkSquare)</h2><div class="row">${checkSquare({})}${checkSquare({ checked: true })}${checkSquare({ checked: true, cls: 'ok' })}${checkSquare({ checked: true, cls: 'p' })}${checkSquare({ checked: true, cls: 'nc' })}${checkSquare({ checked: true, cls: 'na' })}${checkSquare({ cls: 'lg' })}${checkSquare({ checked: true, cls: 'lg' })}</div>
         <div class="row" style="margin-top:10px">${checkSquare({ label: 'Satisfaisant', cls: 'ok' })}${checkSquare({ label: 'Perfectible', cls: 'p', checked: true })}${checkSquare({ label: 'Non satisfaisant', cls: 'nc' })}${checkSquare({ label: 'Non applicable', cls: 'na' })}</div>
         <h3>Légende (statusLegend)</h3>${statusLegend()}</div>
+      <div class="card" id="notation" style="grid-column:1/-1"><h2>Note sur 20 : badge, pastilles, grille de notation</h2>
+        <p>Point majeur (compte double) : <b>Prélèvement après purge</b> ${majorBadge()} — critère commun : <b>Calibration des sondes</b> ${sharedBadge()}${majorBadge()}</p>
+        <h3>Pastilles de note (gradePill) — colonnes « Note /20 »</h3>
+        <div class="row">${[{ got2: 36, max2: 40 }, { got2: 29, max2: 40 }, { got2: 18, max2: 40 }, {}].map(t => gradePill(gradeOf(t), { label: true }))}</div>
+        <h3>Encadré « Grille de notation » (gradeBox) — pied de feuille, synthèse</h3>
+        <div class="cg-stack">
+          ${gradeBox({ grade: gradeOf({ C: 12, P: 3, NC: 1, NA: 2, total: 19, evaluated: 16, majors: 4, excluded: 1, got2: 31, max2: 40, unanswered: 1 }), state: 'provisoire', theme: 'peach' })}
+          ${gradeBox({ grade: gradeOf({ C: 15, P: 1, NC: 0, NA: 3, total: 19, evaluated: 16, majors: 3, got2: 37, max2: 38 }), state: 'figee', theme: 'navy', title: 'Grille de notation de la tournée' })}
+          ${gradeBox({ grade: gradeOf({ C: 4, P: 2, NC: 5, total: 11, evaluated: 11, majors: 2, got2: 10, max2: 26 }), theme: 'slate' })}
+          ${gradeBox({ grade: gradeOf({ NA: 6, total: 6 }), theme: 'green' })}
+        </div>
+        <p class="cg-note">Couleur de l’appréciation : vert « Satisfaisant », orange foncé « À améliorer », rouge « Insuffisant », gris « non noté » (js/domain/grading.js : C = 1, P = 0,5, NC = 0, N/A non compté, point majeur ×2, point de synthèse hors note).</p></div>
       <div class="card"><h2>Silhouette de la Guyane (guyaneInset)</h2><div class="row">${guyaneInset(SITE, { size: 60 })}${guyaneInset(SITE, { size: 90, label: 'ATHANASE' })}${guyaneInset(SITE_ESO, { size: 90, theme: 'slate', label: 'Maripasoula' })}${guyaneInset(SITE, { size: 90, theme: 'violet' })}</div></div>
     </div>
   </section>

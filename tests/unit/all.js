@@ -7,6 +7,7 @@ export const FILES = [
   './domain.test.js',
   './formats.test.js',
   './grid-ct-2026.test.js',
+  './grading.test.js',
   './links.test.js',
   './networks.test.js',
   './pdf-sheets.test.js',

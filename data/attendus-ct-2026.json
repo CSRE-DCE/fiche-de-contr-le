@@ -1,5 +1,5 @@
 {
-  "version": "1.1",
+  "version": "1.2",
   "grid": "grid-ct-2026-v1",
   "updated": "2026-10-23",
   "titre": "Attendus des prestataires – contrôle terrain 2026",
@@ -24,6 +24,7 @@
     "NC": "L’exigence n’est pas respectée, ou l’écart peut affecter la représentativité ou l’intégrité de l’échantillon, la traçabilité des données ou la sécurité des personnes. Observation obligatoire ; une photo en preuve est recommandée.",
     "NA": "Le point est sans objet pour cette station, ce type de prélèvement ou cette tournée (pas de navigation, pas d’analyse de métaux dissous…). À justifier en observation. Un point qui n’a pas pu être observé est signalé comme tel en observation et n’est jamais coté C par défaut."
   },
+  "notation": "Chaque feuille, chaque station et la tournée reçoivent une note sur 20 : C = 1 point, P = 0,5 point, NC = 0 point ; les points N/A et les points non renseignés ne sont pas comptés. Les points majeurs (mention « Point majeur ») comptent double ; les points de synthèse sont cotés mais hors note. Note = points obtenus ÷ points évalués × 20, au dixième. Appréciation selon les seuils fixés par l’OEG (par défaut : 16 et plus « Satisfaisant », de 12 à moins de 16 « À améliorer », moins de 12 « Insuffisant »). Un point commun à la tournée, ou une opération mutualisée d’une station contrôlée pour la biologie et la chimie, n’est compté qu’une fois dans la note de la tournée.",
   "preparation": {
     "commun": [
       {
@@ -1017,6 +1018,7 @@
         "eso"
       ],
       "tournee": true,
+      "majeur": true,
       "attendu": "Pendant les prélèvements, l’équipe porte les EPI de sécurité adaptés au contexte : gilet de sauvetage sur une berge à risque, depuis un pont, dans un gué ou en eau profonde ; waders et chaussures adaptés. Les gants d’hygiène sont jugés en F5.2, la sécurité de chaque opération en F5.22 et la manipulation des réactifs et des produits de conservation avec ces produits (F4.13, F6.9, F7.10).",
       "verification": "Observation pendant les opérations sur chaque station ; le jugement porte sur toute la tournée.",
       "C": "EPI adaptés portés à chaque opération.",
@@ -1346,11 +1348,11 @@
         "eso"
       ],
       "tournee": true,
-      "attendu": "Les échantillons sont déposés au laboratoire ou remis au transporteur le jour même du prélèvement, en respectant le délai de prise en charge fixé par le CCTP et le laboratoire et en maintenant la chaîne du froid.",
-      "verification": "Le contrôleur demande l’organisation prévue (lieu, heure, transporteur) et, si possible, constate le dépôt ou l’expédition.",
-      "C": "Dépôt ou expédition le jour même, organisé et confirmé.",
-      "P": "Dépôt le jour même mais organisation fragile (heure limite tout juste respectée).",
-      "NC": "Échantillons gardés jusqu’au lendemain sans justification, ou délai du laboratoire dépassé.",
+      "attendu": "Les échantillons sont déposés au laboratoire ou remis au transporteur dans le délai de prise en charge fixé par le CCTP et le laboratoire, en maintenant la chaîne du froid. Le dépôt ou l’expédition le jour même est recommandé, mais il n’est pas toujours réalisable dans le contexte guyanais (distances, liaisons aériennes ou fluviales, horaires du laboratoire) : un dépôt plus tardif, dans un délai compatible avec les analyses et avec une conservation maîtrisée jusqu’au dépôt (stockage intermédiaire : F5.17, F5.18), n’est pas une non-conformité pour ce seul motif.",
+      "verification": "Le contrôleur demande l’organisation prévue (lieu, heure, transporteur, délai jusqu’à la prise en charge par le laboratoire) et, si possible, constate le dépôt ou l’expédition ; si le dépôt n’a pas lieu le jour même, il vérifie le délai prévu et les conditions de conservation jusqu’au dépôt.",
+      "C": "Dépôt ou expédition le jour même, organisé et confirmé ; ou dépôt plus tardif imposé par les contraintes du terrain, dans un délai compatible avec les analyses et avec une conservation maîtrisée.",
+      "P": "Dépôt plus tardif, dans un délai compatible avec les analyses et avec une conservation maîtrisée, alors que l’organisation peut s’améliorer (attente évitable, heure limite tout juste respectée).",
+      "NC": "Délai de prise en charge du laboratoire dépassé, ou conservation non maîtrisée jusqu’au dépôt (chaîne du froid rompue, stockage intermédiaire non prévu).",
       "refs": [
         "NF EN ISO 5667-3",
         "CCTP du marché",
@@ -1697,6 +1699,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le prélèvement est réalisé sur la station prévue (cours d’eau) ou sur le point d’eau prévu au bordereau (eaux souterraines), et non sur un point voisin.",
       "verification": "Le contrôleur compare le lieu de prélèvement avec la fiche station, le bordereau et les coordonnées théoriques.",
       "C": "Lieu conforme.",
@@ -2006,6 +2009,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Si la pompe est alimentée par le véhicule ou par un groupe électrogène, le préleveur éloigne la source de gaz d’échappement de l’ouvrage et des flacons et la place de façon que les gaz ne soient pas rabattus vers le point de prélèvement (sous le vent).",
       "verification": "Point affiché seulement si la pompe est branchée sur le véhicule ou sur un groupe électrogène (F10.3). Le contrôleur observe la position du véhicule ou du groupe.",
       "C": "Source éloignée et placée sous le vent.",
@@ -2025,6 +2029,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Avant de prélever, le préleveur purge l’ouvrage ou les canalisations selon le protocole du marché. Il note la durée et le type de purge. Pour un piézomètre, il calcule le volume d’eau de l’ouvrage (π × r² × hauteur d’eau) et le débit de pompage pour connaître le volume renouvelé. S’il ne purge pas, il en donne la raison.",
       "verification": "Le contrôleur relève si la purge est réalisée, sa durée, son type, les calculs faits, ou la raison de l’absence de purge.",
       "C": "Purge réalisée et documentée conformément au protocole.",
@@ -2046,6 +2051,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "La technique de purge est adaptée à la configuration du point d’eau : robinet laissé en écoulement continu (tuyau fixe, ou tuyau adapté par le préleveur), pompe en fonctionnement continu à débit connu, pompe placée à la position prévue dans la colonne d’eau (milieu, tiers inférieur…).",
       "verification": "Le contrôleur relève les modalités observées dans les champs de la valeur.",
       "C": "Technique adaptée.",
@@ -2107,6 +2113,7 @@
         "eso"
       ],
       "tournee": true,
+      "majeur": true,
       "attendu": "Chaque appareil (pH, oxygène, conductivité, turbidité ; potentiel redox pour les eaux souterraines) est étalonné selon la procédure du fabricant et la fréquence fixée par le protocole du marché, avec des solutions étalons valides, puis vérifié en début et en fin de journée. Les résultats sont tracés.",
       "verification": "Le contrôleur renseigne le module « Appareils de mesure » (dernière calibration, étalonnage hebdomadaire, étalons utilisés, vérifications du matin et du soir) et demande la procédure appliquée. L’application signale une dernière calibration de plus de 30 jours (seuil d’alerte de la grille). Commun à la tournée : jugé une seule fois pour toute la tournée.",
       "C": "Étalonnages et vérifications réalisés, tracés et dans les délais du protocole.",
@@ -2322,6 +2329,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le flaconnage utilisé correspond au programme analytique de la station : nombre et types de flacons (matériau, volume, conservateur) fournis ou prescrits par le laboratoire.",
       "verification": "Le contrôleur compare les flacons préparés au descriptif du laboratoire ou au programme analytique.",
       "C": "Flaconnage complet et conforme.",
@@ -2343,6 +2351,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Les flacons qui doivent contenir un réactif ou un conservateur le contiennent (fourni par le laboratoire ou ajouté sur place selon ses consignes). Ces flacons ne sont pas rincés et sont remplis sans débordement, jusqu’au niveau indiqué, pour ne pas perdre le réactif. Seul ce point juge les flacons avec réactif (rinçage des autres flacons : F4.17).",
       "verification": "Le contrôleur observe le remplissage des flacons avec réactif et l’éventuel ajout sur place (gants, dosage).",
       "C": "Réactif présent ; flacons remplis sans rinçage ni débordement.",
@@ -2698,6 +2707,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Avant de prélever, le préleveur vérifie que les paramètres sont stabilisés : plusieurs mesures successives à intervalle régulier, selon le critère du protocole. Il note le nombre de mesures, l’intervalle et le délai avant la première mesure.",
       "verification": "Le contrôleur relève si la vérification est faite, avec le nombre de mesures, l’intervalle et le délai, ou la raison de l’absence de vérification.",
       "C": "Stabilité vérifiée et notée.",
@@ -2850,6 +2860,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le préleveur identifie les sources possibles de contamination sur le site et pendant ses opérations : gaz d’échappement (moteur, groupe), carburant, crème solaire, répulsif anti-insectes, tabac, matériel sale, poussière, ruissellement d’un pont ou d’une route, sédiments remis en suspension, objets métalliques pour les métaux.",
       "verification": "Le contrôleur demande au préleveur quelles sources il a identifiées et les compare à ses propres constats. Les moyens d’évitement sont jugés en F5.8.",
       "C": "Sources identifiées.",
@@ -2977,6 +2988,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Les échantillons sont conservés au froid, à 5 ± 3 °C, du prélèvement jusqu’au laboratoire (NF EN ISO 5667-3).",
       "verification": "Le contrôleur relève la température des échantillons de la station (thermomètre, enregistreur ou flacon témoin) et la saisit ; l’application signale une température hors de la plage 2–8 °C. Le mode de réfrigération et les glacières sont jugés en F5.14 et F5.11 (communs à la tournée).",
       "C": "Température dans la plage.",
@@ -3142,6 +3154,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Les flacons sont remplis doucement, sans barbotage ni bulles, jusqu’au niveau demandé par le laboratoire (à ras bord et sans bulle d’air pour les flacons qui l’exigent), puis bouchés aussitôt. Les flacons avec réactif sont jugés en F4.13.",
       "verification": "Le contrôleur observe le remplissage ; une photo du remplissage peut servir de preuve.",
       "C": "Remplissage conforme.",
@@ -3201,6 +3214,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le prélèvement est réalisé après la purge ou le renouvellement de l’eau prévu (F10.5), sans interruption de l’écoulement. La durée de renouvellement avant le prélèvement est notée.",
       "verification": "Le contrôleur saisit la durée de renouvellement en minutes.",
       "C": "Prélèvement après renouvellement, durée notée.",
@@ -3244,6 +3258,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Si des métaux dissous sont analysés, l’eau est filtrée sur place selon les consignes du laboratoire : kit de filtration (seringue et filtre) propre et rincé avec l’eau à prélever, seringue remplie sans intermédiaire, filtre neuf pour chaque échantillon.",
       "verification": "Le contrôleur observe la filtration et coche « Rinçage du kit » et « Seringue remplie sans intermédiaire ».",
       "C": "Filtration conforme.",
@@ -3267,6 +3282,7 @@
         "eso"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Chaque flacon porte une étiquette lisible et résistante à l’eau, sur le corps du flacon, avec au minimum le code de la station (code BSS pour les eaux souterraines), la date et l’heure du prélèvement.",
       "verification": "Le contrôleur vérifie les étiquettes des flacons de la station.",
       "C": "Étiquetage complet et lisible.",
@@ -3417,6 +3433,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le nombre de prélèvements au Surber est celui fixé par le protocole PEZADA pour la station.",
       "verification": "Le contrôleur compte les prélèvements réalisés (« Valeur / réponse »).",
       "C": "Nombre conforme au protocole.",
@@ -3525,6 +3542,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le prélèvement suit le protocole PEZADA en vigueur (choix des placettes, technique de prélèvement au Surber, traitement de l’échantillon sur place).",
       "verification": "Synthèse du contrôleur sur l’ensemble des opérations observées.",
       "C": "Protocole respecté.",
@@ -3543,6 +3561,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Chaque récipient porte une identification lisible et durable (station, date, n° de prélèvement), résistante au produit de conservation, par exemple une étiquette intérieure et une étiquette extérieure. La correspondance avec la fiche terrain est jugée en F6.10.",
       "verification": "Le contrôleur vérifie l’étiquetage des récipients.",
       "C": "Identification complète et durable.",
@@ -3669,6 +3688,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le nombre de blocs ou de supports brossés est celui prévu par le protocole, répartis sur la station.",
       "verification": "Le contrôleur compte les blocs brossés (« Valeur / réponse »).",
       "C": "Nombre conforme.",
@@ -3780,6 +3800,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le prélèvement suit le protocole IDGF en vigueur et les principes de la norme NF EN 13946 (choix des substrats, brossage de la face supérieure, rinçage, récupération du prélèvement).",
       "verification": "Synthèse du contrôleur sur l’ensemble des opérations observées.",
       "C": "Protocole respecté.",
@@ -3848,40 +3869,22 @@
     "it-F8-A2": {
       "feuille": 8,
       "no": "A2",
-      "libelle": "Filets maillants / batteries",
+      "libelle": "Filets maillants / batteries et mailles utilisées",
       "section": "Ichtyologie",
       "types": [
         "bio"
       ],
       "tournee": false,
-      "attendu": "La batterie de filets maillants utilisée est celle prévue par le protocole (nombre, longueur, hauteur, mailles) et elle est complète.",
-      "verification": "Le contrôleur compare la batterie posée avec le protocole.",
-      "C": "Batterie conforme et complète.",
-      "P": "Batterie conforme avec un filet remplacé par un équivalent, noté.",
-      "NC": "Batterie incomplète ou différente du protocole sans justification.",
+      "majeur": true,
+      "attendu": "La batterie de filets maillants posée est celle prévue par le protocole (nombre, longueur, hauteur, mailles) et elle est complète ; les mailles utilisées correspondent au protocole et sont notées sur la fiche.",
+      "verification": "Le contrôleur compare la batterie posée et les mailles utilisées avec le protocole, et relève les mailles utilisées (« Valeur / réponse »).",
+      "C": "Batterie conforme et complète, mailles conformes et notées.",
+      "P": "Batterie conforme avec un filet remplacé par un équivalent, noté ; ou mailles conformes mais non notées.",
+      "NC": "Batterie incomplète ou différente du protocole sans justification, ou mailles différentes du protocole.",
       "refs": [
         "Protocole de pêche du marché"
       ],
-      "aPreciser": "Composition de la batterie de filets (nombre, dimensions) : à préciser par l’OEG d’après le protocole de pêche."
-    },
-    "it-F8-A3": {
-      "feuille": 8,
-      "no": "A3",
-      "libelle": "Mailles utilisées",
-      "section": "Ichtyologie",
-      "types": [
-        "bio"
-      ],
-      "tournee": false,
-      "attendu": "Les mailles utilisées correspondent à celles du protocole et sont notées sur la fiche.",
-      "verification": "Le contrôleur relève les mailles utilisées (« Valeur / réponse »).",
-      "C": "Mailles conformes et notées.",
-      "P": "Mailles conformes mais non notées.",
-      "NC": "Mailles différentes du protocole.",
-      "refs": [
-        "Protocole de pêche du marché"
-      ],
-      "aPreciser": "Mailles attendues : à préciser par l’OEG d’après le protocole de pêche."
+      "aPreciser": "Composition de la batterie de filets (nombre, dimensions) et mailles attendues : à préciser par l’OEG d’après le protocole de pêche."
     },
     "it-F8-A4": {
       "feuille": 8,
@@ -3910,6 +3913,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "L’heure de relève est notée ; la durée de pose respecte le protocole.",
       "verification": "Le contrôleur saisit l’heure de relève (« Valeur / réponse ») et calcule la durée de pose.",
       "C": "Durée de pose conforme et heures notées.",
@@ -4076,6 +4080,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Chaque individu ou échantillon est identifié (code station, date, espèce, n° d’individu) et relié à ses données biométriques jusqu’au laboratoire.",
       "verification": "Le contrôleur vérifie l’étiquetage et le lien avec la fiche biométrique.",
       "C": "Identification et traçabilité complètes.",
@@ -4094,6 +4099,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Les échantillons sont conservés selon le mode prévu par le protocole (réfrigération ou congélation), dans des emballages propres et fermés, sans risque de contamination ni de dégradation. Le froid de la glacière est jugé en F8.B6.",
       "verification": "Le contrôleur observe le mode de conservation.",
       "C": "Conservation conforme.",
@@ -4299,6 +4305,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le fixateur prévu (Lugol ou autre produit du protocole) est ajouté dans la proportion prescrite, aussitôt après le prélèvement. L’échantillon fixé est conservé à l’obscurité.",
       "verification": "Le contrôleur relève le produit utilisé (« Valeur / réponse ») et observe son ajout.",
       "C": "Fixation conforme.",
@@ -4352,6 +4359,7 @@
         "bio"
       ],
       "tournee": false,
+      "majeur": true,
       "attendu": "Le prélèvement suit le protocole phytoplancton du marché ; tout écart est noté.",
       "verification": "Le contrôleur indique « Oui », « Non » ou « Écart(s) » et décrit les écarts.",
       "C": "Protocole respecté.",

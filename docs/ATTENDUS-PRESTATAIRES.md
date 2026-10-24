@@ -2,13 +2,13 @@
 
 <!-- Document généré par tools/attendus_md.py depuis data/attendus-ct-2026.json : ne pas le modifier à la main. -->
 
-Version **1.1** du 23/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
+Version **1.2** du 23/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
 
 > Document de référence de l’Office de l’Eau de Guyane pour les contrôles terrain 2026, partagé entre les contrôleurs et les prestataires. Il indique, pour chaque point de contrôle des fiches, ce que le prestataire doit faire ou présenter, comment le contrôleur le vérifie et comment il choisit C, P, NC ou N/A. Il ne remplace ni le CCTP, ni les protocoles, ni les consignes du laboratoire, qui prévalent en cas de différence. Les mentions « à préciser » signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.
 
 ## Sommaire
 
-- [Échelle de cotation C / P / NC / N/A](#echelle)
+- [Échelle de cotation C / P / NC / N/A et note sur 20](#echelle)
 - [Liste de préparation de la tournée](#preparation)
 - [F1 — Fiche station de contrôle terrain](#f1) · 0 point coté · Hydrobiologie, Cours d’eau, Eaux souterraines
 - [F2 — Organisation, sécurité et déroulé de mission](#f2) · 34 points cotés · Hydrobiologie, Cours d’eau, Eaux souterraines
@@ -18,13 +18,13 @@ Version **1.1** du 23/10/2026 · grille `grid-ct-2026-v1` · source : `data/atte
 - [F5 — Physico-chimie – prélèvement, conditionnement et chaîne du froid](#f5) · 30 points cotés · Hydrobiologie, Cours d’eau, Eaux souterraines
 - [F6 — Invertébrés aquatiques – protocole PEZADA](#f6) · 13 points cotés · Hydrobiologie
 - [F7 — Diatomées – IDGF](#f7) · 14 points cotés · Hydrobiologie
-- [F8 — Ichtyologie et mercure dans le biote](#f8) · 17 points cotés · Hydrobiologie
+- [F8 — Ichtyologie et mercure dans le biote](#f8) · 16 points cotés · Hydrobiologie
 - [F9 — Phytoplancton d’eau douce](#f9) · 13 points cotés · Hydrobiologie
 - [Références citées](#references)
 
 <a id="echelle"></a>
 
-## Échelle de cotation C / P / NC / N/A
+## Échelle de cotation C / P / NC / N/A et note sur 20
 
 | Cote | Signification |
 |:----:|---|
@@ -34,6 +34,8 @@ Version **1.1** du 23/10/2026 · grille `grid-ct-2026-v1` · source : `data/atte
 | **N/A** | **Non applicable.** Le point est sans objet pour cette station, ce type de prélèvement ou cette tournée (pas de navigation, pas d’analyse de métaux dissous…). À justifier en observation. Un point qui n’a pas pu être observé est signalé comme tel en observation et n’est jamais coté C par défaut. |
 
 Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute la tournée (une réponse partagée par toutes les stations). Les mentions *À préciser* signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer.
+
+**Note sur 20.** Chaque feuille, chaque station et la tournée reçoivent une note sur 20 : C = 1 point, P = 0,5 point, NC = 0 point ; les points N/A et les points non renseignés ne sont pas comptés. Les points majeurs (mention « Point majeur ») comptent double ; les points de synthèse sont cotés mais hors note. Note = points obtenus ÷ points évalués × 20, au dixième. Appréciation selon les seuils fixés par l’OEG (par défaut : 16 et plus « Satisfaisant », de 12 à moins de 16 « À améliorer », moins de 12 « Insuffisant »). Un point commun à la tournée, ou une opération mutualisée d’une station contrôlée pour la biologie et la chimie, n’est compté qu’une fois dans la note de la tournée.
 
 <a id="preparation"></a>
 
@@ -380,6 +382,8 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.4.4 – Port des EPI prélèvements
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Pendant les prélèvements, l’équipe porte les EPI de sécurité adaptés au contexte : gilet de sauvetage sur une berge à risque, depuis un pont, dans un gué ou en eau profonde ; waders et chaussures adaptés. Les gants d’hygiène sont jugés en F5.2, la sécurité de chaque opération en F5.22 et la manipulation des réactifs et des produits de conservation avec ces produits (F4.13, F6.9, F7.10).
 - **Vérification :** Observation pendant les opérations sur chaque station ; le jugement porte sur toute la tournée.
 - **C** (conforme / satisfaisant) : EPI adaptés portés à chaque opération.
@@ -533,11 +537,11 @@ Organisation, logistique et sécurité de la tournée. Feuille renseignée une f
 
 #### F2.7.3 – Dépôt / expédition des échantillons le jour même
 
-- **Attendu :** Les échantillons sont déposés au laboratoire ou remis au transporteur le jour même du prélèvement, en respectant le délai de prise en charge fixé par le CCTP et le laboratoire et en maintenant la chaîne du froid.
-- **Vérification :** Le contrôleur demande l’organisation prévue (lieu, heure, transporteur) et, si possible, constate le dépôt ou l’expédition.
-- **C** (conforme / satisfaisant) : Dépôt ou expédition le jour même, organisé et confirmé.
-- **P** (perfectible) : Dépôt le jour même mais organisation fragile (heure limite tout juste respectée).
-- **NC** (non conforme) : Échantillons gardés jusqu’au lendemain sans justification, ou délai du laboratoire dépassé.
+- **Attendu :** Les échantillons sont déposés au laboratoire ou remis au transporteur dans le délai de prise en charge fixé par le CCTP et le laboratoire, en maintenant la chaîne du froid. Le dépôt ou l’expédition le jour même est recommandé, mais il n’est pas toujours réalisable dans le contexte guyanais (distances, liaisons aériennes ou fluviales, horaires du laboratoire) : un dépôt plus tardif, dans un délai compatible avec les analyses et avec une conservation maîtrisée jusqu’au dépôt (stockage intermédiaire : F5.17, F5.18), n’est pas une non-conformité pour ce seul motif.
+- **Vérification :** Le contrôleur demande l’organisation prévue (lieu, heure, transporteur, délai jusqu’à la prise en charge par le laboratoire) et, si possible, constate le dépôt ou l’expédition ; si le dépôt n’a pas lieu le jour même, il vérifie le délai prévu et les conditions de conservation jusqu’au dépôt.
+- **C** (conforme / satisfaisant) : Dépôt ou expédition le jour même, organisé et confirmé ; ou dépôt plus tardif imposé par les contraintes du terrain, dans un délai compatible avec les analyses et avec une conservation maîtrisée.
+- **P** (perfectible) : Dépôt plus tardif, dans un délai compatible avec les analyses et avec une conservation maîtrisée, alors que l’organisation peut s’améliorer (attente évitable, heure limite tout juste respectée).
+- **NC** (non conforme) : Délai de prise en charge du laboratoire dépassé, ou conservation non maîtrisée jusqu’au dépôt (chaîne du froid rompue, stockage intermédiaire non prévu).
 - **Références :** NF EN ISO 5667-3 · CCTP du marché · Consignes du laboratoire
 - **À préciser (OEG) :** Délai maximal entre prélèvement et prise en charge par le laboratoire, et cas admis de stockage intermédiaire (F5.17, F5.18) : à préciser par l’OEG d’après le CCTP et les consignes du laboratoire.
 
@@ -742,6 +746,8 @@ Station et site : informations de terrain relevées par le préleveur (identific
 
 #### F3.19 – Respect de la localisation prévue (station / bordereau)
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Le prélèvement est réalisé sur la station prévue (cours d’eau) ou sur le point d’eau prévu au bordereau (eaux souterraines), et non sur un point voisin.
 - **Vérification :** Le contrôleur compare le lieu de prélèvement avec la fiche station, le bordereau et les coordonnées théoriques.
 - **C** (conforme / satisfaisant) : Lieu conforme.
@@ -903,7 +909,7 @@ Eaux souterraines – ouvrage, pompage et purge (une fiche par point d’eau). L
 
 #### F10.4 – Vigilance vis-à-vis des gaz d’échappement (contamination)
 
-*Tournées : Eaux souterraines*
+*Point majeur (compte double dans la note) · Tournées : Eaux souterraines*
 
 - **Attendu :** Si la pompe est alimentée par le véhicule ou par un groupe électrogène, le préleveur éloigne la source de gaz d’échappement de l’ouvrage et des flacons et la place de façon que les gaz ne soient pas rabattus vers le point de prélèvement (sous le vent).
 - **Vérification :** Point affiché seulement si la pompe est branchée sur le véhicule ou sur un groupe électrogène (F10.3). Le contrôleur observe la position du véhicule ou du groupe.
@@ -916,7 +922,7 @@ Eaux souterraines – ouvrage, pompage et purge (une fiche par point d’eau). L
 
 #### F10.5 – Purge de l’ouvrage et/ou des canalisations
 
-*Tournées : Eaux souterraines*
+*Point majeur (compte double dans la note) · Tournées : Eaux souterraines*
 
 - **Attendu :** Avant de prélever, le préleveur purge l’ouvrage ou les canalisations selon le protocole du marché. Il note la durée et le type de purge. Pour un piézomètre, il calcule le volume d’eau de l’ouvrage (π × r² × hauteur d’eau) et le débit de pompage pour connaître le volume renouvelé. S’il ne purge pas, il en donne la raison.
 - **Vérification :** Le contrôleur relève si la purge est réalisée, sa durée, son type, les calculs faits, ou la raison de l’absence de purge.
@@ -929,7 +935,7 @@ Eaux souterraines – ouvrage, pompage et purge (une fiche par point d’eau). L
 
 #### F10.6 – Technique de purge adaptée à la configuration du point d’eau
 
-*Tournées : Eaux souterraines*
+*Point majeur (compte double dans la note) · Tournées : Eaux souterraines*
 
 - **Attendu :** La technique de purge est adaptée à la configuration du point d’eau : robinet laissé en écoulement continu (tuyau fixe, ou tuyau adapté par le préleveur), pompe en fonctionnement continu à débit connu, pompe placée à la position prévue dans la colonne d’eau (milieu, tiers inférieur…).
 - **Vérification :** Le contrôleur relève les modalités observées dans les champs de la valeur.
@@ -986,7 +992,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.2 – Calibration des sondes
 
-*Commun à la tournée*
+*Point majeur (compte double dans la note) · Commun à la tournée*
 
 - **Attendu :** Chaque appareil (pH, oxygène, conductivité, turbidité ; potentiel redox pour les eaux souterraines) est étalonné selon la procédure du fabricant et la fréquence fixée par le protocole du marché, avec des solutions étalons valides, puis vérifié en début et en fin de journée. Les résultats sont tracés.
 - **Vérification :** Le contrôleur renseigne le module « Appareils de mesure » (dernière calibration, étalonnage hebdomadaire, étalons utilisés, vérifications du matin et du soir) et demande la procédure appliquée. L’application signale une dernière calibration de plus de 30 jours (seuil d’alerte de la grille). Commun à la tournée : jugé une seule fois pour toute la tournée.
@@ -1088,6 +1094,8 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.12 – Flaconnage conforme
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Le flaconnage utilisé correspond au programme analytique de la station : nombre et types de flacons (matériau, volume, conservateur) fournis ou prescrits par le laboratoire.
 - **Vérification :** Le contrôleur compare les flacons préparés au descriptif du laboratoire ou au programme analytique.
 - **C** (conforme / satisfaisant) : Flaconnage complet et conforme.
@@ -1096,6 +1104,8 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 - **Références :** NF EN ISO 5667-3 · Consignes du laboratoire
 
 #### F4.13 – Présence ou ajout de réactif
+
+*Point majeur (compte double dans la note)*
 
 - **Attendu :** Les flacons qui doivent contenir un réactif ou un conservateur le contiennent (fourni par le laboratoire ou ajouté sur place selon ses consignes). Ces flacons ne sont pas rincés et sont remplis sans débordement, jusqu’au niveau indiqué, pour ne pas perdre le réactif. Seul ce point juge les flacons avec réactif (rinçage des autres flacons : F4.17).
 - **Vérification :** Le contrôleur observe le remplissage des flacons avec réactif et l’éventuel ajout sur place (gants, dosage).
@@ -1284,7 +1294,7 @@ Physico-chimie : mesures in situ, étalonnage des sondes et flaconnage. Les poin
 
 #### F4.31 – Vérification de la stabilité des paramètres
 
-*Tournées : Eaux souterraines*
+*Point majeur (compte double dans la note) · Tournées : Eaux souterraines*
 
 - **Attendu :** Avant de prélever, le préleveur vérifie que les paramètres sont stabilisés : plusieurs mesures successives à intervalle régulier, selon le critère du protocole. Il note le nombre de mesures, l’intervalle et le délai avant la première mesure.
 - **Vérification :** Le contrôleur relève si la vérification est faite, avec le nombre de mesures, l’intervalle et le délai, ou la raison de l’absence de vérification.
@@ -1382,6 +1392,8 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.7 – Sources de contamination
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Le préleveur identifie les sources possibles de contamination sur le site et pendant ses opérations : gaz d’échappement (moteur, groupe), carburant, crème solaire, répulsif anti-insectes, tabac, matériel sale, poussière, ruissellement d’un pont ou d’une route, sédiments remis en suspension, objets métalliques pour les métaux.
 - **Vérification :** Le contrôleur demande au préleveur quelles sources il a identifiées et les compare à ses propres constats. Les moyens d’évitement sont jugés en F5.8.
 - **C** (conforme / satisfaisant) : Sources identifiées.
@@ -1442,6 +1454,8 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 - **Références :** NF EN ISO 5667-3
 
 #### F5.13 – Température de conservation
+
+*Point majeur (compte double dans la note)*
 
 - **Attendu :** Les échantillons sont conservés au froid, à 5 ± 3 °C, du prélèvement jusqu’au laboratoire (NF EN ISO 5667-3).
 - **Vérification :** Le contrôleur relève la température des échantillons de la station (thermomètre, enregistreur ou flacon témoin) et la saisit ; l’application signale une température hors de la plage 2–8 °C. Le mode de réfrigération et les glacières sont jugés en F5.14 et F5.11 (communs à la tournée).
@@ -1532,6 +1546,8 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.21 – Remplissage des flacons (barbotage…)
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Les flacons sont remplis doucement, sans barbotage ni bulles, jusqu’au niveau demandé par le laboratoire (à ras bord et sans bulle d’air pour les flacons qui l’exigent), puis bouchés aussitôt. Les flacons avec réactif sont jugés en F4.13.
 - **Vérification :** Le contrôleur observe le remplissage ; une photo du remplissage peut servir de preuve.
 - **C** (conforme / satisfaisant) : Remplissage conforme.
@@ -1559,7 +1575,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.24 – Prélèvement après purge ou renouvellement de l’eau
 
-*Tournées : Eaux souterraines*
+*Point majeur (compte double dans la note) · Tournées : Eaux souterraines*
 
 - **Attendu :** Le prélèvement est réalisé après la purge ou le renouvellement de l’eau prévu (F10.5), sans interruption de l’écoulement. La durée de renouvellement avant le prélèvement est notée.
 - **Vérification :** Le contrôleur saisit la durée de renouvellement en minutes.
@@ -1580,6 +1596,8 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 #### F5.26 – Filtration pour les analyses de métaux
 
+*Point majeur (compte double dans la note)*
+
 - **Attendu :** Si des métaux dissous sont analysés, l’eau est filtrée sur place selon les consignes du laboratoire : kit de filtration (seringue et filtre) propre et rincé avec l’eau à prélever, seringue remplie sans intermédiaire, filtre neuf pour chaque échantillon.
 - **Vérification :** Le contrôleur observe la filtration et coche « Rinçage du kit » et « Seringue remplie sans intermédiaire ».
 - **C** (conforme / satisfaisant) : Filtration conforme.
@@ -1592,6 +1610,8 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 ### Identification et transmission des échantillons
 
 #### F5.27 – Étiquetage suffisant des échantillons (à minima code station / BSS, date, heure)
+
+*Point majeur (compte double dans la note)*
 
 - **Attendu :** Chaque flacon porte une étiquette lisible et résistante à l’eau, sur le corps du flacon, avec au minimum le code de la station (code BSS pour les eaux souterraines), la date et l’heure du prélèvement.
 - **Vérification :** Le contrôleur vérifie les étiquettes des flacons de la station.
@@ -1695,7 +1715,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 #### F6.5 – Nombre de prélèvements Surber
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le nombre de prélèvements au Surber est celui fixé par le protocole PEZADA pour la station.
 - **Vérification :** Le contrôleur compte les prélèvements réalisés (« Valeur / réponse »).
@@ -1763,7 +1783,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 #### F6.11 – Respect des normes de prélèvement
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le prélèvement suit le protocole PEZADA en vigueur (choix des placettes, technique de prélèvement au Surber, traitement de l’échantillon sur place).
 - **Vérification :** Synthèse du contrôleur sur l’ensemble des opérations observées.
@@ -1774,7 +1794,7 @@ Invertébrés aquatiques – protocole PEZADA. Le contrôleur vérifie que le pr
 
 #### F6.12 – Échantillons correctement identifiés
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Chaque récipient porte une identification lisible et durable (station, date, n° de prélèvement), résistante au produit de conservation, par exemple une étiquette intérieure et une étiquette extérieure. La correspondance avec la fiche terrain est jugée en F6.10.
 - **Vérification :** Le contrôleur vérifie l’étiquetage des récipients.
@@ -1868,7 +1888,7 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 
 #### F7.6 – Nombre de blocs échantillonnés
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le nombre de blocs ou de supports brossés est celui prévu par le protocole, répartis sur la station.
 - **Vérification :** Le contrôleur compte les blocs brossés (« Valeur / réponse »).
@@ -1937,7 +1957,7 @@ Diatomées – IDGF. Le contrôleur vérifie que l’échantillonnage des diatom
 
 #### F7.12 – Respect des normes de prélèvement
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le prélèvement suit le protocole IDGF en vigueur et les principes de la norme NF EN 13946 (choix des substrats, brossage de la face supérieure, rinçage, récupération du prélèvement).
 - **Vérification :** Synthèse du contrôleur sur l’ensemble des opérations observées.
@@ -1998,29 +2018,17 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 - **Références :** CCTP du marché
 - **À préciser (OEG) :** Qualification exigée des agents (formation, expérience en identification) : à préciser par l’OEG d’après le CCTP.
 
-#### F8.A2 – Filets maillants / batteries
+#### F8.A2 – Filets maillants / batteries et mailles utilisées
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
-- **Attendu :** La batterie de filets maillants utilisée est celle prévue par le protocole (nombre, longueur, hauteur, mailles) et elle est complète.
-- **Vérification :** Le contrôleur compare la batterie posée avec le protocole.
-- **C** (conforme / satisfaisant) : Batterie conforme et complète.
-- **P** (perfectible) : Batterie conforme avec un filet remplacé par un équivalent, noté.
-- **NC** (non conforme) : Batterie incomplète ou différente du protocole sans justification.
+- **Attendu :** La batterie de filets maillants posée est celle prévue par le protocole (nombre, longueur, hauteur, mailles) et elle est complète ; les mailles utilisées correspondent au protocole et sont notées sur la fiche.
+- **Vérification :** Le contrôleur compare la batterie posée et les mailles utilisées avec le protocole, et relève les mailles utilisées (« Valeur / réponse »).
+- **C** (conforme / satisfaisant) : Batterie conforme et complète, mailles conformes et notées.
+- **P** (perfectible) : Batterie conforme avec un filet remplacé par un équivalent, noté ; ou mailles conformes mais non notées.
+- **NC** (non conforme) : Batterie incomplète ou différente du protocole sans justification, ou mailles différentes du protocole.
 - **Références :** Protocole de pêche du marché
-- **À préciser (OEG) :** Composition de la batterie de filets (nombre, dimensions) : à préciser par l’OEG d’après le protocole de pêche.
-
-#### F8.A3 – Mailles utilisées
-
-*Tournées : Hydrobiologie*
-
-- **Attendu :** Les mailles utilisées correspondent à celles du protocole et sont notées sur la fiche.
-- **Vérification :** Le contrôleur relève les mailles utilisées (« Valeur / réponse »).
-- **C** (conforme / satisfaisant) : Mailles conformes et notées.
-- **P** (perfectible) : Mailles conformes mais non notées.
-- **NC** (non conforme) : Mailles différentes du protocole.
-- **Références :** Protocole de pêche du marché
-- **À préciser (OEG) :** Mailles attendues : à préciser par l’OEG d’après le protocole de pêche.
+- **À préciser (OEG) :** Composition de la batterie de filets (nombre, dimensions) et mailles attendues : à préciser par l’OEG d’après le protocole de pêche.
 
 #### F8.A4 – Heure de pose
 
@@ -2035,7 +2043,7 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 #### F8.A5 – Heure de relève
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** L’heure de relève est notée ; la durée de pose respecte le protocole.
 - **Vérification :** Le contrôleur saisit l’heure de relève (« Valeur / réponse ») et calcule la durée de pose.
@@ -2141,7 +2149,7 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 #### F8.B4 – Étiquetage / traçabilité
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Chaque individu ou échantillon est identifié (code station, date, espèce, n° d’individu) et relié à ses données biométriques jusqu’au laboratoire.
 - **Vérification :** Le contrôleur vérifie l’étiquetage et le lien avec la fiche biométrique.
@@ -2152,7 +2160,7 @@ Ichtyologie (partie A) et mercure dans le biote (partie B). Le contrôleur véri
 
 #### F8.B5 – Conservation
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Les échantillons sont conservés selon le mode prévu par le protocole (réfrigération ou congélation), dans des emballages propres et fermés, sans risque de contamination ni de dégradation. Le froid de la glacière est jugé en F8.B6.
 - **Vérification :** Le contrôleur observe le mode de conservation.
@@ -2296,7 +2304,7 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 #### F9.9 – Produit de conservation
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le fixateur prévu (Lugol ou autre produit du protocole) est ajouté dans la proportion prescrite, aussitôt après le prélèvement. L’échantillon fixé est conservé à l’obscurité.
 - **Vérification :** Le contrôleur relève le produit utilisé (« Valeur / réponse ») et observe son ajout.
@@ -2329,7 +2337,7 @@ Phytoplancton d’eau douce. Le contrôleur vérifie le prélèvement (type int�
 
 #### F9.12 – Respect des normes de prélèvement
 
-*Tournées : Hydrobiologie*
+*Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Le prélèvement suit le protocole phytoplancton du marché ; tout écart est noté.
 - **Vérification :** Le contrôleur indique « Oui », « Non » ou « Écart(s) » et décrit les écarts.

@@ -29,6 +29,10 @@
  * Preuves : « Prendre une photo » (appareil photo de la tablette), « Importer depuis la galerie » (date de prise de vue
  * reprise de la photo) et « Joindre un document » — boutons libellés dans les cartes et les encadrés, bouton « Ajouter
  * une preuve » ouvrant ces trois choix dans les lignes de tableau.
+ * NOTE SUR 20 (js/domain/grading.js) : badge « Majeur (×2) » des points majeurs (lignes et cartes) ; encadré « Grille de
+ * notation » en pied de chaque feuille cotée (C, P, NC, N/A, évalués, points, note /20, appréciation colorée) ; synthèse :
+ * note de la tournée (figée à la signature, recalculée, calculée ou provisoire), colonne « Note /20 » par station et par
+ * feuille.
  * Saisie enregistrée à chaque changement (handlers de js/views/audit.js et sheetHandlers ci-dessous) ; un nouvel
  * appui sur le statut choisi l'annule ; observation obligatoire pour P et NC (contrôle avant clôture) ; critères
  * « Commun à la tournée » : une seule réponse partagée par toutes les stations (identifiant sans « @ »).
@@ -46,8 +50,9 @@ import { getPosition, positionXY } from '../ui/gps.js';
 import { addFilesFromInput } from '../ui/capture.js';
 import {
   oegHeader, stationBanner, infoStrip, sectionCard, blockCard, checkSquare, sheetFooter, sheetFrame, STATUS_SCALE, statusHeadCells,
-  statusLegend, sharedBadge, tourStations, assetURL
+  statusLegend, sharedBadge, tourStations, assetURL, majorBadge, gradeBox, gradePill
 } from '../ui/sheet-chrome.js';
+import { isMajorItem, GRADE_STATES, thresholdsText } from '../domain/grading.js';
 import { RESPONSES, itemInput, fieldShown, SHEET_CONCLUSIONS, CODE_TYPES, auditDate, formatValue, auditKindLabel, auditTimeTexts } from '../domain/model.js';
 import {
   isSheetGrid, isAnswered, allowedResponses, needsJustification, sectionHeaders, sheetStoreKey, suggestedValue, groupSheets, isEnteredResponse, stationKeyOf,
@@ -276,7 +281,7 @@ function tableRow(c, it, o) {
   const sub = alerts.length || media.length || devs.length ? html`<tr class="as-sub"><td colspan="${o.cols}"><div class="as-sub-in">${alerts.map(a => alertBox(a, c.editable))}${thumbs(media)}${devs.length ? deviationChips(c.audit, it.id, devs) : ''}</div></td></tr>` : '';
   return html`<tr id="row-${it.id}" class="${rowClass(c, it, r)}">
     ${o.noCol ? html`<td class="c-no">${o.pills ? html`<span class="st-no">${it.no}</span>` : it.no}</td>` : ''}
-    <td class="c-label">${it.icon ? html`<span class="st-ic">${icon(it.icon)}</span>` : ''}<span class="as-lbl">${it.label}</span>${it.shared ? sharedBadge() : ''}${helpButton(it)}${attenduButton(it)}</td>
+    <td class="c-label">${it.icon ? html`<span class="st-ic">${icon(it.icon)}</span>` : ''}<span class="as-lbl">${it.label}</span>${it.shared ? sharedBadge() : ''}${conf && isMajorItem(it, c.scoring) ? majorBadge() : ''}${helpButton(it)}${attenduButton(it)}</td>
     ${o.hasShort ? html`<td class="c-short">${it.short || ''}</td>` : ''}
     <td class="c-value">${valueControl(c, it, 't')}${linkSuggest(c, it)}${fromBadge(c, it)}</td>
     ${o.full ? STATUS_SCALE.map(s => html`<td class="c-${s.cls}">${conf && allowed.includes(s.code) ? statusButton(c, it, s, r?.status, 't') : ''}</td>`) : ''}
@@ -295,7 +300,7 @@ function itemCard(c, it, o) {
   const need = needsJustification(it, r);
   const hd = o.headers;
   return html`<article id="card-${it.id}" class="st-row-card ${rowClass(c, it, r)}">
-    <div class="st-rc-head"><span class="st-rc-no">${it.no}</span>${it.icon ? html`<span class="st-rc-ic">${icon(it.icon)}</span>` : ''}<span class="st-rc-label">${it.label}${it.required && conf ? html` <span class="req" title="obligatoire">*</span>` : ''}${it.shared ? html`<br>${sharedBadge()}` : ''}</span>${it.short && it.short !== it.no ? html`<span class="st-rc-short">${it.short}</span>` : ''}${helpButton(it)}${attenduButton(it)}</div>
+    <div class="st-rc-head"><span class="st-rc-no">${it.no}</span>${it.icon ? html`<span class="st-rc-ic">${icon(it.icon)}</span>` : ''}<span class="st-rc-label">${it.label}${it.required && conf ? html` <span class="req" title="obligatoire">*</span>` : ''}${it.shared || (conf && isMajorItem(it, c.scoring)) ? html`<br>${it.shared ? sharedBadge() : ''}${conf && isMajorItem(it, c.scoring) ? majorBadge() : ''}` : ''}</span>${it.short && it.short !== it.no ? html`<span class="st-rc-short">${it.short}</span>` : ''}${helpButton(it)}${attenduButton(it)}</div>
     ${itemInput(it) ? html`<div class="st-rc-value"><span class="st-rc-k">${hd.value}</span>${valueControl(c, it, 'k')}${linkSuggest(c, it)}${fromBadge(c, it)}</div>` : r?.copiedFrom ? html`<div class="st-rc-value">${fromBadge(c, it)}</div>` : ''}
     ${conf ? html`<div class="st-rc-status" role="group" aria-label="Statut — ${it.label}">${STATUS_SCALE.filter(s => allowed.includes(s.code)).map(s => statusButton(c, it, s, r?.status, 'k'))}</div>` : ''}
     ${o.full ? html`<div class="st-rc-obs"><label class="st-rc-k" for="k-o-${it.id}">Observations${need ? html` <span class="req">(obligatoire)</span>` : ''}</label><div class="input-wrap">${obsField(c, it, r, 'k')}${c.editable ? voiceBtn('k-o-' + it.id) : ''}</div></div>` : ''}
@@ -401,6 +406,13 @@ function blocksArea(c, sh) {
   return html`<div class="sheet-blocks as-blocks">${blocks.map(b => blockCard({ icon: b.icon || 'chat', title: b.title, cls: `as-block as-b-${b.key}`, body: b.key === 'conclusion' ? conclusionBody(c, sh, b) : textBlock(c, sh, b) }))}</div>`;
 }
 
+/** Encadré « Grille de notation » d'une feuille (id gradeBox-<instance>) : note de la feuille et seuils de la tournée. */
+function sheetGradeBox(c, sh) {
+  const g = c.st.summary.sheets.find(x => x.instanceKey === sh.instanceKey)?.grade || null;
+  const r = c.st.summary.grading;
+  return gradeBox({ grade: g, thresholds: r?.thresholds, state: r?.state || '', id: `gradeBox-${sh.instanceKey.replace(/[^\w@.-]/g, '_')}`, scope: 'de la feuille' });
+}
+
 /* ---------- Feuilles ---------- */
 /** En-têtes de la feuille : complet (≥ 900 px) et compact (< 900 px, une ligne). */
 function sheetHeaders(c, sh, site, { variant = 'default', titleInBanner = false } = {}) {
@@ -478,6 +490,8 @@ function tableSheetView(c, sh, site) {
   }
   if (sh.items.some(i => i.kind === 'conformity')) parts.push(statusLegend());
   parts.push(blocksArea(c, sh));
+  // Grille de notation de la feuille (points affichés, communs à la tournée compris).
+  if (sh.items.some(i => i.kind === 'conformity')) parts.push(sheetGradeBox(c, sh));
   parts.push(sheetFooter({ grid: c.baseGrid }));
   return sheetFrame({ theme: th, cls: `as-frame as-sheet-${sh.key}`, body: html`${parts}` });
 }
@@ -497,30 +511,49 @@ function deviationsView(c) {
 }
 
 const countCells = x => html`<td class="n-c">${x.C}</td><td class="n-p">${x.P}</td><td class="n-nc">${x.NC}</td><td class="n-na">${x.NA}</td><td class="n-u">${x.unanswered}</td>`;
+const gradeCell = x => html`<td class="n-g">${gradePill(x?.grade)}</td>`;
+/** Mention de l'état de la note de la tournée (synthèse) : figée à la signature, recalculée, calculée, provisoire. */
+function gradeStateNote(c) {
+  const r = c.st.summary.grading;
+  if (!r) return '';
+  const rec = r.record;
+  const by = rec ? `${rec.at ? ` le ${fmtDate(rec.at)} à ${fmtTime(rec.at)}` : ''}${rec.byName ? ` par ${rec.byName}` : ''}` : '';
+  const text = r.state === 'figee' ? `Note figée à la signature du contrôleur${by}, avec les seuils de ce moment (${thresholdsText(r.thresholds)}).`
+    : r.state === 'recalculee' ? `Note recalculée après modification tracée de la tournée signée (seuils et barème figés à la signature${by}) ; note à la signature : ${r.signedTour?.text || '—'} / 20.`
+      : r.state === 'calculee' ? `Note calculée : tournée signée avant la mise en place de la notation (aucune note figée à sa signature) ; seuils actuels (${thresholdsText(r.thresholds)}).`
+        : 'Note provisoire : elle sera figée à la signature du contrôleur, avec les seuils de ce moment.';
+  return html`<p class="note as-grade-state" data-state="${r.state}">${text}</p>`;
+}
 function synthesisView(c) {
   const s = c.st.summary;
   const g = s.stations?.global || { C: s.counts.C, P: s.counts.P, NC: s.counts.NC, NA: s.counts.NA, unanswered: s.counts.unanswered, total: s.counts.controlled };
   const dis = c.editable ? '' : raw('disabled');
   const tiles = [['Points conformes / satisfaisants', g.C, 'ok', 'C'], ['Points perfectibles', g.P, 'perf', 'P'], ['Points non conformes', g.NC, 'nc', 'NC'], ['Non applicables', g.NA, 'na', 'N/A'], ['Non renseignés', g.unanswered, '', ''], ['Écarts enregistrés', s.deviationsCount, 'nc', '']];
   const max = Math.max(1, ...s.byCriticality.map(x => x.count));
-  const sheetRows = list => list.map(x => html`<tr><th scope="row"><a href="#/audit/${c.audit.id}/feuille-${x.instanceKey}"><span class="as-sn" style="${themeVars(x.theme)}">${x.index}</span>${x.tab || x.title}</a>${x.sharedCounted ? html` <small class="muted">(dont ${x.sharedCounted} commun${x.sharedCounted > 1 ? 's' : ''})</small>` : ''}</th>${countCells(x)}<td class="as-concl">${x.conclusionLabel ? badge(x.conclusionLabel, OPT_CLS[x.conclusion] === 'ok' ? 'ok' : OPT_CLS[x.conclusion] === 'p' ? 'perf' : OPT_CLS[x.conclusion] || 'outline') : html`<span class="muted">—</span>`}${x.hint && (x.NC || x.P) ? html`<div class="tiny muted">${x.hint}</div>` : ''}</td></tr>`);
+  const sheetRows = list => list.map(x => html`<tr><th scope="row"><a href="#/audit/${c.audit.id}/feuille-${x.instanceKey}"><span class="as-sn" style="${themeVars(x.theme)}">${x.index}</span>${x.tab || x.title}</a>${x.sharedCounted ? html` <small class="muted">(dont ${x.sharedCounted} commun${x.sharedCounted > 1 ? 's' : ''})</small>` : ''}</th>${gradeCell(x)}${countCells(x)}<td class="as-concl">${x.conclusionLabel ? badge(x.conclusionLabel, OPT_CLS[x.conclusion] === 'ok' ? 'ok' : OPT_CLS[x.conclusion] === 'p' ? 'perf' : OPT_CLS[x.conclusion] || 'outline') : html`<span class="muted">—</span>`}${x.hint && (x.NC || x.P) ? html`<div class="tiny muted">${x.hint}</div>` : ''}</td></tr>`);
   const tourSheets = s.sheets.filter(x => !x.stationKey);
-  const head = html`<thead><tr><th scope="col">Feuille</th><th class="n-c" scope="col" title="Conforme / satisfaisant">C</th><th class="n-p" scope="col" title="Perfectible">P</th><th class="n-nc" scope="col" title="Non conforme">NC</th><th class="n-na" scope="col" title="Non applicable">N/A</th><th class="n-u" scope="col" title="Non renseignés">Non rens.</th><th scope="col">Conclusion</th></tr></thead>`;
-  return html`<div class="card"><h2>Synthèse factuelle de la tournée <span class="badge outline">sans score global</span></h2>
+  const head = html`<thead><tr><th scope="col">Feuille</th><th class="n-g" scope="col" title="Note sur 20 de la feuille">Note /20</th><th class="n-c" scope="col" title="Conforme / satisfaisant">C</th><th class="n-p" scope="col" title="Perfectible">P</th><th class="n-nc" scope="col" title="Non conforme">NC</th><th class="n-na" scope="col" title="Non applicable">N/A</th><th class="n-u" scope="col" title="Non renseignés">Non rens.</th><th scope="col">Conclusion</th></tr></thead>`;
+  const r = s.grading;
+  return html`${r ? html`<div class="card as-grade-card" id="tourGrade"><h2>Note de la tournée</h2>
+      ${gradeBox({ grade: r.tour, thresholds: r.thresholds, state: r.state, id: 'tourGradeBox', scope: 'de la tournée', theme: 'navy', title: 'Grille de notation de la tournée' })}
+      ${gradeStateNote(c)}
+      <p class="note">La note de la tournée compte chaque point une fois (un point commun à la tournée${c.st.mixed ? ', une opération mutualisée d’une station contrôlée pour la biologie et la chimie' : ''} : une seule fois) ; la note d’une feuille porte sur les points affichés dans la feuille ; la note d’une station, sur ses points propres (les points communs sont notés sur la ligne « Commun à la tournée »).</p>
+    </div>` : ''}
+    <div class="card"><h2>Synthèse factuelle de la tournée</h2>
       <div class="kpis as-kpis">${tiles.map(([k, v, cls, code]) => html`<div class="kpi ${cls ? 'k-' + cls : ''}"><span class="k">${code ? html`<b class="as-k-code">${code}</b>` : ''}${k}</span><span class="v">${v}</span></div>`)}</div>
       <p class="note">Chaque point est compté une fois : un critère « commun à la tournée » n’est compté qu’une seule fois, quel que soit le nombre de stations${c.st.mixed ? ' ; à une station contrôlée pour plusieurs parties (biologie et chimie), une opération commune (accès, mesures in situ, prélèvement, conservation…) n’est saisie et comptée qu’une fois' : ''}.</p>
     </div>
-    ${s.stations && c.stations.length ? html`<div class="card"><h2>Par station</h2><div class="table-wrap"><table class="tbl as-sum"><thead><tr><th scope="col">Station</th><th class="n-c" scope="col">C</th><th class="n-p" scope="col">P</th><th class="n-nc" scope="col">NC</th><th class="n-na" scope="col">N/A</th><th class="n-u" scope="col">Non rens.</th><th scope="col">Avancement</th></tr></thead><tbody>
-      ${s.stations.tournee.total ? html`<tr class="as-sum-tour"><th scope="row">${icon('route', { size: 16 })} Commun à la tournée</th>${countCells(s.stations.tournee)}<td>${c.st.stationProgress?.tournee ? `${c.st.stationProgress.tournee.answered} / ${c.st.stationProgress.tournee.total}` : ''}</td></tr>` : ''}
-      ${s.stations.stations.map(x => { const p = c.st.stationProgress?.stations?.[x.key]; const perim = c.st.mixed ? c.stations.find(y => y.key === x.key)?.perimeter : null; return html`<tr><th scope="row"><b>${x.index + 1}.</b> ${x.name} <small class="muted">${x.code}</small>${perim ? html` <small class="as-perim-s">${partsText(c.baseGrid, perim)}</small>` : ''}</th>${countCells(x)}<td>${p ? `${p.answered} / ${p.total}` : ''}</td></tr>`; })}
-      <tr class="as-sum-total"><th scope="row">Total de la tournée</th>${countCells(s.stations.global)}<td>${c.st.progress.answered} / ${c.st.progress.total}</td></tr>
+    ${s.stations && c.stations.length ? html`<div class="card"><h2>Par station</h2><div class="table-wrap"><table class="tbl as-sum"><thead><tr><th scope="col">Station</th><th class="n-g" scope="col" title="Note sur 20">Note /20</th><th class="n-c" scope="col">C</th><th class="n-p" scope="col">P</th><th class="n-nc" scope="col">NC</th><th class="n-na" scope="col">N/A</th><th class="n-u" scope="col">Non rens.</th><th scope="col">Avancement</th></tr></thead><tbody>
+      ${s.stations.tournee.total ? html`<tr class="as-sum-tour"><th scope="row">${icon('route', { size: 16 })} Commun à la tournée</th>${gradeCell(s.stations.tournee)}${countCells(s.stations.tournee)}<td>${c.st.stationProgress?.tournee ? `${c.st.stationProgress.tournee.answered} / ${c.st.stationProgress.tournee.total}` : ''}</td></tr>` : ''}
+      ${s.stations.stations.map(x => { const p = c.st.stationProgress?.stations?.[x.key]; const perim = c.st.mixed ? c.stations.find(y => y.key === x.key)?.perimeter : null; return html`<tr data-station="${x.key}"><th scope="row"><b>${x.index + 1}.</b> ${x.name} <small class="muted">${x.code}</small>${perim ? html` <small class="as-perim-s">${partsText(c.baseGrid, perim)}</small>` : ''}</th>${gradeCell(x)}${countCells(x)}<td>${p ? `${p.answered} / ${p.total}` : ''}</td></tr>`; })}
+      <tr class="as-sum-total"><th scope="row">Total de la tournée</th>${gradeCell(s.stations.global)}${countCells(s.stations.global)}<td>${c.st.progress.answered} / ${c.st.progress.total}</td></tr>
     </tbody></table></div></div>` : ''}
     <div class="card"><h2>Par feuille</h2><div class="table-wrap"><table class="tbl as-sum">${head}<tbody>
-      ${tourSheets.length ? html`${c.multi ? html`<tr class="as-sum-group"><td colspan="7">${icon('route', { size: 16 })} Feuilles de tournée</td></tr>` : ''}${sheetRows(tourSheets)}` : ''}
-      ${c.stations.map(st => { const list = s.sheets.filter(x => x.stationKey === st.key); return list.length ? html`<tr class="as-sum-group"><td colspan="7">Station ${st.index + 1} — ${st.name} <small>${st.code}</small></td></tr>${sheetRows(list)}` : ''; })}
+      ${tourSheets.length ? html`${c.multi ? html`<tr class="as-sum-group"><td colspan="8">${icon('route', { size: 16 })} Feuilles de tournée</td></tr>` : ''}${sheetRows(tourSheets)}` : ''}
+      ${c.stations.map(st => { const list = s.sheets.filter(x => x.stationKey === st.key); return list.length ? html`<tr class="as-sum-group"><td colspan="8">Station ${st.index + 1} — ${st.name} <small>${st.code}</small></td></tr>${sheetRows(list)}` : ''; })}
       ${!c.stations.length ? sheetRows(s.sheets.filter(x => x.stationKey)) : ''}
     </tbody></table></div>
-      <p class="note">Conclusion : choix du contrôleur dans l’encadré de chaque feuille (la suggestion « n NC, n P sur cette feuille » n’est jamais appliquée seule).</p></div>
+      <p class="note">Conclusion : choix du contrôleur dans l’encadré de chaque feuille (la suggestion « n NC, n P sur cette feuille » n’est jamais appliquée seule). Note /20 de la feuille : points affichés dans la feuille, communs à la tournée compris.</p></div>
     ${s.ncItems.length || s.pItems.length ? html`<div class="card"><h2>Points non conformes et perfectibles</h2><div class="list">${[...s.ncItems.map(x => ({ ...x, st: 'NC' })), ...s.pItems.map(x => ({ ...x, st: 'P' }))].map(x => html`<a class="li ${x.st === 'NC' ? 'stripe-nc' : 'stripe-perf'}" href="${itemHref(c.audit, c.model, x.itemId)}"><div class="li-main"><div class="li-title">${badge(x.st, x.st === 'NC' ? 'nc' : 'perf')} ${x.code} — ${x.label}</div><div class="li-sub">${x.stationName ? x.stationName + ' · ' : ''}${x.comment || html`<i>observation manquante</i>`}</div></div><span class="chev">›</span></a>`)}</div></div>` : ''}
     <div class="card"><h2>Écarts par niveau de criticité</h2>
       <div class="bars">${s.byCriticality.map(b => html`<div class="bar-row"><span class="bl">${b.label}</span><span class="bt"><span style="width:${b.count / max * 100}%;background:${b.color || 'var(--sky)'}"></span></span><span class="bn">${b.count}</span></div>`)}</div>
@@ -690,7 +723,9 @@ export async function renderSheetAudit({ audit, st, step, q = {}, editable, lock
     date: auditDate(audit),
     providerLabel: prov ? (prov.kind === 'regie' && prov.code ? `${prov.code} en régie` : prov.name) : '',
     // Contrôleurs OEG de la tournée (binôme) ; agent connecté hors contrôleurs : « Rejoindre la tournée ».
-    controllers: tourControllers(audit), controllersText: '', joinable: !locked && canJoinAudit(audit, session.user)
+    controllers: tourControllers(audit), controllersText: '', joinable: !locked && canJoinAudit(audit, session.user),
+    // Barème de la note sur 20 (points majeurs, points de synthèse) : figé à la signature, sinon celui de la grille.
+    scoring: st.scoring || null
   };
   c.controllersText = c.controllers.map(x => x.name).filter(Boolean).join(', ');
   // Critères visibles (reprises et propositions entre feuilles) et préleveurs de la tournée.

@@ -8,7 +8,8 @@
  *    identifiant effectif de tournée « it-F4-12@09271503 ») ;
  *  - le modèle d'affichage par type de tournée (attendusModel) : feuilles VISIBLES pour le type (conditions de la
  *    grille évaluées par sheetsOf / expandGrid sur une station fictive, conditions portant sur des réponses
- *    ignorées), sections, critères, badges « Commun à la tournée » ;
+ *    ignorées), sections, critères, badges « Commun à la tournée », « Point majeur (×2) » (note sur 20) et « Point de
+ *    synthèse, hors note », règle de la note sur 20 (data.notation) ;
  *  - le PDF A4 portrait (generateAttendusPdf / buildAttendusPdf) : en-tête OEG, échelle, liste de préparation à
  *    cocher, puis une section par feuille aux couleurs de son thème (js/ui/themes.js), pied de page avec la version
  *    des attendus et la pagination. Polices Barlow / Barlow Condensed / Montserrat incorporées (fonts/pdf), repli
@@ -124,7 +125,8 @@ const sectionTheme = (sec, sheet) => sec.theme || sheet.theme || 'ocean';
  * Modèle du document pour un type de tournée (null : tous les types) :
  * {type, typeLabel, data, echelle, avertissement, preparation: [{key, label, groups}], sheets: [{no, code, title, tab,
  *  theme, scope, icon, types, intro, documents, sections: [{id, no, title, icon, theme, items}], items, values, count}], count}.
- * Critère : {id, code, no, label, kind, shared, types, conditional, noScore (point de synthèse, hors note), value (critère sans
+ * Critère : {id, code, no, label, kind, shared, types, conditional, noScore (point de synthèse, hors note), major (point
+ *  majeur : compte double dans la note sur 20), value (critère sans
  *  cotation), theme, entry}.
  * Les feuilles et critères sont ceux AFFICHÉS pour le type (tous les types : réunion, titres de base des feuilles).
  */
@@ -144,7 +146,7 @@ export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = 
       const items = (s.items || []).filter(it => allowed.has(it.id)).map(it => ({
         id: it.id, code: it.code, no: it.no, label: it.label, kind: it.kind, value: it.kind !== 'conformity',
         shared: base.scope === 'tournee' || it.scope === 'tournee', sheetScope: base.scope,
-        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), noScore: !!it.noScore, help: it.help || '',
+        types: vis.typesOf.get(it.id) || [], conditional: vis.conditional.has(it.id), noScore: !!it.noScore, major: !!it.major, help: it.help || '',
         theme: sectionTheme(s, base), entry: data?.criteres?.[it.id] || null
       }));
       if (items.length) secs.push({ id: s.id, no: s.no || '', title: s.title, icon: s.icon || '', theme: sectionTheme(s, base), items });
@@ -165,7 +167,7 @@ export function attendusModel(data, { auditType = null, grid = GRID_CT_2026 } = 
     ...(type ? [type] : TOUR_TYPES).map(t => ({ key: t, label: gridType(grid, t)?.label || t, groups: prep[t] || [] }))].filter(p => p.groups.length);
   return {
     type, typeLabel, data, version: data?.version || '', updated: data?.updated || '', avertissement: data?.avertissement || '',
-    echelle: SCALE.map(s => ({ ...s, text: data?.echelle?.[s.code] || '' })), preparation, sheets,
+    echelle: SCALE.map(s => ({ ...s, text: data?.echelle?.[s.code] || '' })), notation: data?.notation || '', preparation, sheets,
     count: sheets.reduce((n, s) => n + s.count, 0)
   };
 }
@@ -313,6 +315,19 @@ function drawScale(flow, model) {
     });
     doc.y += h + 6;
   }
+  // Note sur 20 (règle validée par l'OEG ; points majeurs signalés sur chaque fiche)
+  if (model.notation) {
+    const text = model.notation.replace(/≥/g, 'au moins');
+    const lines = flow.lines(text, F.text, 8.3, flow.width - 22);
+    const h = lines.length * 10.2 + 26;
+    flow.ensure(h + 6);
+    const y = doc.y;
+    doc.roundRect(M, y, flow.width, h, 6, { fill: '#fff6e6', stroke: '#e3b062', lineWidth: 0.7 });
+    doc.rect(M, y + 5, 3.2, h - 10, { fill: '#b45f00' });
+    doc.text('Note sur 20', M + 10, y + 7.2, { font: F.bold, size: 9.2, color: '#6b3600' });
+    flow.textLines(lines, M + 10, y + 22, { size: 8.3, lh: 10.2 });
+    doc.y += h + 6;
+  }
   doc.y += 6;
 }
 
@@ -425,6 +440,7 @@ function criterionCard(flow, model, it) {
   const badges = [];
   if (it.shared && it.sheetScope !== 'tournee') badges.push({ text: 'Commun à la tournée', color: '#0b4f9c', bg: '#e8f3fc' });
   if (it.conditional) badges.push({ text: 'Affiché selon une réponse', color: MUTED, bg: '#eef1f4' });
+  if (it.major) badges.push({ text: 'Point majeur (×2)', color: '#6b3600', bg: '#fff1d6' });
   if (it.noScore) badges.push({ text: 'Point de synthèse, hors note', color: '#6b4e00', bg: '#fff4d6' });
   if (!model.type && it.types.length < TOUR_TYPES.length) it.types.forEach(k => badges.push({ text: gridType(GRID_CT_2026, k)?.short || k, color: th(TYPE_THEMES[k]).dark, bg: th(TYPE_THEMES[k]).light }));
   const kw = 62;

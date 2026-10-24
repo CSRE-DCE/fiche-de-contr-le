@@ -1,6 +1,6 @@
 /* Administration : agents de la tablette et profils, appareils (désactivation d'un appareil perdu), paramètres
- * de l'organisation (dont « Logo de l'application »), données (dont la mise à niveau du référentiel) ; écran « Mon
- * compte ».
+ * de l'organisation (dont « Logo de l'application » et les seuils d'appréciation de la « Note sur 20 »), données (dont
+ * la mise à niveau du référentiel) ; écran « Mon compte ».
  * Tablette partagée (deux tablettes pour quatre agents) : « Agents de cette tablette » (comptes du trousseau :
  * connexion possible ici ; « Ajouter un agent » — nom, prénom, initiales, profil, mot de passe saisi par l'agent —,
  * modifier, « Retirer de cette tablette » — entrée locale seulement) et « Agents pas encore sur cette tablette »
@@ -23,6 +23,7 @@ import { orgSettings, saveOrgSettings, pref, setPref, applyDisplayPrefs } from '
 import { exchangePasswordInfo, knownDevices, acceptHeld, refuseHeld } from '../app/exchange.js';
 import { LOGO_ACCEPT } from '../app/logo.js';
 import { logoImg } from '../ui/logo.js';
+import { thresholdErrors, thresholdsText, gradeThresholds, frNumber } from '../domain/grading.js';
 import { icon } from '../ui/icons.js';
 import { passwordDialog, heldCard } from './exchange.js';
 
@@ -36,6 +37,27 @@ const SETTINGS = [
 
 const ROLE_OPTIONS = () => Object.entries(ROLES).map(([id, label]) => ({ id, label }));
 const errText = e => e?.message === 'Failed to fetch' ? 'GitHub injoignable : vérifiez la connexion réseau.' : (e?.message || String(e));
+
+/**
+ * Seuils d'appréciation de la note sur 20 (administrateur) : « Satisfaisant » (note ≥) et « À améliorer » (note ≥ ;
+ * en dessous : « Insuffisant »), de 0 à 20, « À améliorer » ≤ « Satisfaisant ». Les tournées non signées les suivent ;
+ * une tournée signée garde ceux figés à sa signature (js/domain/grading.js). Réglages de l'organisation : partent vers
+ * l'autre tablette avec le prochain fichier d'échange.
+ */
+function gradingCard(org) {
+  const t = gradeThresholds(org);
+  const num = (name, label, value, hint) => field(label, html`<input name="${name}" id="${name}" type="number" min="0" max="20" step="0.1" inputmode="decimal" value="${String(value)}" data-input="grade-preview" required>`, { hint });
+  return html`<div class="card" id="gradingCard"><h2>Note sur 20</h2>
+    <p class="note">Chaque feuille, chaque station et la tournée sont notées sur 20 : C = 1 point, P = 0,5, NC = 0, N/A non compté ; les points majeurs comptent double, les points de synthèse sont hors note. Appréciation de la note (affichée au dixième) :</p>
+    <form id="gradef"><div class="grid2">
+      ${num('gradeGood', 'Seuil « Satisfaisant » (note ≥)', t.good, 'Par défaut 16.')}
+      ${num('gradeFair', 'Seuil « À améliorer » (note ≥)', t.fair, 'Par défaut 12 ; en dessous : « Insuffisant ».')}
+    </div>
+    <p class="grade-preview" id="gradePreview">${thresholdsText(t)}</p>
+    <p class="hint" id="gradeErr" style="color:var(--nc)" role="alert"></p>
+    <button class="btn primary" type="button" data-act="save-grading">Enregistrer les seuils</button></form>
+    <p class="note">Les tournées en cours suivent ces seuils ; une tournée signée garde la note et les seuils figés à sa signature. Les seuils partent vers l’autre tablette avec le prochain fichier d’échange.</p></div>`;
+}
 
 /**
  * Agent de la tablette (les deux modes) : « Ajouter un agent » = NOUVEAU profil (nom, prénom, initiales, profil,
@@ -231,6 +253,7 @@ export default {
         <div class="btn-row" style="margin-top:10px">${can('settings.manage') ? html`<button class="btn ${xpw ? 'ghost' : 'primary'}" data-act="xch-password">${xpw ? 'Changer le mot de passe d’échange' : 'Définir le mot de passe d’échange'}</button>` : ''}<a class="btn ghost" href="#/synchronisation">Envoyer ou recevoir un fichier</a></div>
         <p class="note">Le même mot de passe d’échange sur toutes les tablettes de l’équipe : il chiffre les fichiers (Quick Share, Bluetooth, e-mail, Teams, clé USB). Un changement de profil ou de statut d’un agent reçu dans un fichier n’est appliqué d’office que si le fichier a été envoyé par un administrateur de cette tablette ; sinon il attend votre validation (ci-dessus).</p></div>` : ''}
       ${can('settings.manage') ? logoCard(org) : ''}
+      ${can('settings.manage') ? gradingCard(org) : ''}
       ${can('settings.manage') ? html`<div class="card"><h2>Paramètres de l’organisation</h2><form id="setf"><div class="grid2">${SETTINGS.map(([key, l, t]) => field(l, html`<input name="${key}" type="${t === 'number' ? 'number' : 'text'}" value="${org[key] ?? ''}">`))}</div>
         <button class="btn primary" type="button" data-act="save-settings">Enregistrer les paramètres</button></form></div>` : ''}
       <div class="card"><h2>Données et stockage</h2>${kv([['Stockage utilisé', est ? `${fmtBytes(est.usage)} sur ${fmtBytes(est.quota)}` : 'inconnu'], ['Stockage persistant', persisted === true ? 'oui (protégé contre l’effacement automatique)' : persisted === false ? 'non garanti' : 'inconnu'], ['Audits', String(store.count('audit'))], ['Médias', String(store.count('media'))], ['Entrées de journal', String(store.count('trail'))], ['Agents de cette tablette', local.map(u => u.name).join(', ')]])}
@@ -366,6 +389,24 @@ export default {
       if (!(await confirmDialog({ title: 'Rétablir le logo OEG', message: 'Le logo de l’OEG remplace le logo choisi partout (écrans, feuilles et PDF), sur cette tablette puis sur l’autre au prochain fichier d’échange. Continuer ?', okLabel: 'Rétablir le logo OEG' }))) return;
       try { await (await import('../app/logo.js')).resetAppLogo(); } catch (e) { toast(e.message, 'err', 6000); return; }
       toast('Logo de l’OEG rétabli', 'ok');
+      this.refresh();
+    },
+    'grade-preview'() {
+      const f = document.getElementById('gradef');
+      const t = { good: f.querySelector('[name=gradeGood]').value, fair: f.querySelector('[name=gradeFair]').value };
+      const errs = thresholdErrors(t);
+      document.getElementById('gradeErr').textContent = errs.join(' ');
+      if (!errs.length) document.getElementById('gradePreview').textContent = thresholdsText(t);
+    },
+    async 'save-grading'() {
+      const f = document.getElementById('gradef');
+      const t = { good: f.querySelector('[name=gradeGood]').value, fair: f.querySelector('[name=gradeFair]').value };
+      const errs = thresholdErrors(t);
+      document.getElementById('gradeErr').textContent = errs.join(' ');
+      if (errs.length) { toast(errs[0], 'err', 6000); return; }
+      const g = gradeThresholds(t);
+      await saveOrgSettings({ gradeGood: g.good, gradeFair: g.fair }, `Seuils de la note sur 20 : « Satisfaisant » ≥ ${frNumber(g.good)}, « À améliorer » ≥ ${frNumber(g.fair)}`);
+      toast('Seuils de la note sur 20 enregistrés', 'ok');
       this.refresh();
     },
     async 'save-settings'() {
