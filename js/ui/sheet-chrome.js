@@ -6,7 +6,8 @@
  * Bandeau « Station » de la feuille 1 : réseaux de surveillance de la station (option networks : objets du
  * référentiel « Réseaux », couleurs de js/domain/networks.js) sur une ligne à part.
  * Note sur 20 (js/domain/grading.js) : badge « Majeur (×2) » d'un point majeur (majorBadge), encadré « Grille de
- * notation » en pied de feuille (gradeBox) et pastille de note des tableaux de synthèse (gradePill), couleur de
+ * notation » en pied de feuille (gradeBox), pastille de note des tableaux de synthèse (gradePill) et badge de note des
+ * listes — liste « Audits », cartes des stations de l'accueil (gradeTag) —, couleur de
  * l'appréciation : vert « Satisfaisant », orange « À améliorer », rouge « Insuffisant », gris « non noté ».
  *
  * Fonctions pures produisant du HTML (gabarits html`` de js/core/util.js), mises en forme par
@@ -262,6 +263,18 @@ export const gradeLevelClass = g => `lvl-${g?.level || 'none'}`;
 export function gradePill(g, { label = false } = {}) {
   const graded = g && g.n10 !== null && g.n10 !== undefined;
   return html`<span class="grade-pill ${gradeLevelClass(g)}" title="${graded ? `${g.text} / 20 — ${g.label}` : 'Non noté : aucun point évalué'}">${graded ? html`<b>${g.text}</b>${label ? html`<small>${g.label}</small>` : ''}` : 'non noté'}</span>`;
+}
+/**
+ * Badge de note des listes (liste « Audits », cartes des stations de l'accueil) : « 17,7 / 20 · Satisfaisant » aux
+ * couleurs de l'appréciation (note définitive : tournée signée) ; note provisoire en gris, bord pointillé, mention
+ * « provisoire » ; « calculée » / « recalculée » : tournée signée sans note figée / modifiée après la signature ;
+ * « non noté » discret. Le texte suffit sans la couleur. lg : listGrade (js/domain/grading.js) ; prefix : intitulé
+ * court visible (« Station ») ; sr : intitulé pour les lecteurs d'écran ; info-bulle : lg.title.
+ */
+export function gradeTag(lg, { prefix = '', sr = 'Note : ' } = {}) {
+  if (!lg) return '';
+  if (!lg.graded) return html`<span class="grade-none" title="${lg.title}" data-grade="non noté">non noté</span>`;
+  return html`<span class="grade-tag lvl-${lg.final ? lg.level : 'none'}${lg.final ? '' : ' is-prov'}" title="${lg.title}" data-grade="${lg.note}" data-state="${lg.state}">${prefix ? html`<span class="gt-k" aria-hidden="true">${prefix}</span> ` : ''}<span class="sr">${sr}</span><span class="gt-n"><b>${lg.note}</b>&nbsp;/&nbsp;20</span> · ${lg.label}${lg.mention ? html` · <span class="gt-m">${lg.mention}</span>` : ''}</span>`;
 }
 /**
  * Encadré « Grille de notation » (pied de feuille, synthèse) : cotes C / P / NC / N/A, points évalués (dont points

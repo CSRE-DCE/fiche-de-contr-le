@@ -8,7 +8,10 @@
  * - portées : feuille (points affichés, communs compris), station, commun à la tournée, tournée (point commun et
  *   opération mutualisée d'une tournée mixte comptés une fois) ;
  * - note figée à la signature (gradingRecord), notes à afficher (resolveGrades : figée, recalculée, calculée,
- *   provisoire) ; moyennes du tableau de bord (averageGrades). */
+ *   provisoire) ; moyennes du tableau de bord (averageGrades) ;
+ * - listes (liste « Audits », cartes des stations de l'accueil) : listGrade (note définitive, calculée, recalculée,
+ *   provisoire, non notée, tournée annulée ; note de la station, à défaut de la tournée), tri compareListGrades, note
+ *   figée lue sans calcul (frozenGrades, identique à resolveGrades d'une tournée verrouillée sans modification). */
 import { test, assert, eq, deepEq } from './harness.js';
 import { GRID_CT_2026, MAJOR_ITEMS } from '../../js/domain/grid-ct-2026.js';
 import { GRID_GENERAL } from '../../js/domain/default-grids.js';
@@ -17,7 +20,7 @@ import { sheetSummary, stationSummary, auditSummary } from '../../js/domain/summ
 import {
   GRADE_SCALE, MAJOR_WEIGHT, DEFAULT_GRADE_THRESHOLDS, NOT_GRADED, emptyTally, tallyItem, gradeOf, gradeItems, noteText, levelOf, gradeThresholds,
   thresholdErrors, thresholdsText, scoringOf, scoringFromRecord, weightOf, isMajorItem, isNoScoreItem, collectGrades, gradingRecord, isGradingRecord,
-  resolveGrades, applyResolvedGrades, gradeFromCompact, gradeText, averageGrades, relabelGrade
+  resolveGrades, applyResolvedGrades, gradeFromCompact, gradeText, averageGrades, relabelGrade, listGrade, compareListGrades, frozenGrades
 } from '../../js/domain/grading.js';
 
 const G = GRID_CT_2026;
@@ -275,4 +278,51 @@ test('moyennes par prestataire et par réseau (tournées notées seulement, demi
   deepEq(m.byNetwork.map(n => [n.code, n.count, n.text]), [['BIO', 2, '15,6'], ['Chimie', 2, '13,3']], 'tournée sur deux réseaux : comptée dans chacun');
   eq(averageGrades([], { good: 15, fair: 10 }).all.text, 'non noté');
   eq(averageGrades(rows, { good: 15, fair: 10 }).byProvider[0].label, 'Satisfaisant', 'appréciation des moyennes : seuils donnés');
+});
+
+/* ---------- Listes : liste « Audits », cartes des stations de l'accueil ---------- */
+test('listes : badge de note (figée, calculée, recalculée, provisoire, non notée, annulée), note de station, tri, note figée lue sans calcul', () => {
+  const { stations, ctx, E } = bioTour();
+  const responses = { 'it-F4-2': { status: 'NC', comment: 'x' }, [`it-F4-12@${B}`]: { status: 'C' }, [`it-F4-5@${B}`]: { status: 'C' } };
+  const audit = { responses, stations, compartments: BIO_ALL, auditType: 'bio' };
+  const grading = { thresholds: { good: 16, fair: 12 }, scoring: scoringOf(G) };
+  const live = collectGrades(auditSummary({ audit, grid: E, ctx, grading }));
+  const rec = gradingRecord(live, grading);
+  // Tournée signée, note figée : note définitive, sans mention.
+  const r = resolveGrades({ live, record: rec, signed: true });
+  let lg = listGrade(r);
+  deepEq([lg.graded, lg.text, lg.note, lg.n10, lg.final, lg.mention, lg.scope, lg.level, lg.state], [true, '12,0 / 20 · À améliorer', '12,0', 120, true, '', 'tournee', 'fair', 'figee']);
+  eq(lg.title, 'Note de la tournée : 12,0 / 20 — À améliorer (note figée à la signature)');
+  // Note de la station (points propres : F4.12 C ×2 + F4.5 C) ; station sans point propre évalué : note de la tournée.
+  lg = listGrade(r, { stationKey: B });
+  deepEq([lg.scope, lg.text, lg.final], ['station', '20,0 / 20 · Satisfaisant', true]);
+  assert(lg.title.startsWith('Note de la station dans la tournée : 20,0 / 20 — Satisfaisant'), lg.title);
+  deepEq([listGrade(r, { stationKey: A }).scope, listGrade(r, { stationKey: A }).text], ['tournee', '12,0 / 20 · À améliorer']);
+  eq(listGrade(r, { stationKey: 'inconnue' }).scope, 'tournee');
+  // Signée avant la notation : « calculée » ; modification tracée après la signature : « recalculée » ; non signée : provisoire.
+  lg = listGrade(resolveGrades({ live, signed: true }));
+  deepEq([lg.final, lg.mention, lg.state], [true, 'calculée', 'calculee']);
+  const amended = { ...audit, responses: { ...responses, 'it-F4-2': { status: 'C' } } };
+  const live2 = collectGrades(auditSummary({ audit: amended, grid: E, ctx, grading: { thresholds: rec.thresholds, scoring: scoringFromRecord(rec) } }));
+  lg = listGrade(resolveGrades({ live: live2, record: rec, signed: true, amended: true }));
+  deepEq([lg.final, lg.mention, lg.text], [true, 'recalculée', '20,0 / 20 · Satisfaisant']);
+  lg = listGrade(resolveGrades({ live, signed: false }));
+  deepEq([lg.final, lg.mention, lg.text, lg.level], [false, 'provisoire', '12,0 / 20 · À améliorer', 'fair']);
+  assert(lg.title.endsWith('(note provisoire (tournée non signée))'), lg.title);
+  // Aucun point évalué : « non noté » ; tournée annulée, grille historique : rien.
+  const none = listGrade(resolveGrades({ live: collectGrades(auditSummary({ audit: { ...audit, responses: {} }, grid: E, ctx, grading })), signed: false }));
+  deepEq([none.graded, none.text, none.n10, none.mention, none.final], [false, 'non noté', null, '', false]);
+  eq(listGrade(r, { cancelled: true }), null, 'tournée annulée');
+  eq(listGrade(null), null, 'grille historique');
+  // Note figée lue sans calcul : identique à resolveGrades d'une tournée verrouillée sans modification tracée.
+  const f = frozenGrades(rec), full = resolveGrades({ live, record: rec, signed: true, locked: true, amended: false });
+  deepEq([f.state, f.tour.text, f.tour.label, f.tournee.text, f.stations[B].text, f.thresholds], [full.state, full.tour.text, full.tour.label, full.tournee.text, full.stations[B].text, full.thresholds]);
+  deepEq(listGrade(f, { stationKey: B }), listGrade(full, { stationKey: B }));
+  deepEq(listGrade(f), listGrade(full));
+  eq(frozenGrades(null), null); eq(frozenGrades({ version: 9, tour: {} }), null);
+  // Tri par note : décroissante ou croissante, non notées (ou sans note) en dernier, égalités dans l'ordre d'origine.
+  const g = n10 => ({ graded: true, n10 });
+  const rows = [['a', g(150)], ['b', null], ['c', g(177)], ['d', { graded: false, n10: null }], ['e', g(150)], ['f', g(90)]];
+  const order = asc => [...rows].sort((x, y) => compareListGrades(x[1], y[1], { asc })).map(x => x[0]).join('');
+  eq(order(false), 'caefbd'); eq(order(true), 'faecbd');
 });

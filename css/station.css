@@ -273,7 +273,10 @@
 .hm-foot .badge .ico{width:14px;height:14px}
 .hm-next{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--info)}
 .hm-next.is-unplanned{color:var(--warn)}
-.hm-last{font-size:12.5px;color:var(--muted)}
+.hm-last{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 8px;max-width:100%;font-size:12.5px;color:var(--muted)}
+/* Note de la dernière tournée signée (gradeTag) à côté de « Dernière tournée » */
+.hm-last .grade-tag{font-size:12px;padding:0 9px}
+.hm-last .grade-tag b{font-size:14px}
 /* Réseaux de surveillance : filtre (pastille, code, effectif en stations distinctes), « Ranger : par réseau | par
  * statut », sections par réseau (une station sur deux réseaux dans chacune : « Aussi : … » sur la carte) */
 .hm-nets{align-items:center}

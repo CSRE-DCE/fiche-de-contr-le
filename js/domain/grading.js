@@ -23,6 +23,9 @@
  *   choisit les notes à afficher : figées, recalculées après une modification tracée, calculées (tournée signée avant
  *   la notation) ou provisoires.
  * - averageGrades : moyennes des notes de tournées signées par prestataire et par réseau (tableau de bord).
+ * - Listes (validé par l'OEG le 24/10/2026) : listGrade donne la note d'une tournée — ou d'une de ses stations — pour la
+ *   liste « Audits » (badge « 17,7 / 20 · Satisfaisant », tri par note : compareListGrades) et les cartes des stations
+ *   de l'accueil (note de la dernière tournée signée) ; tournée annulée : aucune note.
  */
 import { allItems, isAnswerable, parseItemId } from './grids.js';
 import { GRID_CT_2026 } from './grid-ct-2026.js';
@@ -269,10 +272,59 @@ export function applyResolvedGrades(summary, r) {
   for (const s of summary.sheets || []) if (r.sheets?.[s.instanceKey]) s.grade = r.sheets[s.instanceKey];
   return summary;
 }
+/**
+ * Notes figées lues telles qu'enregistrées (sans calcul) : ce que donne resolveGrades pour une tournée VERROUILLÉE sans
+ * modification tracée — {state: 'figee', thresholds, record, tour, tournee, stations, sheets} ; null si l'enregistrement
+ * est illisible. Sert les listes (accueil : dernière tournée signée de chaque station) sans recalculer la tournée.
+ */
+export function frozenGrades(record) {
+  if (!isGradingRecord(record)) return null;
+  const th = gradeThresholds(record.thresholds);
+  const map = o => Object.fromEntries(Object.entries(o || {}).map(([k, c]) => [k, gradeFromCompact(c, th)]));
+  return { state: 'figee', thresholds: th, record, tour: gradeFromCompact(record.tour, th), tournee: record.tournee ? gradeFromCompact(record.tournee, th) : null, stations: map(record.stations), sheets: map(record.sheets) };
+}
 /** Mention de l'état d'une note (écrans, PDF, exports). */
 export const GRADE_STATES = Object.freeze({
   figee: 'figée à la signature', recalculee: 'recalculée après modification tracée', calculee: 'calculée (tournée signée avant la notation)', provisoire: 'provisoire (tournée non signée)'
 });
+
+/* ---------- Listes : liste « Audits », cartes des stations de l'accueil ---------- */
+/** Mention courte de l'état d'une note dans les listes ('' : note figée à la signature, définitive). */
+export const LIST_GRADE_MENTIONS = Object.freeze({ figee: '', recalculee: 'recalculée', calculee: 'calculée', provisoire: 'provisoire' });
+/**
+ * Note d'une tournée dans les listes (fonction pure). r : notes à afficher (resolveGrades) ; cancelled : tournée annulée ;
+ * stationKey : clé d'une station de la tournée — sa note propre si elle est notée, sinon celle de la tournée.
+ * Retour : null (tournée annulée, grille historique, notes absentes) ou {graded, n10, note, text, label, level, state,
+ * final, mention, scope, title} — graded : false = « non noté » (aucun point évalué) ; text : « 17,7 / 20 · Satisfaisant » ;
+ * final : note définitive (tournée signée : note figée, recalculée ou calculée), sinon provisoire ; mention : « provisoire »,
+ * « calculée », « recalculée » ou '' (figée) ; scope : 'station' | 'tournee' ; title : texte complet (info-bulle).
+ */
+export function listGrade(r, { cancelled = false, stationKey = '' } = {}) {
+  if (cancelled || !r?.tour) return null;
+  const st = stationKey ? r.stations?.[stationKey] : null;
+  const scope = Number.isInteger(st?.n10) ? 'station' : 'tournee';
+  const g = scope === 'station' ? st : r.tour;
+  const state = GRADE_STATES[r.state] ? r.state : 'provisoire';
+  const of = scope === 'station' ? 'Note de la station dans la tournée' : 'Note de la tournée';
+  if (!Number.isInteger(g?.n10)) {
+    return { graded: false, n10: null, note: null, text: NOT_GRADED, label: 'Non noté', level: null, state, final: state !== 'provisoire', mention: '', scope, title: `${of} : non notée (aucun point évalué)` };
+  }
+  const text = `${noteText(g.n10)} / 20 · ${g.label}`;
+  return {
+    graded: true, n10: g.n10, note: noteText(g.n10), text, label: g.label, level: g.level, state, final: state !== 'provisoire',
+    mention: LIST_GRADE_MENTIONS[state], scope, title: `${of} : ${noteText(g.n10)} / 20 — ${g.label} (note ${GRADE_STATES[state]})`
+  };
+}
+/**
+ * Tri par note des listes : note décroissante (asc : croissante), notes égales dans l'ordre d'origine ; tournées non
+ * notées (ou sans note : annulée, grille historique) toujours en dernier. a, b : listGrade (ou null).
+ */
+export function compareListGrades(a, b, { asc = false } = {}) {
+  const n = g => (g?.graded && Number.isInteger(g.n10) ? g.n10 : null);
+  const x = n(a), y = n(b);
+  if (x === null || y === null) return (x === null) - (y === null);
+  return asc ? x - y : y - x;
+}
 
 /* ---------- Moyennes (tableau de bord) ---------- */
 const meanN10 = list => Math.floor((2 * list.reduce((a, b) => a + b, 0) + list.length) / (2 * list.length));

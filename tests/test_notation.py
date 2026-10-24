@@ -20,6 +20,14 @@ par tests/unit/grading.test.js.
      figée) : sceau intact, note « calculée » ; modification tracée après la signature : note « recalculée », note à la
      signature rappelée ; tableau de bord : moyennes par prestataire et par réseau des tournées signées, liste des
      tournées d'une moyenne ; téléphone sans défilement horizontal.
+  4. test_note_dans_les_listes (validé par l'OEG le 24/10/2026 ; tablette 1280 × 800 puis téléphone 390 × 844) :
+     liste « Audits » — badge « 18,0 / 20 · Satisfaisant » aux couleurs de l'appréciation (tournée signée, note figée),
+     « calculée » (tournée signée avant la notation), note provisoire en gris « provisoire », « non noté » discret,
+     rien sur une tournée annulée ; « Trier : Date | Note décroissante | Note croissante » (aria-pressed, combiné aux
+     filtres, conservé par « Effacer », tournées non notées en dernier) ; badge mis à jour après une saisie et après un
+     changement des seuils (mémoire par tournée) ; accueil — note de la dernière tournée signée à côté de « Dernière
+     tournée » (note de la station, « Tournée » à défaut), « Dernière tournée signée » pendant une tournée en cours,
+     rien dans « Tournées en cours sur cette tablette », recherche sans réaffichage ; aucun défilement horizontal.
 """
 import re
 import zipfile
@@ -288,3 +296,166 @@ def test_seuils_signature_tournee_ancienne_et_tableau_de_bord(make_page, app_url
     for h in (f'#/audit/{signed}/synthese', f'#/audit/{current}/feuille-4@{K}', '#/tableau-de-bord?periode=tout', '#/administration'):
         goto_hash(page, h)
         assert page.evaluate(NO_OVERFLOW), f'{h} : défilement horizontal'
+
+
+# ---------------------------------------------------------------------------------------------------------------
+SAKOURA, SOUROU, TWENKE = 'site-09281718', 'site-09281719', 'site-09280106'
+T = '09280106'
+
+
+def rate(page, aid, responses):
+    """Cote directement des critères d'une tournée ({identifiant: {status, comment?}}), en une écriture."""
+    js(page, """await A.updateAudit(store.get('audit', arg.id), a => {
+          for (const [k, v] of Object.entries(arg.r)) a.responses[k] = { ...v, at: new Date().toISOString(), by: session.user.id, byName: session.user.name };
+        }, { reason: 'Cotes (test)' });""", {'id': aid, 'r': responses})
+
+
+def sign_before_grading(page, aid):
+    """Tournée signée et verrouillée comme avec la version 1.0.8 (sans note figée) : note « calculée »."""
+    js(page, """await A.finishAudit(store.get('audit', arg));
+        const b = structuredClone(store.get('audit', arg)); delete b.grading;
+        const h = await A.auditContentHash(b);
+        b.signatures = { auditor: { role: 'auditor', name: session.user.name, at: new Date().toISOString(), contentHash: h, userId: session.user.id },
+          provider: { role: 'provider', name: 'Représentant', refused: true, comment: 'absent', at: new Date().toISOString(), contentHash: h } };
+        b.lock = { lockedAt: new Date().toISOString(), lockedBy: session.user.id, lockedByName: session.user.name, contentHash: h, appVersion: '1.0.8' };
+        b.status = 'signe';
+        await store.put('audit', b, { reason: 'Test : tournée signée avec la version 1.0.8 (sans note sur 20)' });""", aid)
+
+
+def rows(page):
+    """Lignes de la liste « Audits » : [(numéro, texte du badge de note ou '')]."""
+    return page.eval_on_selector_all('#view .list .li', """els => els.map(e => [e.querySelector('.li-title').textContent.split(' — ')[0].trim(),
+        (e.querySelector('.grade-tag, .grade-none')?.textContent || '').replace(/\\s+/g, ' ').trim()])""")
+
+
+def tag(page, number):
+    t = page.locator('#view .list .li', has_text=number).locator('.grade-tag')
+    return {'text': flat(t.inner_text()), 'cls': t.get_attribute('class'), 'grade': t.get_attribute('data-grade'), 'state': t.get_attribute('data-state'), 'title': t.get_attribute('title')}
+
+
+def click_q(page, k, v, expect):
+    page.click(f'[data-act=q][data-k={k}][data-v="{v}"]')
+    page.wait_for_function('(e) => location.hash.includes(e)', arg=expect)
+    page.wait_for_selector(f'[data-act=q][data-k={k}][data-v="{v}"][aria-pressed="true"]')
+
+
+def card(page, site):
+    return page.locator(f'#hmGrid .hm-card[data-site="{site}"]')
+
+
+@pytest.mark.lent
+def test_note_dans_les_listes(make_page, app_url):
+    page = make_page(viewport=TABLET)
+    setup_standalone(page, app_url)
+    # Tournée signée (note figée) : tournée 9 / 10 points = 18,0 ; station Athanase (points propres) 5 / 6 = 16,7.
+    signed = create_tour(page, 'bio', [ATHANASE], 'prov-HYDRECO', [PRES_BIO])
+    rate(page, signed['id'], {'it-F4-2': {'status': 'C'}, f'it-F4-12@{K}': {'status': 'C'}, f'it-F4-5@{K}': {'status': 'P', 'comment': 'À reprendre'}})
+    assert sign_lock(page, signed['id'])['ok']
+    # Tournée signée avant la notation (Twenke 4 / 6 = 13,3 ; Crique Sakoura sans point propre évalué ; tournée 8 / 10 = 16,0).
+    old = create_tour(page, 'ce', [TWENKE, SAKOURA], 'prov-TL1')
+    rate(page, old['id'], {'it-F4-2': {'status': 'C'}, f'it-F4-12@{T}': {'status': 'C'}, f'it-F4-5@{T}': {'status': 'NC', 'comment': 'Écart'}})
+    sign_before_grading(page, old['id'])
+    g = js(page, """const r = A.tourGrades(store.get('audit', arg.old)), s = A.tourGrades(store.get('audit', arg.signed));
+        return [r.state, r.tour.text, r.stations[arg.T].text, r.stations[arg.S].text, s.state, s.tour.text, s.stations[arg.K].text];""",
+           {'old': old['id'], 'signed': signed['id'], 'T': T, 'S': '09281718', 'K': K})
+    assert g == ['calculee', '16,0', '13,3', 'non noté', 'figee', '18,0', '16,7'], g
+    cancelled = create_tour(page, 'ce', [SOUROU], 'prov-TL1')
+    rate(page, cancelled['id'], {'it-F4-2': {'status': 'C'}})
+    js(page, "await A.cancelTour(store.get('audit', arg), 'Crue : accès impossible');", cancelled['id'])
+
+    # ----- Accueil : la dernière tournée de chaque station est signée → note à côté de « Dernière tournée »
+    goto_hash(page, '#/?ranger=statut')
+    last = card(page, ATHANASE).locator('.hm-last')
+    assert last.count() == 1 and f'Dernière tournée : {signed["number"]} (' in flat(last.inner_text()), last.inner_text()
+    t = last.locator('.grade-tag')
+    assert flat(t.inner_text()) == f'Station Note de la station dans la tournée {signed["number"]} : 16,7 / 20 · Satisfaisant', t.inner_text()
+    assert 'lvl-good' in t.get_attribute('class') and t.get_attribute('data-state') == 'figee'
+    assert t.get_attribute('title') == 'Note de la station dans la tournée : 16,7 / 20 — Satisfaisant (note figée à la signature)'
+    tw = card(page, TWENKE).locator('.hm-last .grade-tag')
+    assert 'Station' in tw.inner_text() and '13,3 / 20 · À améliorer · calculée' in flat(tw.inner_text()) and 'lvl-fair' in tw.get_attribute('class')
+    sk = card(page, SAKOURA).locator('.hm-last .grade-tag')
+    assert flat(sk.inner_text()).startswith('Tournée') and '16,0 / 20 · Satisfaisant · calculée' in flat(sk.inner_text()), sk.inner_text()
+    assert sk.get_attribute('title').startswith('Note de la tournée : 16,0 / 20 — Satisfaisant (note calculée'), 'station sans note propre : note de la tournée'
+    assert card(page, SOUROU).locator('.grade-tag, .grade-none').count() == 0, 'tournée annulée : aucune note'
+    assert card(page, 'site-09160201').locator('.grade-tag').count() == 0, 'station jamais contrôlée'
+
+    # ----- Tournées en cours : provisoire (Athanase) et sans point évalué (Twenke)
+    current = create_tour(page, 'bio', [ATHANASE], 'prov-HYDRECO')
+    rate(page, current['id'], {'it-F4-2': {'status': 'NC', 'comment': 'Sonde non étalonnée'}, f'it-F4-12@{K}': {'status': 'C'}})   # 4 / 8 = 10,0
+    fresh = create_tour(page, 'ce', [TWENKE], 'prov-TL1')
+    goto_hash(page, '#/?ranger=statut')
+    c = card(page, ATHANASE)
+    assert f'Tournée en cours · {current["number"]}' in c.inner_text()
+    sig = c.locator('.hm-signed')
+    assert f'Dernière tournée signée : {signed["number"]} (' in flat(sig.inner_text()) and '16,7 / 20 · Satisfaisant' in flat(sig.inner_text()), sig.inner_text()
+    assert c.locator('.grade-tag').count() == 1 and current['number'] not in sig.inner_text(), 'jamais la note provisoire de la tournée en cours'
+    assert '13,3 / 20' in flat(card(page, TWENKE).locator('.hm-signed').inner_text())
+    assert page.locator('.hm-tours .hm-tour').count() == 2 and page.locator('.hm-tours .grade-tag, .hm-tours .grade-none').count() == 0, 'rien dans « Tournées en cours sur cette tablette »'
+    # Recherche instantanée : cartes filtrées sans réaffichage (aucun recalcul à chaque frappe)
+    page.evaluate(f"() => {{ document.querySelector('#hmGrid .hm-card[data-site=\"{ATHANASE}\"]').__probe = 1; }}")
+    page.fill('[data-input=search]', 'athan')
+    page.wait_for_function("() => document.getElementById('hmCount').textContent.startsWith('1 station')")
+    assert page.evaluate(f"() => document.querySelector('#hmGrid .hm-card[data-site=\"{ATHANASE}\"]').__probe === 1"), 'carte conservée'
+    assert card(page, ATHANASE).locator('.grade-tag').is_visible()
+
+    # ----- Liste « Audits » : badges
+    goto_hash(page, '#/audits')
+    b = tag(page, signed['number'])
+    assert b['text'] == 'Note : 18,0 / 20 · Satisfaisant' and 'lvl-good' in b['cls'] and 'is-prov' not in b['cls'] and b['grade'] == '18,0' and b['state'] == 'figee', b
+    assert b['title'] == 'Note de la tournée : 18,0 / 20 — Satisfaisant (note figée à la signature)', b
+    b = tag(page, old['number'])
+    assert b['text'] == 'Note : 16,0 / 20 · Satisfaisant · calculée' and 'lvl-good' in b['cls'] and b['state'] == 'calculee', b
+    b = tag(page, current['number'])
+    assert b['text'] == 'Note : 10,0 / 20 · Insuffisant · provisoire' and 'lvl-none' in b['cls'] and 'is-prov' in b['cls'] and b['state'] == 'provisoire', b
+    assert page.locator('#view .list .li', has_text=fresh['number']).locator('.grade-none').inner_text() == 'non noté'
+    assert cancelled['number'] not in page.inner_text('#view .list')
+    r = page.locator('#view .list .li', has_text=old['number']).inner_text()
+    assert re.search(r'\d+ C · 0 P · 1 NC', r) and '2 stations : Twenke, Crique Sakoura' in r, r
+    # Tri : Date (défaut), Note décroissante, Note croissante — boutons accessibles (aria-pressed), non notées en dernier
+    sort = page.locator('.au-sort[role=group][aria-label="Trier les tournées"]')
+    assert sort.locator('button').count() == 3 and sort.locator('[data-v=""][aria-pressed="true"]').count() == 1
+    assert page.get_by_role('button', name='Note décroissante').count() == 1 and page.get_by_role('button', name='Note croissante').count() == 1
+    click_q(page, 'tri', 'note', 'tri=note')
+    assert [n for n, _ in rows(page)] == [signed['number'], old['number'], current['number'], fresh['number']], rows(page)
+    assert sort.locator('[data-v=""][aria-pressed="false"]').count() == 1
+    click_q(page, 'tri', 'note-asc', 'tri=note-asc')
+    assert [n for n, _ in rows(page)] == [current['number'], old['number'], signed['number'], fresh['number']], rows(page)
+    # Combiné aux filtres existants : « Signés », « En cours », « Annulées »
+    click_q(page, 'statut', 'verrouille', 'statut=verrouille')
+    assert 'tri=note-asc' in page.evaluate('location.hash') and [n for n, _ in rows(page)] == [old['number'], signed['number']], rows(page)
+    click_q(page, 'statut', 'en_cours', 'statut=en_cours')
+    assert [n for n, _ in rows(page)] == [current['number'], fresh['number']], rows(page)
+    click_q(page, 'statut', 'abandonne', 'statut=abandonne')
+    assert [n for n, _ in rows(page)] == [cancelled['number']] and page.locator('#view .list .grade-tag, #view .list .grade-none').count() == 0, 'tournée annulée : rien'
+    # « Effacer » : filtres effacés, tri conservé ; puce « Date » : ordre d'origine
+    goto_hash(page, '#/audits?prestataire=prov-TL1&tri=note')
+    assert [n for n, _ in rows(page)] == [old['number'], fresh['number']], rows(page)
+    page.click('[data-act=reset]')
+    page.wait_for_function("() => location.hash === '#/audits?tri=note' && document.querySelectorAll('#view .list .li').length === 4")
+    assert page.locator('[data-act=q][data-k=tri][data-v=note][aria-pressed="true"]').count() == 1
+    click_q(page, 'tri', '', '#/audits')
+    assert 'tri=' not in page.evaluate('location.hash') and len(rows(page)) == 4
+    # Mémoire des notes : une saisie (nouvel objet tournée) et un changement des seuils mettent le badge à jour
+    rate(page, current['id'], {'it-F4-2': {'status': 'C'}})                                         # 8 / 8 = 20,0
+    goto_hash(page, '#/audits?tri=note')
+    assert rows(page)[0] == [current['number'], 'Note : 20,0 / 20 · Satisfaisant · provisoire'], rows(page)
+    js(page, "await (await import('./js/app/settings.js')).saveOrgSettings({ gradeGood: 19, gradeFair: 17 }, 'Seuils (test)');")
+    goto_hash(page, '#/audits?tri=note')
+    assert dict(rows(page)) == {current['number']: 'Note : 20,0 / 20 · Satisfaisant · provisoire', signed['number']: 'Note : 18,0 / 20 · Satisfaisant',
+                                old['number']: 'Note : 16,0 / 20 · Insuffisant · calculée', fresh['number']: 'non noté'}, ('seuils figés à la signature ; tournée ancienne : seuils actuels', rows(page))
+    assert page.evaluate(NO_OVERFLOW)
+
+    # ----- Téléphone : badges lisibles, tri accessible, aucun défilement horizontal
+    page.set_viewport_size(PHONE)
+    goto_hash(page, '#/audits')
+    page.get_by_role('button', name='Note croissante').click()
+    page.wait_for_selector('[data-act=q][data-k=tri][data-v=note-asc][aria-pressed="true"]')
+    assert [n for n, _ in rows(page)][-1] == fresh['number'] and page.locator('#view .list .grade-tag').first.is_visible()
+    assert page.evaluate(NO_OVERFLOW), 'liste « Audits » (téléphone)'
+    for h in ('#/?ranger=statut', '#/?ranger=reseau'):
+        goto_hash(page, h)
+        g = card(page, ATHANASE).first.locator('.grade-tag')
+        g.scroll_into_view_if_needed()
+        assert g.is_visible() and '16,7 / 20 · Satisfaisant' in flat(g.inner_text())
+        assert page.evaluate(NO_OVERFLOW), f'{h} (téléphone)'
+

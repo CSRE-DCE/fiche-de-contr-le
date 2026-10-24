@@ -409,6 +409,15 @@
 .grade-pill{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap;border-radius:999px;padding:1px 10px;font-weight:600;font-size:12.5px;line-height:1.4;font-variant-numeric:tabular-nums;
   color:var(--gb-main,#5f6b7a);background:var(--gb-bg,#eef1f4);border:1px solid var(--gb-line,#c3cad3)}
 .grade-pill b{font-family:var(--f-cond);font-weight:800;font-size:15px}
+/* Badge de note des listes (liste « Audits », cartes des stations de l'accueil) : gradeTag */
+.grade-tag{display:inline-block;max-width:100%;padding:1px 10px;border-radius:999px;font-size:12.5px;font-weight:700;line-height:1.45;overflow-wrap:anywhere;
+  color:var(--gb-main);background:var(--gb-bg);border:1px solid var(--gb-line)}
+.grade-tag b{font-family:var(--f-cond);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+.grade-tag .gt-n{white-space:nowrap}
+.grade-tag .gt-k{font-weight:600;color:var(--muted)}
+.grade-tag.is-prov{border-style:dashed;font-weight:600}
+.grade-tag .gt-m{font-style:italic}
+.grade-none{font-size:12.5px;font-style:italic;color:var(--muted)}
 .tour-stations{display:flex;align-items:stretch;gap:8px;padding:6px;border-radius:16px;background:#fff;border:1.5px solid #d3e3f0;box-shadow:0 1px 3px #0d35770d;font-family:var(--f-text)}
 .ts-label{flex:none;display:flex;align-items:center;gap:8px;padding:0 10px 0 6px;color:var(--oeg-navy);font-family:var(--f-cond);font-weight:800;font-size:17px;text-transform:uppercase;letter-spacing:.02em;line-height:1.05;border-right:1.5px solid #d3e3f0}
 .ts-label .ico{width:22px;height:22px;color:var(--oeg-sky)}

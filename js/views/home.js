@@ -14,6 +14,12 @@
  * Type, réseau et rangement sont mémorisés PAR AGENT (préférences « u:<profil>:home.* » : sur une tablette partagée,
  * l'agent suivant ne reçoit pas les filtres du précédent) ; « Effacer les filtres » vide aussi le réseau.
  * Paramètres : ?type=bio|ce|eso, ?reseau=<code>|aucun, ?ranger=reseau|statut, ?bassin=, ?statut=, ?q=.
+ * NOTE SUR 20 (validé par l'OEG le 24/10/2026) : chaque carte porte, à côté de « Dernière tournée », la note de la
+ * DERNIÈRE TOURNÉE SIGNÉE (verrouillée) contenant la station — note de la station dans cette tournée (« Station
+ * 17,7 / 20 · Satisfaisant »), à défaut celle de la tournée (« Tournée … ») ; « Dernière tournée signée : … » quand la
+ * dernière tournée n'est pas signée (tournée en cours) ; aucune note dans « Tournées en cours sur cette tablette ».
+ * Notes calculées une fois par tournée (auditListGrade : note figée lue sans calcul, sinon mémorisée) ; la recherche
+ * filtre les cartes sans rien recalculer.
  * Mode autonome (celui de l'OEG) : bandeau « n modifications à envoyer à l'autre tablette » avec « Envoyer à l'autre
  * tablette » et « Recevoir un fichier » (js/views/exchange.js). */
 import { html, normalize, sortBy, fmtDate } from '../core/util.js';
@@ -32,7 +38,8 @@ import { TYPE_STYLES, TYPE_ORDER, STATUS_STYLES } from '../ui/map.js';
 import { agentPref, setAgentPref } from '../app/settings.js';
 import { providerHeaderName } from '../domain/grids.js';
 import { ctGrid, siteTypes, primaryType, stationStatus, plannedLabel, typeBadges, siteSearchText } from './station-sheet.js';
-import { tourControllers, isAuditController, tourTypesOf } from '../app/audits.js';
+import { tourControllers, isAuditController, tourTypesOf, auditListGrade } from '../app/audits.js';
+import { gradeTag } from '../ui/sheet-chrome.js';
 import { NO_NETWORK, groupSitesByNetwork, inNetwork, networkId, siteNetworkCodes, sortNetworkCodes } from '../domain/networks.js';
 import { currentNetworkIndex, currentNetworkOf } from '../app/networks.js';
 
@@ -62,7 +69,9 @@ function collect() {
   return store.all('site').map(site => {
     const audits = [...(bySite.get(site.id) || [])].sort(byAuditDateDesc);
     const prestations = sortBy((prestBySite.get(site.id) || []).filter(p => !audits.some(a => a.lock?.lockedAt && ((a.prestationIds || []).includes(p.id) || a.prestationId === p.id))), p => p.plannedDate || '9999');
-    return { site, types: siteTypes(site), networks: siteNetworkCodes(site, idx), status: stationStatus(site.id, { year, audits }), audits, prestations, text: siteSearchText(site) };
+    // Dernière tournée signée (verrouillée) contenant la station et sa note (station, à défaut tournée).
+    const signed = audits.find(a => a.lock?.lockedAt) || null;
+    return { site, types: siteTypes(site), networks: siteNetworkCodes(site, idx), status: stationStatus(site.id, { year, audits }), audits, prestations, text: siteSearchText(site), signed, grade: signed ? auditListGrade(signed, { siteId: site.id }) : null };
   });
 }
 
@@ -83,8 +92,19 @@ function networkLine(x, net) {
     : html`<span class="hm-netline"><span class="sr">Réseaux de surveillance :</span>${list}</span>`;
 }
 
+/**
+ * Note de la dernière tournée signée d'une carte : badge « Station 17,7 / 20 · Satisfaisant » (note de la station dans
+ * la tournée) ou « Tournée … » (station sans point propre évalué) ; lecteurs d'écran : intitulé complet.
+ */
+function cardGrade(x) {
+  const lg = x.grade;
+  if (!lg) return '';
+  const station = lg.scope === 'station';
+  return gradeTag(lg, { prefix: station ? 'Station' : 'Tournée', sr: `${station ? 'Note de la station dans la tournée' : 'Note de la tournée'} ${x.signed.number} : ` });
+}
+
 function stationCard(x, grid, { net = '' } = {}) {
-  const { site, status, prestations, audits } = x;
+  const { site, status, prestations, audits, signed } = x;
   const t = TYPE_STYLES[primaryType(site)] || TYPE_STYLES.ce;
   const rd = site.photos?.RD;
   const visual = rd?.mediaId ? html`<span class="hm-thumb" data-hm-media="${rd.mediaId}" data-fallback="${rd.src ? assetURL(rd.src) : ''}"></span>`
@@ -105,7 +125,8 @@ function stationCard(x, grid, { net = '' } = {}) {
     <span class="hm-foot">
       <span class="badge ${status.cls}">${status.key === 'en_cours' ? icon('route', { size: 14 }) : status.key === 'controlee' ? icon('check', { size: 14 }) : ''}${status.label}</span>
       ${next ? html`<span class="hm-next${next.plannedDate ? '' : ' is-unplanned'}" title="${next.ref}">${icon('calendar', { size: 14 })}${providerHeaderName(store.get('provider', next.providerId)) || ''} · ${plannedLabel(next)}</span>` : ''}
-      ${last && status.key !== 'en_cours' ? html`<span class="hm-last">Dernière tournée : ${last.number} (${fmtDate(auditDate(last))})</span>` : ''}
+      ${last && status.key !== 'en_cours' ? html`<span class="hm-last">Dernière tournée : ${last.number} (${fmtDate(auditDate(last))})${last === signed ? cardGrade(x) : ''}</span>` : ''}
+      ${signed && x.grade && (signed !== last || status.key === 'en_cours') ? html`<span class="hm-last hm-signed">Dernière tournée signée : ${signed.number} (${fmtDate(auditDate(signed))})${cardGrade(x)}</span>` : ''}
     </span>
   </a>`;
 }

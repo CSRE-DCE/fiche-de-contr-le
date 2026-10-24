@@ -230,6 +230,12 @@ a.li:hover,button.li:hover{border-color:#b7cfe4}
 .li .li-ic{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--soft2);color:var(--brand)}
 .li .li-ic .ico{width:24px;height:24px}
 .li.stripe-nc{border-left:6px solid var(--nc)}.li.stripe-perf{border-left:6px solid var(--perf)}.li.stripe-warn{border-left:6px solid #d99a00}.li.stripe-ok{border-left:6px solid var(--ok)}.li.stripe-info{border-left:6px solid var(--sky)}
+/* Liste « Audits » : « Trier : Date | Note décroissante | Note croissante » (badge de note : .grade-tag, css/sheet.css) */
+.au-sort{align-items:center;gap:6px;margin-bottom:10px}
+.au-sort-k{font-size:13.5px;font-weight:700;color:var(--muted);margin-right:2px}
+.au-sort .chip{padding:4px 14px}
+.au-sort .au-arrow{display:none}
+@media(max-width:520px){.au-sort .au-dir{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.au-sort .au-arrow{display:inline;font-weight:800}}
 .date-head{font-family:var(--font-cond);font-size:14.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin:16px 4px 6px}
 .empty{text-align:center;padding:30px 16px;color:var(--muted)}
 .empty .ic{font-size:40px;display:flex;margin-bottom:6px;color:var(--sky)}

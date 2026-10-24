@@ -36,7 +36,9 @@
  * (summary.grade, summary.grading) ; à la signature du contrôleur, la note, les seuils et le barème utilisés sont
  * enregistrés dans la tournée (audit.grading) AVANT le calcul de l'empreinte, qu'ils rejoignent : une tournée signée
  * garde sa note même si les seuils changent ensuite. Une tournée signée avant la notation (sans audit.grading : son
- * sceau reste valide) affiche sa note calculée (mention « calculée »). Rouvrir la tournée efface la note figée. */
+ * sceau reste valide) affiche sa note calculée (mention « calculée »). Rouvrir la tournée efface la note figée.
+ * Listes (liste « Audits », cartes des stations de l'accueil) : auditListGrade, mémorisée par objet tournée avec
+ * tourGrades. */
 import { store } from '../core/store.js';
 import { session, appVersion } from '../core/session.js';
 import { saveMedia } from '../core/media.js';
@@ -53,7 +55,7 @@ import { linkedUpdates, copyFromPreviousStation, OPERATORS_SOURCE, SITE_SOURCE, 
 import { defaultCriticality, auditDate, OPEN_DEVIATION } from '../domain/model.js';
 import { computeAlerts } from '../domain/rules.js';
 import { auditSummary } from '../domain/summary.js';
-import { gradeThresholds, scoringOf, scoringFromRecord, isGradingRecord, collectGrades, gradingRecord, resolveGrades, applyResolvedGrades } from '../domain/grading.js';
+import { gradeThresholds, scoringOf, scoringFromRecord, isGradingRecord, collectGrades, gradingRecord, resolveGrades, applyResolvedGrades, listGrade, frozenGrades } from '../domain/grading.js';
 import { CT_GRID_ID, upToDateGrid } from '../domain/default-grids.js';
 import { operatorLabel } from '../domain/operators.js';
 import { nextNumber } from './numbering.js';
@@ -185,22 +187,40 @@ function resolveAuditGrades(audit, summary, g) {
   });
   return applyResolvedGrades(summary, r);
 }
+/*
+ * Mémoire des notes : par OBJET tournée (le dépôt remplace l'objet à chaque écriture : une tournée modifiée est
+ * recalculée) et par seuils actuels (Administration). Alimentée aussi par auditState (liste « Audits » : aucun second
+ * calcul). Sert le tableau de bord, les exports, le badge et le tri par note de la liste « Audits » et les cartes des
+ * stations de l'accueil (108 stations, nombreuses tournées : chaque tournée n'est calculée qu'une fois).
+ */
 const GRADES = new WeakMap();
+const gradesKey = g => { const cur = gradeThresholds(orgSettings()); return `${g.record ? 'figee' : ''}|${cur.good}|${cur.fair}`; };
 /**
- * Notes d'une tournée sans l'état complet (tableau de bord, exports) : resolveGrades — {state, thresholds, tour,
+ * Notes d'une tournée sans l'état complet (tableau de bord, exports, listes) : resolveGrades — {state, thresholds, tour,
  * tournee, stations, sheets} ; null hors grille « en feuilles ». Mémorisé par objet et par seuils.
  */
 export function tourGrades(audit) {
   if (!isSheetGrid(audit?.gridSnapshot)) return null;
   const g = gradingContext(audit);
-  const cur = gradeThresholds(orgSettings());
-  const key = `${g.record ? 'figee' : ''}|${cur.good}|${cur.fair}`;
+  const key = gradesKey(g);
   const hit = GRADES.get(audit);
   if (hit?.key === key) return hit.value;
   const summary = auditSummary({ audit, grid: effectiveGrid(audit), ctx: auditContext(audit), grading: g });
   const value = resolveAuditGrades(audit, summary, g).grading || null;
   GRADES.set(audit, { key, value });
   return value;
+}
+/**
+ * Note d'une tournée dans les listes (listGrade : badge de la liste « Audits », tri par note, cartes des stations de
+ * l'accueil) : null pour une tournée annulée ou une grille historique. siteId : note de cette station dans la tournée si
+ * elle est notée, sinon celle de la tournée (scope). Mémorisée avec tourGrades.
+ */
+export function auditListGrade(audit, { siteId = '' } = {}) {
+  if (!audit || audit.status === 'abandonne') return null;
+  const key = siteId ? (audit.stations || []).find(s => s.siteId === siteId)?.key || '' : '';
+  // Tournée verrouillée, note figée, sans modification tracée : note lue telle qu'enregistrée (aucun calcul).
+  const frozen = audit.lock?.lockedAt && !(audit.amendments || []).length && isSheetGrid(audit.gridSnapshot) ? frozenGrades(audit.grading) : null;
+  return listGrade(frozen || tourGrades(audit), { stationKey: key });
 }
 /** Note à figer à la signature du contrôleur (seuils actuels, barème de la grille de la tournée) ; null hors grille en feuilles. */
 function freezeGrading(audit) {
@@ -255,7 +275,10 @@ export function auditState(audit, { includeMissing = false } = {}) {
   const sheetGrid = isSheetGrid(grid);
   const grading = gradingContext(audit);
   const summary = auditSummary({ audit, grid, ctx, deviations: deviations.filter(d => d.status !== 'annule'), criticalities: store.all('criticality'), alerts, grading });
-  if (sheetGrid) resolveAuditGrades(audit, summary, grading);
+  if (sheetGrid) {
+    resolveAuditGrades(audit, summary, grading);
+    if (isSheetGrid(baseGrid)) GRADES.set(audit, { key: gradesKey(grading), value: summary.grading || null });
+  }
   return {
     grid, baseGrid, ctx, auditType: ctx.auditType || '', type: gridType(baseGrid, ctx.auditType) || null,
     // Types contrôlés (tournée mixte : plusieurs) et leurs définitions.
