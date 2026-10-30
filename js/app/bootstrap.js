@@ -5,7 +5,7 @@
  * et ne remplacent jamais une saisie existante. Exception documentée : les grilles PAR DÉFAUT enregistrées suivent
  * la version livrée avec l'application (upgradeDefaultGrids) ; les tournées, elles, ne sont jamais modifiées. */
 import { store } from '../core/store.js';
-import { baseReferential, referenceDocuments, oegReferential, oegProgramme, bioProgramme, ceProgramme, demoData, emptyStationFields, STATION_DETAILS, BIO_CAMPAIGN, CT_GRID_ID, CE_NETWORKS, orderCompartments } from '../domain/seed.js';
+import { baseReferential, referenceDocuments, oegReferential, oegProgramme, bioProgramme, ceProgramme, demoData, emptyStationFields, STATION_DETAILS, BIO_CAMPAIGN, CT_GRID_ID, CE_NETWORKS, orderCompartments, herCorrection } from '../domain/seed.js';
 import { DEFAULT_GRIDS, OLD_BIO_GRID_ID } from '../domain/default-grids.js';
 import { upgradeStoredGrid } from '../domain/grids.js';
 import { nowISO } from '../core/util.js';
@@ -188,11 +188,36 @@ export async function upgradeDefaultGrids() {
 }
 
 /**
+ * Hydro-écorégions corrigées par l'OEG (HER_CORRECTIONS, js/domain/seed.js : 51 → 52 pour Crique Grillon, Fourmi,
+ * Parare et Saut Alexis, donc protocole invertébrés PEZADA) reportées sur les sites déjà enregistrés : le champ `her`
+ * n'est corrigé QUE s'il vaut encore l'ancienne valeur (herCorrection : une valeur saisie par l'utilisateur n'est jamais
+ * remplacée) ; aucun autre champ du site. Une écriture par site (store.put : journal avec le motif, file d'envoi).
+ * DÉTERMINISTE (même contenu sur deux tablettes : aucun conflit à l'échange) et IDEMPOTENTE. Les tournées ne sont
+ * JAMAIS modifiées : celles déjà commencées gardent leur instantané et leurs réponses (F6.14 et F3.10 y gardent leur
+ * valeur ; la feuille propose la valeur de la fiche station, appliquée seulement sur appui) ; les nouvelles tournées
+ * reçoivent PEZADA en F6.14. Retourne les sites corrigés : [{ id, code, from, to }].
+ */
+export async function correctStationHer() {
+  const out = [];
+  for (const site of store.all('site')) {
+    const c = herCorrection(site);
+    if (!c) continue;
+    await store.put('site', { ...site, her: c.to }, {
+      action: 'seed',
+      reason: `Hydro-écorégion corrigée par l’OEG (30/10/2026) : ${c.from} → ${c.to} (protocole invertébrés PEZADA) ; tournées existantes inchangées`
+    });
+    out.push({ id: site.id, code: c.code, from: site.her, to: c.to });
+  }
+  return out;
+}
+
+/**
  * Mise à niveau d'un appareil déjà initialisé (à appeler après ouverture de session), IDEMPOTENTE :
  * - ajoute la grille CT-2026 (et toute grille par défaut manquante) ; archive l'ancienne grille CT-BIO-2026 ;
  * - grilles par défaut enregistrées mises à niveau (upgradeDefaultGrids : nouvelle version, turbidité en NTU) ;
  * - référentiel « Réseaux de surveillance » : réseaux par défaut et unité NTU installés s'ils manquent, puis un réseau
  *   créé pour chaque code utilisé par une station ou une campagne sans réseau enregistré (aucune station réécrite) ;
+ * - hydro-écorégions corrigées par l'OEG (correctStationHer : 51 → 52 pour quatre stations, si elles valent encore 51) ;
  * - si le référentiel des stations est installé : ajoute les prestataires, sites (dont les 17 points d'eaux
  *   souterraines), points et campagnes manquants, complète les sites (types de tournée, code BSS, compartiments,
  *   nature / usage / aquifère), installe les programmes BIO 2026 et cours d'eau 2026 manquants et rattache à la
@@ -208,7 +233,8 @@ export async function upgradeReferentiel2026() {
       await store.put('grid', { ...old, status: 'archivee', archivedAt: nowISO() }, { reason: 'Remplacée par la grille CT-2026 (contrôle terrain des prestations de prélèvement – 2026)' });
       res.upgraded = true; res.oldGridArchived = true;
     }
-    // Avant toute sortie anticipée : grilles par défaut à jour, réseaux de surveillance et unité NTU.
+    // Avant toute sortie anticipée : grilles par défaut à jour, réseaux de surveillance, unité NTU et hydro-écorégions
+    // corrigées par l'OEG.
     const grids = await upgradeDefaultGrids();
     if (grids.replaced.length || grids.units.length) { res.upgraded = true; res.gridsUpgraded = grids.replaced.length + grids.units.length; }
     const base = baseReferential();
@@ -220,6 +246,8 @@ export async function upgradeReferentiel2026() {
     }
     const created = await ensureNetworks(usedNetworkCodes(), { reason: 'Réseaux utilisés par les stations ou les campagnes, absents du référentiel' });
     if (created.length) { res.upgraded = true; res.networksCreated = created.length; }
+    const her = await correctStationHer();
+    if (her.length) { res.upgraded = true; res.herCorrected = her.length; }
     if (!store.count('site')) return res;
     const retarget = store.filter('prestation', p => p.gridId === OLD_BIO_GRID_ID);
     // Contrôles rapides (éléments supprimés compris : un élément supprimé n'est jamais recréé).

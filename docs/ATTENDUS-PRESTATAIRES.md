@@ -2,7 +2,7 @@
 
 <!-- Document généré par tools/attendus_md.py depuis data/attendus-ct-2026.json : ne pas le modifier à la main. -->
 
-Version **1.3** du 24/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
+Version **1.3** du 30/10/2026 · grille `grid-ct-2026-v1` · source : `data/attendus-ct-2026.json` · écran de l’application : **Attendus des prestataires** (`#/attendus`).
 
 > Document de référence de l’Office de l’Eau de Guyane pour les contrôles terrain 2026, partagé entre les contrôleurs et les prestataires. Il indique, pour chaque point de contrôle des fiches, ce que le prestataire doit faire ou présenter, comment le contrôleur le vérifie et comment il choisit C, P, NC ou N/A. Il ne remplace ni le CCTP, ni les protocoles, ni les consignes du laboratoire, qui prévalent en cas de différence. Les mentions « à préciser » signalent une exigence chiffrée ou propre au marché que l’OEG doit confirmer. Les valeurs chiffrées viennent des CCTP 2026 de chaque réseau et des protocoles nationaux : chaque critère concerné indique ses sources (CCTP du réseau et marché, paragraphe, page ; protocole ou guide), et, quand elles diffèrent, les valeurs propres à chaque réseau.
 
@@ -104,9 +104,9 @@ Un critère marqué *Commun à la tournée* est jugé une seule fois pour toute 
 **Invertébrés – PEZADA / PEZSML**
 
 - [ ] Protocole invertébrés de la station (PEZADA ou PEZSML) et fiches terrain
-- [ ] Surber et matériel prévu par le protocole, en bon état et propre ; troubleau en cas de difficulté au Surber
-- [ ] PEZSML : drague et substrats artificiels (substrats organiques standards), pose et relève trois semaines plus tard
-- [ ] Récipients étanches, produit de conservation prévu (éthanol), sa fiche de données de sécurité et les EPI de manipulation
+- [ ] Filet Surber de la surface et du vide de maille prévus (F6.7), en bon état et propre ; troubleau et, pour le PEZSML, drague en cas de difficulté au Surber
+- [ ] PEZSML : substrats artificiels (substrats organiques standards), en plus du Surber ; pose, puis relève trois semaines plus tard
+- [ ] Récipients étanches, éthanol en quantité suffisante pour la concentration finale prévue (F6.9), sa fiche de données de sécurité et les EPI de manipulation
 - [ ] Étiquettes résistantes au produit de conservation
 
 **Diatomées – IDGF**
@@ -1821,7 +1821,7 @@ Prélèvement, conditionnement et chaîne du froid. Le lieu, la technique, le re
 
 *Onglet « Invertébrés » · répétée pour chaque station · types de tournée : Hydrobiologie – RCS ESC BIO*
 
-Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose le PEZADA dans les zones amont (bouclier guyanais) et le PEZSML dans les zones aval soumises à la marée (plaine littorale) : le protocole de la station est relevé en F6.14. Les points F6.1 à F6.13 valent pour les deux protocoles (équipe, fiche terrain, limites de la station, nombre et répartition des prélèvements, matériel, conservation, identification et transport) ; la pose et la relève des substrats artificiels du PEZSML sont jugées en F6.15 et F6.16. Les exigences chiffrées sont celles du protocole et du CCTP du marché, avec leur référence.
+Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose le PEZADA dans les zones amont (bouclier guyanais) et le PEZSML dans les zones aval soumises à la marée (plaine littorale) : le protocole de la station est relevé en F6.14. Les points F6.1 à F6.13 valent pour les deux protocoles (équipe, fiche terrain, limites de la station, nombre et répartition des prélèvements, matériel, conservation, identification et transport). Le PEZSML associe les prélèvements au Surber et des substrats artificiels, posés puis relevés trois semaines plus tard ; le troubleau et la drague ne servent qu’en cas de difficulté au Surber. Le contrôle porte sur la pose (F6.15) et sur la relève (F6.16) des substrats : le contrôleur assiste aux deux opérations, dans la même tournée ou lors d’un second passage. Les exigences chiffrées sont celles du protocole, du CCTP du marché et de la circulaire retenue par l’OEG, avec leur référence.
 
 **À présenter ou à préparer :**
 
@@ -1834,10 +1834,10 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 | N° | Information | Ce qui est relevé |
 |---|---|---|
-| F6.14 | Protocole invertébrés de la station | protocole d’échantillonnage des invertébrés applicable à la station selon le CCTP : PEZADA dans les zones amont (hydro-écorégion 52, bouclier guyanais), PEZSML dans les zones aval soumises à la marée (hydro-écorégion 51, plaine littorale). La valeur est proposée d’après l’hydro-écorégion de la station ; sans hydro-écorégion connue (stations du lot 2 du RCO), le contrôleur la choisit. Il la corrige si le protocole prévu pour la station est différent et le signale en observation. Le choix PEZSML affiche F6.15 et F6.16 ; la mention du protocole sur la fiche du préleveur est jugée en F3.13. |
+| F6.14 | Protocole invertébrés de la station | protocole d’échantillonnage des invertébrés applicable à la station selon le CCTP : PEZADA dans les zones amont (hydro-écorégion 52, bouclier guyanais), PEZSML dans les zones aval soumises à la marée (hydro-écorégion 51, plaine littorale). La valeur est proposée d’après l’hydro-écorégion de la fiche station ; sans hydro-écorégion connue (stations du lot 2 du RCO), le contrôleur la choisit. L’hydro-écorégion du référentiel de l’OEG prime sur le Tableau 1 du CCTP BIO : Crique Grillon, Fourmi, Parare et Saut Alexis sont en hydro-écorégion 52, donc en PEZADA (correction de l’OEG du 30/10/2026). Le contrôleur corrige la valeur si le protocole prévu pour la station est différent et le signale en observation. Le choix PEZSML affiche F6.15 et F6.16 ; la mention du protocole sur la fiche du préleveur est jugée en F3.13. |
 
 - **F6.14 – Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35 · CCTP BIO (marché OEG 2026-01), § Tableau 1 (colonne HER), p. 15-16
-- **F6.14 – À préciser (OEG) :** Protocole de chaque station à confirmer par l’OEG : stations en hydro-écorégion 51 éloignées du littoral (Saut Alexis, Fourmi, Parare…) ; hydro-écorégion ou protocole des 12 stations du lot 2 du RCO, absents du CCTP.
+- **F6.14 – À préciser (OEG) :** Hydro-écorégion ou protocole des 12 stations du lot 2 du RCO, absents du CCTP : à préciser par l’OEG.
 
 ### Invertébrés aquatiques – PEZADA / PEZSML
 
@@ -1890,13 +1890,13 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 *Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
-- **Attendu :** Le nombre de prélèvements au Surber est celui du protocole de la station (F6.14) : PEZADA (zones amont, hydro-écorégion 52) : 12 prélèvements, 4 sur la fraction minérale et 8 sur la fraction organique ; PEZSML (zones aval soumises à la marée, hydro-écorégion 51) : 2 prélèvements, 1 en rive gauche et 1 en rive droite. Les substrats artificiels du PEZSML sont comptés en F6.15.
+- **Attendu :** Le nombre de prélèvements au Surber est celui du protocole de la station (F6.14) : PEZADA (zones amont, hydro-écorégion 52) : 12 prélèvements, 4 sur la fraction minérale et 8 sur la fraction organique ; PEZSML (zones aval soumises à la marée, hydro-écorégion 51) : 2 prélèvements, 1 en rive gauche et 1 en rive droite, réalisés en plus des substrats artificiels, qui ne les remplacent pas (pose et relève jugées en F6.15 et F6.16).
 - **Vérification :** Le contrôleur compte les prélèvements réalisés (« Valeur / réponse »).
 - **C** (conforme / satisfaisant) : Nombre conforme au protocole.
-- **P** (perfectible) : Écart justifié par les conditions (habitat absent, recours au troubleau) et noté sur la fiche.
-- **NC** (non conforme) : Nombre inférieur au protocole sans justification.
+- **P** (perfectible) : Écart justifié par les conditions (habitat absent, recours au troubleau ou, pour le PEZSML, à la drague en cas de difficulté au Surber) et noté sur la fiche.
+- **NC** (non conforme) : Nombre inférieur au protocole sans justification, notamment PEZSML réduit aux substrats artificiels, sans prélèvement au Surber.
 - **Selon le réseau (CCTP 2026) :**
-  - **BIO** : PEZADA sur les 26 stations en HER 52 ; PEZSML sur les 12 stations en HER 51 (règle p. 26 ; HER du Tableau 1, p. 15-16).
+  - **BIO** : PEZADA sur les 30 stations en HER 52, PEZSML sur les 8 stations en HER 51 (règle p. 26 ; HER du Tableau 1, p. 15-16, corrigée par l’OEG pour quatre stations : voir F6.14).
   - **RCO** : Lot 2, 12 stations, octobre 2026 : même règle (p. 35), mais le Tableau 4 (p. 33) ne donne pas l’hydro-écorégion des stations.
 - **Références :** Protocole invertébrés de la station (PEZADA ou PEZSML)
 - **Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35
@@ -1905,7 +1905,7 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Les prélèvements sont répartis selon le protocole de la station et la répartition est notée sur la fiche : PEZADA : 4 prélèvements sur la fraction minérale, en tenant compte de la vitesse du courant, et 8 sur la fraction organique, répartis entre rive droite et rive gauche ; PEZSML : 1 prélèvement en rive gauche et 1 en rive droite, et un prélèvement de sédiment à la drague lorsque le substrat est susceptible d’accueillir une faune importante.
+- **Attendu :** Les prélèvements sont répartis selon le protocole de la station et la répartition est notée sur la fiche : PEZADA : 4 prélèvements sur la fraction minérale, en tenant compte de la vitesse du courant, et 8 sur la fraction organique, répartis entre rive droite et rive gauche ; PEZSML : 1 prélèvement au Surber en rive gauche et 1 en rive droite. En cas de difficulté au Surber, le prélèvement de sédiment à la drague du PEZSML est fait là où le substrat est susceptible d’accueillir une faune importante.
 - **Vérification :** Le contrôleur compare la répartition réalisée avec les habitats présents et le protocole.
 - **C** (conforme / satisfaisant) : Répartition conforme et notée.
 - **P** (perfectible) : Répartition conforme mais non notée.
@@ -1917,14 +1917,14 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Le matériel est celui du protocole de la station : filet Surber (troubleau en cas de difficulté au Surber) ; pour le PEZSML, drague pour le prélèvement de sédiment et substrats organiques standards (feuilles). Il est en bon état (filet sans trou), propre et sans organismes de la station précédente.
-- **Vérification :** Le contrôleur observe le matériel.
+- **Attendu :** Le matériel est celui du protocole de la station : filet Surber de 1/20 de m² (0,05 m²) et de 0,5 mm de vide de maille, conformément à la circulaire DCE 2007/22 retenue par l’OEG pour le PEZADA et le PEZSML ; pour le PEZSML, en plus, les substrats organiques standards (feuilles) ; le troubleau et, pour le PEZSML, la drague ne servent qu’en cas de difficulté au Surber. Il est en bon état (filet sans trou), propre et sans organismes de la station précédente.
+- **Vérification :** Le contrôleur observe le matériel et demande la surface et le vide de maille du filet Surber.
 - **C** (conforme / satisfaisant) : Matériel conforme, en bon état et propre.
 - **P** (perfectible) : Matériel conforme mais usé ou mal nettoyé, sans organismes résiduels.
-- **NC** (non conforme) : Matériel non conforme ou troué, ou organismes d’une autre station présents.
+- **NC** (non conforme) : Filet Surber d’une autre surface ou d’un autre vide de maille, matériel troué, ou organismes d’une autre station présents.
 - **Références :** Protocole invertébrés de la station (PEZADA ou PEZSML)
-- **Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35 · Circulaire DCE 2007/22 (invertébrés), § III.1 Appareils de prélèvements, p. 4 · Circulaire DCE 2007/22 (invertébrés), § III.3.6 Traitement et fixation des échantillons sur le terrain, p. 9
-- **À préciser (OEG) :** Les CCTP ne précisent ni la surface ni le vide de maille du Surber ; la circulaire DCE 2007/22 citée par les CCTP prévoit des prélèvements de 1/20 de m² au filet Surber de 0,5 mm de vide de maille : à confirmer par l’OEG pour le PEZADA et le PEZSML, avec le volume de la drague (« 0,15 m³ » dans les CCTP).
+- **Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35 · Circulaire DCE 2007/22 (invertébrés), § III.1 Appareils de prélèvements, p. 4
+- **À préciser (OEG) :** Volume de la drague du PEZSML (« 0,15 m³ » dans les CCTP BIO et RCO) à confirmer par l’OEG.
 
 #### F6.8 – Récipients de stockage
 
@@ -1941,14 +1941,13 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 *Tournées : Hydrobiologie*
 
-- **Attendu :** Chaque prélèvement est conservé dans de l’éthanol, à une concentration adaptée à la bonne conservation des organismes, et le conservateur est indiqué sur le récipient. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
-- **Vérification :** Le contrôleur demande le produit utilisé et observe sa manipulation.
-- **C** (conforme / satisfaisant) : Produit conforme, manipulé en sécurité.
-- **P** (perfectible) : Produit conforme mais dosage approximatif ou fiche de données de sécurité absente.
-- **NC** (non conforme) : Produit non conforme ou insuffisant (échantillon mal conservé), ou manipulation sans protection.
+- **Attendu :** Chaque prélèvement est conservé dans de l’éthanol à 70 % en concentration finale, c’est-à-dire une fois mélangé à l’eau et au substrat du prélèvement (les CCTP imposent l’éthanol ; concentration de la circulaire DCE 2007/22 retenue par l’OEG), et le conservateur est indiqué sur le récipient. Il est manipulé avec les EPI requis (gants, lunettes) et sa fiche de données de sécurité est disponible.
+- **Vérification :** Le contrôleur demande le produit utilisé, son titre et le volume versé au regard du volume du prélèvement, et observe sa manipulation.
+- **C** (conforme / satisfaisant) : Éthanol à 70 % en concentration finale, conservateur indiqué, manipulé en sécurité.
+- **P** (perfectible) : Éthanol, mais concentration finale approximative sans risque démontré pour la conservation, conservateur non indiqué sur le récipient, ou fiche de données de sécurité absente.
+- **NC** (non conforme) : Autre produit que l’éthanol, concentration finale nettement inférieure à 70 % (échantillon mal conservé), ou manipulation sans protection.
 - **Références :** Protocole invertébrés de la station (PEZADA ou PEZSML)
 - **Sources :** CCTP BIO (marché OEG 2026-01), § II. Invertébrés, flaconnage, p. 26-27 · CCTP RCO (marché OEG 2026-04), § Lot 2, invertébrés, flaconnage, p. 35-36 · Circulaire DCE 2007/22 (invertébrés), § III.3.6 Traitement et fixation des échantillons sur le terrain, p. 9
-- **À préciser (OEG) :** Les CCTP BIO et RCO imposent l’éthanol sans fixer sa concentration ; la circulaire DCE 2007/22 indique une concentration finale de 70 % : concentration à confirmer par l’OEG.
 
 #### F6.10 – Traçabilité des flacons
 
@@ -2000,26 +1999,26 @@ Invertébrés aquatiques – PEZADA ou PEZSML selon la station. Le CCTP impose l
 
 *Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
-- **Attendu :** Le préleveur dispose cinq substrats organiques standards (composés de feuilles) dans la colonne d’eau de la station, où ils restent immergés trois semaines pour être colonisés par les invertébrés, conformément au protocole PEZSML ; il note la date de pose et le dispositif sur la fiche. La relève est jugée en F6.16.
-- **Vérification :** Le contrôleur saisit le nombre de substrats et la date de pose : il assiste à la pose ou, si elle a eu lieu avant le contrôle, la vérifie sur la fiche terrain et sur place (substrats en place).
+- **Attendu :** Le préleveur dispose cinq substrats organiques standards (composés de feuilles) dans la colonne d’eau de la station, où ils restent immergés trois semaines pour être colonisés par les invertébrés, conformément au protocole PEZSML ; ils s’ajoutent aux prélèvements au Surber (F6.5) et ne les remplacent pas. Il note la date de pose et le dispositif sur la fiche. La relève est jugée en F6.16.
+- **Vérification :** Le contrôle porte sur la pose et sur la relève (décision de l’OEG du 30/10/2026) : le contrôleur assiste à la pose, compte les substrats posés et saisit leur nombre et la date de pose ; la relève, trois semaines plus tard, est contrôlée en F6.16, dans la même tournée ou lors d’un second passage.
 - **C** (conforme / satisfaisant) : Cinq substrats maintenus dans la colonne d’eau, date de pose notée.
 - **P** (perfectible) : Substrats posés conformément au protocole, mais date de pose ou dispositif non noté.
 - **NC** (non conforme) : Moins de cinq substrats sans justification, ou substrats non maintenus dans la colonne d’eau.
-- **N/A** (non applicable) : Pose non vérifiable lors du contrôle (réalisée lors d’un autre passage, sans trace sur la fiche) : préciser en observation.
+- **N/A** (non applicable) : Pose contrôlée lors d’un autre passage (numéro de la tournée de la pose en observation), ou, par exception, réalisée sans le contrôleur (raison et date de pose relevée sur la fiche terrain en observation).
 - **Références :** Protocole PEZSML (Guillemet et Clavier, 2006) · CCTP du marché
 - **Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35
-- **À préciser (OEG) :** Calendrier de la pose et de la relève (trois semaines d’intervalle) à préciser par l’OEG, notamment pour le lot 2 du RCO, dont les prélèvements d’une station ont lieu le même jour lors d’une campagne unique ; lecture retenue : la drague et les substrats font partie du protocole normal, et non du repli prévu en cas de difficulté au Surber (à confirmer).
+- **À préciser (OEG) :** Calendrier de la pose et de la relève (trois semaines d’intervalle) pour le lot 2 du RCO, dont les prélèvements d’une station ont lieu le même jour lors d’une campagne unique : à préciser par l’OEG.
 
 #### F6.16 – Relève des substrats artificiels (PEZSML)
 
 *Point majeur (compte double dans la note) · Tournées : Hydrobiologie*
 
 - **Attendu :** Les substrats sont relevés après trois semaines d’immersion ; le nombre de substrats relevés et la date de relève sont notés, et tout substrat perdu est signalé. Chaque prélèvement est ensuite conditionné à part et conservé à l’éthanol (F6.8, F6.9), identifié (F6.12) et tracé (F6.10).
-- **Vérification :** Le contrôleur assiste à la relève, compte les substrats relevés et calcule la durée d’immersion depuis la date de pose (F6.15).
+- **Vérification :** Le contrôleur assiste à la relève (même tournée ou second passage : la pose et la relève sont contrôlées toutes deux), compte les substrats relevés et calcule la durée d’immersion depuis la date de pose (F6.15).
 - **C** (conforme / satisfaisant) : Relève après trois semaines d’immersion, substrats relevés et comptés.
 - **P** (perfectible) : Durée d’immersion différente de trois semaines pour une raison justifiée (crue, accès) et notée, ou substrat perdu signalé.
 - **NC** (non conforme) : Relève nettement avant trois semaines sans justification, ou substrats manquants non signalés.
-- **N/A** (non applicable) : Relève prévue lors d’un autre passage que le contrôle : préciser en observation.
+- **N/A** (non applicable) : Relève contrôlée lors d’un autre passage (numéro de la tournée de la relève en observation), ou, par exception, réalisée sans le contrôleur (raison, date de relève et nombre de substrats relevés d’après la fiche terrain en observation).
 - **Références :** Protocole PEZSML (Guillemet et Clavier, 2006) · CCTP du marché
 - **Sources :** CCTP BIO (marché OEG 2026-01), § II. Prélèvement des invertébrés aquatiques, p. 26 · CCTP RCO (marché OEG 2026-04), § Lot 2, prélèvement des invertébrés aquatiques, p. 35
 

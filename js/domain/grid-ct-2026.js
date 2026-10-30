@@ -768,7 +768,8 @@ export const GRID_CT_2026 = {
         C(6, 11, 'Respect des normes de prélèvement', 'NORM'),
         C(6, 12, 'Échantillons correctement identifiés', 'ID'),
         C(6, 13, 'Transport / conservation', 'TRANS', { domain: 'transport' }),
-        // PEZSML : pose et relève à trois semaines d'intervalle (le contrôleur assiste en général à l'une des deux).
+        // PEZSML : substrats artificiels EN PLUS des prélèvements au Surber (F6.5) ; pose et relève à trois semaines
+        // d'intervalle, contrôlées toutes les deux (OEG, 30/10/2026 : même tournée ou second passage, voir les attendus).
         C(6, 15, 'Pose des substrats artificiels (PEZSML)', 'SUB', {
           condition: PEZSML,
           input: fields([

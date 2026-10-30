@@ -12,7 +12,9 @@
  * eso), type de code (`codeType` : SANDRE ou BSS), compartiments à contrôler, cours d'eau, hydro-écorégion, listes
  * BIO, accès, difficultés, photos ; eaux souterraines : nature, aquifère, usage. Seules les données de la station
  * ATHANASE (09271503) sont connues (maquettes) : les autres stations ont des champs vides à compléter.
- * - demoData() : jeu d'exemple FICTIF (documents « EXEMPLE », prestataire de démonstration).
+ * - HER_CORRECTIONS, herCorrection(site) : hydro-écorégions corrigées par l'OEG (30/10/2026), reportées sur les sites
+ *   déjà enregistrés par la mise à niveau des tablettes (js/app/bootstrap.js).
+ * - demoData(): jeu d'exemple FICTIF (documents « EXEMPLE », prestataire de démonstration).
  * Les identifiants sont déterministes : deux appareils initialisés séparément produisent les mêmes
  * identifiants pour les mêmes objets, ce qui évite les doublons à la synchronisation.
  */
@@ -190,6 +192,29 @@ export const STATION_DETAILS = {
     photoSource: 'Localisation cartographique et photos issues du rapport HYDRECO CRT BIO 2024.'
   }
 };
+
+/**
+ * Hydro-écorégions corrigées par l'OEG le 30/10/2026 (tableau des stations de l'OEG ; le Tableau 1 du CCTP BIO et
+ * l'ancien référentiel les donnaient en 51) : ces quatre stations sont en HER 52 (bouclier guyanais), donc en
+ * protocole invertébrés PEZADA (F6.14). data/referentiel-oeg.json est corrigé ; les sites déjà enregistrés sur une
+ * tablette le sont par upgradeReferentiel2026 (correctStationHer, js/app/bootstrap.js), seulement s'ils valent encore
+ * l'ancienne valeur. Aucun autre champ de ces stations n'est corrigé (statuts, masses d'eau : en attente de validation).
+ */
+export const HER_CORRECTIONS = Object.freeze([
+  { code: '09241209', name: 'Crique Grillon', from: 51, to: 52 },
+  { code: '09281704', name: 'Fourmi', from: 51, to: 52 },
+  { code: '09261522', name: 'Parare', from: 51, to: 52 },
+  { code: '09271707', name: 'Saut Alexis', from: 51, to: 52 }
+].map(c => Object.freeze(c)));
+/**
+ * Correction d'hydro-écorégion à appliquer à un site enregistré (fonction pure) : l'entrée de HER_CORRECTIONS de son
+ * code si son `her` vaut ENCORE l'ancienne valeur (51, nombre ou texte « 51 »), sinon null — une valeur saisie par
+ * l'utilisateur (52, autre texte, champ vidé) n'est jamais remplacée.
+ */
+export function herCorrection(site) {
+  const c = site ? HER_CORRECTIONS.find(x => x.code === String(site.code ?? '')) : null;
+  return c && String(site.her ?? '').trim() === String(c.from) ? c : null;
+}
 
 /** Référentiel repris des fiches terrain OEG. */
 /** Nombre de lettres accentuées d'un texte (choix de la bonne orthographe entre deux listes). */

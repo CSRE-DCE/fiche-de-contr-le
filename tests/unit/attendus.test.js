@@ -8,7 +8,10 @@
  *   des critères existants, un constat coté à un seul endroit (recadrages des critères voisins), points de synthèse
  *   « hors note », liste de préparation sans élément répété ; CCTP 2026 ET PEZSML (1.3) : sources au format « CCTP
  *   <réseau> (marché OEG 2026-0x), § …, p. N » ou protocole, valeurs par réseau, points résolus sans « à préciser »,
- *   F6.14 à F6.16, F5.31, F5.32, corrections de F7.5 et F9.8, délais d'acheminement de l'eau (F2.7.3) ;
+ *   F6.14 à F6.16, F5.31, F5.32, corrections de F7.5 et F9.8, délais d'acheminement de l'eau (F2.7.3) ; RÉPONSES DE
+ *   L'OEG DU 30/10/2026 : PEZSML = substrats artificiels + Surber en plus (troubleau et drague en repli), pose ET relève
+ *   contrôlées, circulaire DCE 2007/22 retenue (Surber de 1/20 m², 0,5 mm ; éthanol à 70 % en concentration finale),
+ *   hydro-écorégions corrigées (F6.14), « à préciser » résolus retirés ;
  * - js/app/attendus-pdf.js : attenduFor (identifiants de base et effectifs), visibilité par type de tournée calculée
  *   par les conditions de la grille, modèle d'affichage, PDF (fiche complète et liste de préparation) ;
  * - js/views/attendus.js : rendu de l'écran par type et par feuille, recherche, carte d'un critère, découpage de l'aide de
@@ -214,7 +217,7 @@ test('attendus : aucun nombre « contractuel » inventé (heuristique)', () => {
   // Une valeur chiffrée sans source reste signalée, même dans une entrée voisine d'une entrée sourcée.
   assert(!sourced.has('it-F4-26') && sourced.has('it-F6-5'), 'entrées avec et sans sources');
   // Exigences chiffrées : résolues par les CCTP et protocoles (sources, plus de « à préciser »), ou renvoyées à l'OEG.
-  for (const id of ['it-F6-5', 'it-F6-6', 'it-F7-6', 'it-F7-7', 'it-F7-10', 'it-F8-A5', 'it-F8-B1', 'it-F8-B3', 'it-F9-9', 'it-F10-5', 'it-F10-6', 'it-F4-31', 'it-F5-5', 'it-F5-15', 'it-F5-26', 'it-F2-2.2', 'it-F4-21']) {
+  for (const id of ['it-F6-5', 'it-F6-6', 'it-F6-9', 'it-F7-6', 'it-F7-7', 'it-F7-10', 'it-F8-A5', 'it-F8-B1', 'it-F8-B3', 'it-F9-9', 'it-F10-5', 'it-F10-6', 'it-F4-31', 'it-F5-5', 'it-F5-15', 'it-F5-26', 'it-F2-2.2', 'it-F4-21']) {
     assert(!data.criteres[id].aPreciser, `${id} : résolu par les CCTP / protocoles, plus de « à préciser »`);
     assert(sourced.has(id), `${id} : sources citées`);
   }
@@ -282,6 +285,39 @@ test('attendus : CCTP 2026 et PEZSML (OEG, 24/10/2026) — F6.14 à F6.16, F5.31
   assert(/NTU/.test(c['it-F4-9'].attendu) && /turbidimètre/.test(c['it-F4-9'].aPreciser));
   // Glossaire : normes ajoutées
   for (const r of ['NF T 90-354', 'NF S 99-700']) assert(filled(data.references[r]), r);
+});
+
+test('attendus : réponses de l’OEG du 30/10/2026 — PEZSML (Surber en plus des substrats, pose et relève contrôlées), circulaire DCE 2007/22, hydro-écorégions', () => {
+  const c = data.criteres;
+  const CIRC_P4 = 'Circulaire DCE 2007/22 (invertébrés), § III.1 Appareils de prélèvements, p. 4';
+  const CIRC_P9 = 'Circulaire DCE 2007/22 (invertébrés), § III.3.6 Traitement et fixation des échantillons sur le terrain, p. 9';
+  // Circulaire retenue : Surber de 1/20 m² et de 0,5 mm de vide de maille (§ III.1, p. 4) ; éthanol à 70 % en concentration finale (§ III.3.6, p. 9)
+  const f7 = c['it-F6-7'], f9 = c['it-F6-9'];
+  assert(/filet Surber de 1\/20 de m² \(0,05 m²\) et de 0,5 mm de vide de maille/.test(f7.attendu) && /circulaire DCE 2007\/22 retenue par l’OEG/.test(f7.attendu), 'F6.7 : Surber de la circulaire');
+  assert(f7.sources.includes(CIRC_P4) && !f7.sources.includes(CIRC_P9) && /vide de maille/.test(f7.NC) && /vide de maille/.test(f7.verification), 'F6.7 : source (p. 4), vérification et NC');
+  assert(/éthanol à 70 % en concentration finale/.test(f9.attendu) && /circulaire DCE 2007\/22 retenue par l’OEG/.test(f9.attendu) && f9.sources.includes(CIRC_P9), 'F6.9 : éthanol à 70 % (p. 9)');
+  assert(/70 % en concentration finale/.test(f9.C) && /inférieure à 70 %/.test(f9.NC) && /Autre produit que l’éthanol/.test(f9.NC), 'F6.9 : C et NC');
+  // « À préciser » résolus (surface et maille du Surber, éthanol, protocole des stations BIO, lecture du PEZSML) ;
+  // restent : volume de la drague, lot 2 du RCO (hydro-écorégions, calendrier de la pose et de la relève)
+  assert(!f9.aPreciser, 'F6.9 : résolu');
+  assert(/drague/.test(f7.aPreciser) && !/Surber|maille|circulaire/.test(f7.aPreciser), 'F6.7 : seul le volume de la drague reste à confirmer');
+  assert(/lot 2 du RCO/.test(c['it-F6-14'].aPreciser) && !/Saut Alexis|Fourmi|Parare|hydro-écorégion 51/.test(c['it-F6-14'].aPreciser), 'F6.14 : seul le lot 2 du RCO reste à préciser');
+  assert(/lot 2 du RCO/.test(c['it-F6-15'].aPreciser) && !/lecture retenue|à confirmer|drague|substrats font partie/.test(c['it-F6-15'].aPreciser), 'F6.15 : seul le calendrier du lot 2 du RCO reste à préciser');
+  // Hydro-écorégions corrigées par l'OEG : quatre stations en HER 52, donc en PEZADA ; F6.5 y renvoie
+  for (const n of ['Crique Grillon', 'Fourmi', 'Parare', 'Saut Alexis']) assert(c['it-F6-14'].attendu.includes(n), `F6.14 : ${n}`);
+  assert(/hydro-écorégion 52, donc en PEZADA/.test(c['it-F6-14'].attendu) && /F6\.14/.test(c['it-F6-5'].parReseau.BIO), 'F6.14 : correction de l’OEG ; F6.5 y renvoie');
+  // PEZSML : Surber EN PLUS des substrats artificiels ; troubleau et drague seulement en repli
+  assert(/en plus des substrats artificiels, qui ne les remplacent pas/.test(c['it-F6-5'].attendu) && /sans prélèvement au Surber/.test(c['it-F6-5'].NC), 'F6.5 : Surber en plus des substrats');
+  assert(/ne servent qu’en cas de difficulté au Surber/.test(f7.attendu) && /En cas de difficulté au Surber, le prélèvement de sédiment à la drague/.test(c['it-F6-6'].attendu), 'F6.6, F6.7 : drague et troubleau en repli');
+  assert(/s’ajoutent aux prélèvements au Surber \(F6\.5\) et ne les remplacent pas/.test(c['it-F6-15'].attendu), 'F6.15 : substrats en plus du Surber');
+  // Le contrôle porte sur la pose ET sur la relève (même tournée ou second passage)
+  assert(/porte sur la pose et sur la relève/.test(c['it-F6-15'].verification) && /assiste à la pose/.test(c['it-F6-15'].verification), 'F6.15 : pose contrôlée');
+  assert(/assiste à la relève/.test(c['it-F6-16'].verification) && /contrôlées toutes deux/.test(c['it-F6-16'].verification), 'F6.16 : relève contrôlée');
+  for (const id of ['it-F6-15', 'it-F6-16']) assert(/autre passage/.test(c[id].NA) && /par exception/.test(c[id].NA), `${id} : N/A si l’opération est contrôlée lors d’un autre passage, ou par exception`);
+  const intro = data.feuilles['6'].intro;
+  assert(/la pose \(F6\.15\) et sur la relève \(F6\.16\)/.test(intro) && /assiste aux deux opérations/.test(intro) && /ne servent qu’en cas de difficulté au Surber/.test(intro), 'introduction de la feuille 6');
+  const prep = data.preparation.bio.find(g => g.titre === 'Invertébrés – PEZADA / PEZSML').elements.join(' | ');
+  assert(/en plus du Surber/.test(prep) && /drague en cas de difficulté au Surber/.test(prep) && !/PEZSML : drague/.test(prep), `liste de préparation : drague en repli (${prep})`);
 });
 
 /** Unité de turbidité écartée (seule NTU est admise), écrite en deux morceaux pour ne pas figurer en clair. */

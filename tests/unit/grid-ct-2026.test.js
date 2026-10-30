@@ -11,7 +11,8 @@
  * libres distinctes ; CCTP 2026 ET PROTOCOLE PEZSML (version 1.3) : F6.14 (protocole de la station, proposé d'après
  * l'hydro-écorégion), F6.15 / F6.16 (substrats artificiels, majeurs, affichés si PEZSML), F5.31 (chlorophylle a),
  * F5.32 (sédiments, stations des réseaux Chimie et RCO, réseaux de CHAQUE station), traçabilité [CCTP], mise à niveau
- * 1.2 → 1.3 sans toucher aux tournées. */
+ * 1.2 → 1.3 sans toucher aux tournées ; HYDRO-ÉCORÉGIONS CORRIGÉES PAR L'OEG (30/10/2026) : quatre stations en HER 52
+ * (PEZADA) dans le référentiel, correction des sites enregistrés seulement s'ils valent encore 51 (herCorrection). */
 import { test, assert, eq, deepEq } from './harness.js';
 import { GRID_CT_2026, INSTRUMENTS_ESO, MAJOR_ITEMS } from '../../js/domain/grid-ct-2026.js';
 import { DEFAULT_GRIDS, CT_GRID_ID, GRID_GENERAL, DEFAULT_GRID_IDS, upToDateGrid } from '../../js/domain/default-grids.js';
@@ -27,7 +28,7 @@ import { computeAlerts, calibrationStatus, xyDistance } from '../../js/domain/ru
 import { sheetSummary, stationSummary, auditSummary, recurringDeviations } from '../../js/domain/summary.js';
 import { compareAudits } from '../../js/domain/compare.js';
 import { parseInputValue } from '../../js/domain/normalize.js';
-import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN, baseReferential } from '../../js/domain/seed.js';
+import { oegReferential, bioProgramme, ceProgramme, bioCompartments, esoUsage, BIO_CAMPAIGN, baseReferential, HER_CORRECTIONS, herCorrection } from '../../js/domain/seed.js';
 import { canonicalJSON } from '../../js/core/util.js';
 import { LINK_GROUPS, isVirtualSource } from '../../js/domain/links.js';
 
@@ -843,6 +844,35 @@ test('PEZSML (1.3) : F6.14 proposé d’après l’hydro-écorégion (choix manu
   const issues = validateResponses(E, pre, ctx);
   assert(issues.some(i => i.itemId === 'it-F6-15@09160201') && !issues.some(i => i.itemId === 'it-F6-15@09271503'), 'F6.15 requis pour la station PEZSML seulement');
   assert(!issues.some(i => /^it-F6-14@/.test(i.itemId) && i.level === 'error'), 'F6.14 : valeur facultative, jamais bloquante');
+});
+
+test('hydro-écorégions corrigées par l’OEG (30/10/2026) : quatre stations en HER 52 (PEZADA), sites enregistrés corrigés s’ils valent encore 51', async () => {
+  const FIXED = { '09241209': 'Crique Grillon', '09281704': 'Fourmi', '09261522': 'Parare', '09271707': 'Saut Alexis' };
+  deepEq(HER_CORRECTIONS.map(c => [c.code, c.name, c.from, c.to]), Object.entries(FIXED).map(([code, name]) => [code, name, 51, 52]));
+  // Référentiel : toutes les listes où ces stations ont une hydro-écorégion (BIO_CE, BIO_FISH, BIO_PHYTO, BIO_ADNE)
+  const DATA = await (await fetch(new URL('../../data/referentiel-oeg.json', import.meta.url))).json();
+  const rows = Object.entries(DATA).filter(([, v]) => Array.isArray(v)).flatMap(([k, v]) => v.filter(s => FIXED[s.code] && 'her' in s).map(s => `${k} ${s.code} ${s.her}`));
+  eq(rows.length, 8, rows.join(' | '));
+  assert(rows.every(r => r.endsWith(' 52')), rows.join(' | '));
+  const ref = oegReferential(DATA);
+  for (const [code, name] of Object.entries(FIXED)) {
+    const s = ref.site.find(x => x.code === code);
+    deepEq([s.name, s.her, invertebrateProtocol(s), herCorrection(s)], [name, 52, 'PEZADA', null], code);
+  }
+  // Protocole des 38 stations BIO (liste BIO_CE) : 30 PEZADA (HER 52), 8 PEZSML (HER 51) — effectifs de la fiche des attendus (F6.5)
+  const bio = ref.site.filter(s => s.bioLists.includes('BIO_CE'));
+  const n = p => bio.filter(s => invertebrateProtocol(s) === p).length;
+  deepEq([bio.length, n('PEZADA'), n('PEZSML')], [38, 30, 8]);
+  const att = await (await fetch(new URL('../../data/attendus-ct-2026.json', import.meta.url))).json();
+  const f65 = att.criteres['it-F6-5'].parReseau.BIO;
+  assert(f65.includes(`${n('PEZADA')} stations en HER 52`) && f65.includes(`${n('PEZSML')} stations en HER 51`), `F6.5 : ${f65}`);
+  // Sites enregistrés (migration, js/app/bootstrap.js) : corrigés seulement s'ils valent ENCORE 51 ; jamais une saisie
+  const site = (code, her) => ({ id: 'site-' + code, code, her });
+  deepEq([51, '51', ' 51 ', 52, '52', '', null, undefined, 'HER 51', 15].map(her => herCorrection(site('09271707', her))?.to ?? null),
+    [52, 52, 52, null, null, null, null, null, null, null]);
+  eq(herCorrection(site('09160201', 51)), null, 'autre station en HER 51 (Acarouany) : inchangée');
+  eq(herCorrection(null), null);
+  eq(invertebrateProtocol({ ...site('09241209', 51), her: herCorrection(site('09241209', 51)).to }), 'PEZADA', 'après correction : PEZADA proposé');
 });
 
 test('F5.31 (chlorophylle a) et F5.32 (sédiments) : types de tournée et réseaux de CHAQUE station', () => {
